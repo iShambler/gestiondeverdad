@@ -35,6 +35,9 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Variable global para acumular respuestas
 respuestas_acumuladas = []
 
+# Historial conversacional para GPT
+historial_conversacion = []
+
 # ---------------------------------------------------------------------
 # GENERAR RESPUESTA NATURAL CON GPT
 # ---------------------------------------------------------------------
@@ -118,6 +121,18 @@ def volver_inicio(driver):
 
 def seleccionar_fecha(driver, fecha_obj):
     """Abre el calendario, navega hasta el mes correcto y selecciona el día correspondiente."""
+    
+    # 🔍 Detectar si estamos en la pantalla de imputación
+    try:
+        btn_volver = driver.find_element(By.CSS_SELECTOR, "#btVolver")
+        if btn_volver.is_displayed():
+            print("[DEBUG] 🔙 Detectada pantalla de imputación, volviendo para cambiar fecha...")
+            btn_volver.click()
+            time.sleep(2)
+    except:
+        # No hay botón volver, ya estamos donde debemos
+        pass
+    
     wait = WebDriverWait(driver, 15)
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, CALENDAR_BUTTON_SELECTOR))).click()
     wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".ui-datepicker-calendar")))
@@ -438,6 +453,157 @@ def finalizar_jornada(driver, wait):
 
 
 
+# ---------------------------------------------------------------------
+# FUNCIONES DE CONSULTA
+# ---------------------------------------------------------------------
+def leer_tabla_imputacion(driver):
+    """
+    Lee toda la información de la tabla de imputación actual.
+    Devuelve un diccionario con los proyectos y sus horas.
+    """
+    try:
+        # Buscar todas las filas con proyectos
+        selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
+        
+        if not selects:
+            selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
+        
+        proyectos_info = []
+        
+        for idx, sel in enumerate(selects):
+            # Leer el proyecto seleccionado
+            try:
+                proyecto_nombre = driver.execute_script("""
+                    var select = arguments[0];
+                    var selectedOption = select.options[select.selectedIndex];
+                    return selectedOption ? selectedOption.text : '';
+                """, sel)
+                
+                if not proyecto_nombre or proyecto_nombre == "Seleccione opción":
+                    continue
+                
+                # Buscar la fila correspondiente
+                fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                
+                # Leer las horas de cada día
+                horas_dias = {}
+                dias_map = {
+                    "lunes": "h1",
+                    "martes": "h2",
+                    "miércoles": "h3",
+                    "jueves": "h4",
+                    "viernes": "h5"
+                }
+                
+                for dia_nombre, dia_key in dias_map.items():
+                    try:
+                        campo = fila.find_element(By.CSS_SELECTOR, f"input[id$='.{dia_key}']")
+                        valor = campo.get_attribute("value") or "0"
+                        try:
+                            valor_float = float(valor.replace(",", "."))
+                        except ValueError:
+                            valor_float = 0.0
+                        horas_dias[dia_nombre] = valor_float
+                    except:
+                        horas_dias[dia_nombre] = 0.0
+                
+                # Calcular total
+                total_horas = sum(horas_dias.values())
+                
+                if total_horas > 0:
+                    proyectos_info.append({
+                        "proyecto": proyecto_nombre,
+                        "horas": horas_dias,
+                        "total": total_horas
+                    })
+            
+            except Exception as e:
+                print(f"[DEBUG] Error leyendo proyecto {idx}: {e}")
+                continue
+        
+        return proyectos_info
+    
+    except Exception as e:
+        print(f"[DEBUG] Error leyendo tabla: {e}")
+        return []
+
+
+def consultar_semana(driver, wait, fecha_obj):
+    """
+    Consulta la información de una semana específica.
+    Navega a la fecha, lee la tabla y devuelve un resumen.
+    """
+    try:
+        # Seleccionar la fecha (lunes de la semana)
+        # seleccionar_fecha() ya detectará si necesita volver
+        lunes = lunes_de_semana(fecha_obj)
+        seleccionar_fecha(driver, lunes)
+        time.sleep(2)  # Esperar a que cargue la tabla
+        
+        # Leer la información de la tabla
+        proyectos = leer_tabla_imputacion(driver)
+        
+        if not proyectos:
+            return "No hay horas imputadas en esa semana"
+        
+        # Formatear la información
+        fecha_inicio = lunes.strftime('%d/%m/%Y')
+        fecha_fin = (lunes + timedelta(days=4)).strftime('%d/%m/%Y')
+        
+        resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n"
+        
+        total_semana = 0
+        for proyecto in proyectos:
+            nombre_corto = proyecto['proyecto'].split(' - ')[-1]  # Solo la última parte
+            horas = proyecto['horas']
+            total = proyecto['total']
+            total_semana += total
+            
+            # Formato de horas por día
+            dias_str = f"L:{horas['lunes']}, M:{horas['martes']}, X:{horas['miércoles']}, J:{horas['jueves']}, V:{horas['viernes']}"
+            resumen += f"🔹 {nombre_corto}: {total}h ({dias_str})\n"
+        
+        resumen += f"\n📊 Total: {total_semana} horas"
+        
+        return resumen
+    
+    except Exception as e:
+        return f"No he podido consultar la semana: {e}"
+
+
+def generar_resumen_natural(info_semana, consulta_usuario):
+    """
+    Usa GPT para generar un resumen natural de la información de la semana.
+    """
+    prompt = f"""Eres un asistente de imputación de horas. El usuario preguntó: "{consulta_usuario}"
+
+Información de la semana:
+{info_semana}
+
+Genera una respuesta natural, amigable y bien formateada con emojis. 
+Destaca lo más importante y presenta la información de forma clara.
+
+Respuesta:"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un asistente que resume información de horas laborales de forma amigable."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=300
+        )
+        
+        return response.choices[0].message.content.strip()
+    
+    except Exception as e:
+        # Si falla GPT, devolver el resumen tal cual
+        return info_semana
+
+
+
 
 # ---------------------------------------------------------------------
 # INTERPRETACIÓN REAL CON GPT
@@ -446,54 +612,137 @@ def clasificar_mensaje(texto):
     """
     Clasifica si el mensaje del usuario es:
     - 'comando': requiere ejecutar acciones de imputación
-    - 'conversacion': saludo, pregunta general, etc.
+    - 'consulta': pide información sobre horas imputadas
+    - 'conversacion': saludo, pregunta general o tema fuera del ámbito laboral
     """
     hoy = datetime.now().strftime("%Y-%m-%d")
-    
-    prompt = f"""Clasifica el siguiente mensaje del usuario en una de estas categorías:
 
-1. "comando" - Si pide realizar acciones de imputación de horas (imputar, añadir, quitar, seleccionar proyecto, iniciar/finalizar jornada, guardar, emitir, etc.)
-2. "conversacion" - Si es un saludo, pregunta general, consulta de información, charla casual, etc.
+    prompt = f"""
+Clasifica el siguiente mensaje en UNA de estas tres categorías:
+1️⃣ "comando" → si el usuario pide hacer algo en la intranet laboral, como:
+   - imputar, añadir, quitar, restar, poner horas
+   - seleccionar semana o proyecto
+   - iniciar/finalizar jornada
+   - emitir o guardar línea
+2️⃣ "consulta" → si pide información sobre sus horas, como:
+   - "qué tengo esta semana", "dime mis horas", "ver resumen", "qué he imputado"
+3️⃣ "conversacion" → si:
+   - es un saludo ("hola", "buenos días", etc.)
+   - es una pregunta general ("capital de España", "quién es Messi", "cuántos continentes hay")
+   - habla de cultura, deportes, clima, política, geografía o conocimiento general
+   - o cualquier cosa que NO tenga relación con imputación de horas ni con tu trabajo.
+
+Responde SOLO con una palabra: "comando", "consulta" o "conversacion".
 
 Mensaje: "{texto}"
-
-Responde SOLO con una palabra: "comando" o "conversacion"
 """
-    
+
     try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Eres un clasificador de mensajes. Responde solo con 'comando' o 'conversacion'."},
+                {"role": "system", "content": "Eres un clasificador inteligente de intenciones de usuario."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
             max_tokens=10
         )
-        
+
         clasificacion = response.choices[0].message.content.strip().lower()
         return clasificacion
-    
+
     except Exception as e:
-        # Por defecto, asumimos que es conversación
+        print(f"[DEBUG] Error en clasificar_mensaje: {e}")
         return "conversacion"
+
 
 
 def responder_conversacion(texto):
     """
     Usa GPT para responder a saludos, preguntas generales, etc.
+    Mantiene contexto de la conversación.
     """
+    global historial_conversacion
+    
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
     
-    prompt = f"""Eres un asistente virtual amigable especializado en gestión de imputación de horas laborales.
+    # Añadir mensaje del usuario al historial
+    historial_conversacion.append({"role": "user", "content": texto})
+    
+    # Limitar historial a últimos 10 mensajes para no consumir muchos tokens
+    if len(historial_conversacion) > 20:
+        historial_conversacion = historial_conversacion[-20:]
+    
+    # System prompt solo la primera vez o si es un saludo explícito
+    es_saludo_explicito = any(palabra in texto.lower() for palabra in ["hola", "buenos días", "buenas tardes", "buenas noches", "hey", "qué tal"])
+    
+    if len(historial_conversacion) <= 1 or es_saludo_explicito:
+        system_content = f"""Eres un asistente virtual amigable especializado en gestión de imputación de horas laborales.
 
 Hoy es {hoy} ({dia_semana}).
 
-El usuario te dice: "{texto}"
+Si el usuario te saluda por primera vez, preséntate brevemente. 
+Si ya has conversado con el usuario y te vuelve a saludar, responde de forma natural sin volver a presentarte.
+Responde de forma natural, amigable y concisa."""
+    else:
+        system_content = f"""Eres un asistente virtual amigable especializado en gestión de imputación de horas laborales.
 
-Responde de forma natural, amigable y concisa. Si te pregunta sobre algo externo (noticias, clima, información general), responde normalmente.
-Si es un saludo, preséntate brevemente como el asistente de imputación de horas.
+Hoy es {hoy} ({dia_semana}).
+
+Estás en medio de una conversación. NO te presentes de nuevo, solo responde a la pregunta de forma natural y directa.
+Si te pregunta sobre algo externo (noticias, clima, información general), responde normalmente."""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_content}
+            ] + historial_conversacion,
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        respuesta = response.choices[0].message.content.strip()
+        
+        # Añadir respuesta al historial
+        historial_conversacion.append({"role": "assistant", "content": respuesta})
+        
+        return respuesta
+    
+    except Exception as e:
+        return "Disculpa, he tenido un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?"
+
+
+def interpretar_consulta(texto):
+    """
+    Interpreta consultas sobre horas imputadas y extrae la fecha solicitada.
+    """
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    
+    prompt = f"""Eres un asistente que interpreta consultas sobre horas laborales imputadas.
+
+Hoy es {hoy}.
+
+El usuario pregunta: "{texto}"
+
+Extrae la fecha sobre la que pregunta y devuelve SOLO un JSON con este formato:
+{{
+  "fecha": "YYYY-MM-DD",
+  "tipo": "semana"  
+}}
+
+Reglas:
+- Si dice "esta semana", "semana actual", usa el lunes de la semana actual
+- Si dice "la semana del X de Y", calcula el lunes de esa semana
+- Si dice "semana pasada", calcula el lunes de la semana anterior
+- Si dice "próxima semana", calcula el lunes de la siguiente semana  
+- Siempre usa el año 2025
+- tipo siempre debe ser "semana"
+
+Ejemplo: "dime la semana del 26 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}}
 
 Respuesta:"""
     
@@ -501,17 +750,19 @@ Respuesta:"""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Eres un asistente virtual amigable de imputación de horas que también puede conversar sobre temas generales."},
+                {"role": "system", "content": "Eres un intérprete de fechas. Devuelve solo JSON."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=200
+            temperature=0
         )
         
-        return response.choices[0].message.content.strip()
+        raw = response.choices[0].message.content.strip()
+        data = json.loads(raw)
+        return data
     
     except Exception as e:
-        return "Disculpa, he tenido un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?"
+        print(f"[DEBUG] Error interpretando consulta: {e}")
+        return None
 
 
 def interpretar_con_gpt(texto):
@@ -744,6 +995,22 @@ def main():
                 # Responder con conversación natural
                 respuesta = responder_conversacion(texto)
                 print(f"\n🤖 Asistente: {respuesta}\n")
+                continue
+            
+            # Si es una consulta, procesar la información
+            if tipo_mensaje == "consulta":
+                consulta_info = interpretar_consulta(texto)
+                
+                if consulta_info and consulta_info.get("tipo") == "semana":
+                    try:
+                        fecha = datetime.fromisoformat(consulta_info["fecha"])
+                        info_bruta = consultar_semana(driver, wait, fecha)
+                        resumen_natural = generar_resumen_natural(info_bruta, texto)
+                        print(f"\n🤖 Asistente:\n{resumen_natural}\n")
+                    except Exception as e:
+                        print(f"\n⚠️ No he podido consultar esa semana: {e}\n")
+                else:
+                    print("\n🤔 No he entendido qué semana quieres consultar. ¿Podrías ser más específico?\n")
                 continue
             
             # Si es un comando, interpretarlo y ejecutarlo
