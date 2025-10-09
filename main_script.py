@@ -32,6 +32,58 @@ hoy = datetime.now()
 # Crear cliente OpenAI con la clave del .env
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Variable global para acumular respuestas
+respuestas_acumuladas = []
+
+# ---------------------------------------------------------------------
+# GENERAR RESPUESTA NATURAL CON GPT
+# ---------------------------------------------------------------------
+def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario):
+    """
+    Usa GPT para generar una respuesta natural basada en las acciones ejecutadas.
+    """
+    if not acciones_ejecutadas:
+        return "No he entendido qué quieres que haga. ¿Podrías reformularlo?"
+    
+    # Crear resumen de acciones
+    resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_ejecutadas])
+    
+    prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
+
+El usuario te dijo: "{entrada_usuario}"
+
+Has ejecutado las siguientes acciones:
+{resumen_acciones}
+
+Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando lo que has hecho.
+Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.
+No inventes información que no esté en las acciones ejecutadas.
+
+Ejemplos de buen estilo:
+- "¡Listo! He imputado 8 horas en Desarrollo para hoy y lo he guardado todo."
+- "Perfecto, ya tienes toda la semana imputada en el proyecto Estudio. He guardado los cambios."
+- "He iniciado tu jornada laboral. ¡A trabajar! 💪"
+
+Respuesta:"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un asistente virtual amigable y profesional que confirma tareas completadas de forma natural."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=150
+        )
+        
+        respuesta = response.choices[0].message.content.strip()
+        return respuesta
+    
+    except Exception as e:
+        # Fallback: si falla GPT, unir las respuestas simples
+        return " · ".join(acciones_ejecutadas)
+
 # ---------------------------------------------------------------------
 # FUNCIONES BASE
 # ---------------------------------------------------------------------
@@ -53,7 +105,6 @@ def hacer_login(driver, wait):
     pwd.send_keys(PASSWORD)
     driver.find_element(By.CSS_SELECTOR, SUBMIT_SELECTOR).click()
     time.sleep(3)
-    print("✅ Login completado.")
 
 def volver_inicio(driver):
     """Pulsa el botón 'Volver' para regresar a la pantalla principal tras login."""
@@ -61,9 +112,9 @@ def volver_inicio(driver):
         btn_volver = driver.find_element(By.CSS_SELECTOR, VOLVER_SELECTOR)
         btn_volver.click()
         time.sleep(2)
-        print("↩️ Volviendo a la pantalla principal...")
+        return "He vuelto a la pantalla principal"
     except Exception as e:
-        print(f"⚠️ No se pudo pulsar el botón Volver: {e}")
+        return f"No he podido volver a la pantalla principal: {e}"
 
 def seleccionar_fecha(driver, fecha_obj):
     """Abre el calendario, navega hasta el mes correcto y selecciona el día correspondiente."""
@@ -97,13 +148,13 @@ def seleccionar_fecha(driver, fecha_obj):
         mes_visible, anio_visible = obtener_mes_anio_actual()
 
     dia_seleccionado = fecha_obj.day
-    print(f"📅 Seleccionando {dia_seleccionado}/{fecha_obj.month}/{fecha_obj.year}")
 
     try:
         driver.find_element(By.XPATH, f"//a[text()='{dia_seleccionado}']").click()
-        print(f"✅ Fecha seleccionada correctamente: {fecha_obj.strftime('%d/%m/%Y')}")
+        fecha_formateada = fecha_obj.strftime('%d/%m/%Y')
+        return f"He seleccionado la fecha {fecha_formateada}"
     except Exception as e:
-        print(f"⚠️ No se pudo seleccionar el día {dia_seleccionado}: {e}")
+        return f"No he podido seleccionar el día {dia_seleccionado}: {e}"
 
 
 # ---------------------------------------------------------------------
@@ -128,20 +179,48 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
         )
 
     try:
-        # 🔍 Buscar si el proyecto ya existe
-        selects = driver.find_elements(By.CSS_SELECTOR, "select[id^='listaEmpleadoHoras'][id$='.subproyecto']")
-        for sel in selects:
-            combinado = (sel.get_attribute("title") or sel.text or "").lower()
-            if normalizar(nombre_proyecto) in normalizar(combinado):
+        # ⏸️ Dar tiempo a que la página se estabilice tras guardar
+        time.sleep(0.5)
+        
+        # 🔍 Buscar si el proyecto ya existe - MEJORADO para selects disabled
+        # Buscar TODOS los selects de subproyecto (incluso disabled)
+        selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
+        
+        # Si no encuentra por name, intentar por id
+        if not selects:
+            selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
+        
+        print(f"[DEBUG] 🔍 Buscando proyecto '{nombre_proyecto}' en {len(selects)} líneas existentes...")
+        
+        for idx, sel in enumerate(selects):
+            # Obtener el atributo 'title' que contiene el nombre completo del proyecto
+            title = sel.get_attribute("title") or ""
+            
+            # También buscar la opción seleccionada usando JavaScript (funciona con disabled)
+            try:
+                texto_selected = driver.execute_script("""
+                    var select = arguments[0];
+                    var selectedOption = select.options[select.selectedIndex];
+                    return selectedOption ? selectedOption.text : '';
+                """, sel)
+            except:
+                texto_selected = ""
+            
+            # Combinar ambos textos
+            texto_completo = f"{title} {texto_selected}".lower()
+            print(f"[DEBUG]   Línea {idx+1}: '{title}' | Selected: '{texto_selected}'")
+            
+            # Comparar normalizado
+            if normalizar(nombre_proyecto) in normalizar(texto_completo):
                 # Obtenemos la fila que contiene este select
                 fila = sel.find_element(By.XPATH, "./ancestor::tr")
-                print(f"🧩 Proyecto '{nombre_proyecto}' ya existe, reutilizando su fila.")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
                 time.sleep(0.3)
-                return fila  # ✅ devolvemos la fila del proyecto
+                print(f"[DEBUG] ✅ ¡Encontrado! Reutilizando línea {idx+1}")
+                return fila, f"Ya tenías el proyecto '{nombre_proyecto}' abierto, lo estoy usando"
 
         # 🆕 Si no existe → añadimos nueva línea
-        print("🆕 Añadiendo nueva línea de imputación...")
+        print(f"[DEBUG] ➕ Proyecto '{nombre_proyecto}' NO encontrado, añadiendo nueva línea...")
         btn_nueva_linea = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#btNuevaLinea")))
         btn_nueva_linea.click()
         time.sleep(1)
@@ -151,7 +230,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
         nuevo_select = selects_actualizados[-1]
         fila = nuevo_select.find_element(By.XPATH, "./ancestor::tr")
 
-        # 📌 Buscar el botón “»” correspondiente dentro de la misma fila
+        # 📌 Buscar el botón "»" correspondiente dentro de la misma fila
         try:
             btn_cambiar = fila.find_element(By.CSS_SELECTOR, "input[id^='btCambiarSubproyecto']")
         except Exception:
@@ -159,27 +238,22 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
             btn_cambiar = botones[-1] if botones else None
 
         if btn_cambiar:
-            print("🔍 Abriendo buscador de proyectos...")
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn_cambiar)
             btn_cambiar.click()
         else:
-            print("⚠️ No se encontró el botón '»' para la nueva línea.")
-            return None
+            return None, f"No he encontrado el botón para buscar el proyecto '{nombre_proyecto}'"
 
         # 3️⃣ Esperar a que aparezca el campo de búsqueda
-        print("⌛ Esperando campo de búsqueda...")
         campo_buscar = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#textoBusqueda")))
         campo_buscar.clear()
         campo_buscar.send_keys(nombre_proyecto)
 
         # 4️⃣ Pulsar en el botón "Buscar"
-        print(f"🔎 Buscando proyecto: {nombre_proyecto}")
         btn_buscar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#buscar")))
         btn_buscar.click()
         time.sleep(1.5)
 
         # 5️⃣ Expandir árbol de resultados
-        print("🌳 Expandiendo árbol de resultados...")
         driver.execute_script("""
             var tree = $('#treeTipologia');
             if (tree && tree.jstree) { tree.jstree('open_all'); }
@@ -187,7 +261,6 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
         time.sleep(1)
 
         # 6️⃣ Buscar y seleccionar el proyecto
-        print("📂 Seleccionando el proyecto en el árbol...")
         xpath = (
             f"//li[@rel='subproyectos']//a[contains(translate(normalize-space(.), "
             f"'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúü'), "
@@ -199,12 +272,10 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
         elemento.click()
         time.sleep(1)
 
-        print(f"✅ Proyecto '{nombre_proyecto}' seleccionado correctamente.")
-        return fila  # ✅ devolvemos la fila asociada al proyecto
+        return fila, f"He abierto el proyecto '{nombre_proyecto}'"
 
     except Exception as e:
-        print(f"⚠️ No se pudo seleccionar el proyecto '{nombre_proyecto}': {e}")
-        return None
+        return None, f"No he podido seleccionar el proyecto '{nombre_proyecto}': {e}"
 
 
 
@@ -215,37 +286,45 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
     Viernes → 6.5 horas
     Si un campo no está disponible (festivo, deshabilitado, etc.), lo omite.
     """
-    print(f"🕒 Imputando horas semanales "
-          f"{'(proyecto ' + nombre_proyecto + ')' if nombre_proyecto else ''}...")
-
     horas_semana = {
-        "h1": "8.5",
-        "h2": "8.5",
-        "h3": "8.5",
-        "h4": "8.5",
-        "h5": "6.5",
+        "lunes": "8.5",
+        "martes": "8.5",
+        "miércoles": "8.5",
+        "jueves": "8.5",
+        "viernes": "6.5",
     }
+    
+    dias_keys = {
+        "lunes": "h1",
+        "martes": "h2",
+        "miércoles": "h3",
+        "jueves": "h4",
+        "viernes": "h5",
+    }
+    
+    dias_imputados = []
 
     try:
-        for dia, valor in horas_semana.items():
+        for dia_nombre, valor in horas_semana.items():
             try:
-                campo = fila.find_element(By.CSS_SELECTOR, f"input[id$='.{dia}']")
+                campo = fila.find_element(By.CSS_SELECTOR, f"input[id$='.{dias_keys[dia_nombre]}']")
                 if campo.is_enabled():
                     campo.clear()
                     campo.send_keys(valor)
-                    print(f"✅ {dia.upper()} → {valor} horas imputadas correctamente.")
+                    dias_imputados.append(f"{dia_nombre} ({valor}h)")
                     time.sleep(0.2)
-                else:
-                    print(f"⚠️ {dia.upper()} no editable (posible festivo o bloqueo).")
             except Exception:
-                print(f"⚠️ Campo para {dia.upper()} no encontrado (omitido).")
+                pass
 
-        print(f"✅ Imputación semanal completada "
-              f"{'(proyecto ' + nombre_proyecto + ')' if nombre_proyecto else ''}.\n")
+        if dias_imputados:
+            dias_texto = ", ".join(dias_imputados)
+            proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
+            return f"He imputado toda la semana {proyecto_texto}: {dias_texto}"
+        else:
+            return f"No he podido imputar ningún día (puede que estén bloqueados o sean festivos)"
 
     except Exception as e:
-        print(f"❌ Error imputando horas semanales en "
-              f"{'(proyecto ' + nombre_proyecto + ')' if nombre_proyecto else ''}: {e}")
+        return f"Ha habido un problema al imputar la semana: {e}"
 
 
 
@@ -267,11 +346,7 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None):
 
     dia_clave = mapa_dias.get(dia.lower())
     if not dia_clave:
-        print(f"⚠️ Día no reconocido: {dia}")
-        return
-
-    print(f"🕓 Imputando {horas}h el {dia} "
-          f"{'(proyecto ' + nombre_proyecto + ')' if nombre_proyecto else ''}...")
+        return f"No reconozco el día '{dia}'"
 
     try:
         campo = fila.find_element(By.CSS_SELECTOR, f"input[id$='.{dia_clave}']")
@@ -287,15 +362,19 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None):
 
             campo.clear()
             campo.send_keys(str(total))
-            print(f"✅ {dia.capitalize()} → {nuevas_horas} horas añadidas (total {total}) "
-                  f"en {nombre_proyecto or 'proyecto'}.")
+            
+            proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
+            accion = "añadido" if nuevas_horas > 0 else "restado"
+            
+            if valor_actual > 0:
+                return f"He {accion} {abs(nuevas_horas)}h el {dia} {proyecto_texto} (total: {total}h)"
+            else:
+                return f"He imputado {total}h el {dia} {proyecto_texto}"
         else:
-            print(f"⚠️ Campo de {dia.capitalize()} no editable en "
-                  f"{nombre_proyecto or 'proyecto'} (posible bloqueo).")
+            return f"El {dia} no está disponible para imputar (puede ser festivo)"
 
     except Exception as e:
-        print(f"⚠️ No se pudo imputar horas en {dia} "
-              f"({nombre_proyecto or 'proyecto'}): {e}")
+        return f"No he podido imputar horas el {dia}: {e}"
 
 
 
@@ -306,9 +385,9 @@ def guardar_linea(driver, wait):
         btn_guardar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#btGuardarLinea")))
         btn_guardar.click()
         time.sleep(1.5)
-        print("💾 Línea guardada correctamente.")
+        return "He guardado los cambios"
     except Exception as e:
-        print(f"⚠️ No se pudo pulsar el botón Guardar: {e}")
+        return f"No he podido guardar: {e}"
 
 def emitir_linea(driver, wait):
     """Pulsa el botón 'Emitir' tras imputar horas."""
@@ -316,9 +395,9 @@ def emitir_linea(driver, wait):
         btn_emitir = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#btEmitir")))
         btn_emitir.click()
         time.sleep(1.5)
-        print("📤 Línea emitida correctamente.")
+        return "He emitido las horas correctamente"
     except Exception as e:
-        print(f"⚠️ No se pudo pulsar el botón Emitir: {e}")
+        return f"No he podido emitir: {e}"
 
 
 def iniciar_jornada(driver, wait):
@@ -326,40 +405,36 @@ def iniciar_jornada(driver, wait):
     Pulsa el botón 'Inicio jornada' si está disponible.
     Si el botón no está o ya se ha pulsado, lo ignora.
     """
-    print("🕒 Intentando iniciar jornada...")
-
     try:
         btn_inicio = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#botonInicioJornada")))
 
         if btn_inicio.is_enabled():
             btn_inicio.click()
             time.sleep(2)
-            print("✅ Jornada iniciada correctamente.")
+            return "He iniciado tu jornada laboral"
         else:
-            print("⚠️ El botón de inicio de jornada no está habilitado (posible jornada ya iniciada).")
+            return "Tu jornada ya estaba iniciada"
 
     except Exception as e:
-        print(f"⚠️ No se pudo iniciar la jornada: {e}")
+        return f"No he podido iniciar la jornada: {e}"
 
 def finalizar_jornada(driver, wait):
     """
     Pulsa el botón 'Finalizar jornada' si está disponible.
     Si el botón no está o ya se ha pulsado, lo ignora.
     """
-    print("🕓 Intentando finalizar jornada...")
-
     try:
         btn_fin = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#botonFinJornada")))
 
         if btn_fin.is_enabled():
             btn_fin.click()
             time.sleep(2)
-            print("✅ Jornada finalizada correctamente.")
+            return "He finalizado tu jornada laboral"
         else:
-            print("⚠️ El botón de finalizar jornada no está habilitado (posible jornada ya cerrada).")
+            return "Tu jornada ya estaba finalizada"
 
     except Exception as e:
-        print(f"⚠️ No se pudo finalizar la jornada: {e}")
+        return f"No he podido finalizar la jornada: {e}"
 
 
 
@@ -367,29 +442,82 @@ def finalizar_jornada(driver, wait):
 # ---------------------------------------------------------------------
 # INTERPRETACIÓN REAL CON GPT
 # ---------------------------------------------------------------------
+def clasificar_mensaje(texto):
+    """
+    Clasifica si el mensaje del usuario es:
+    - 'comando': requiere ejecutar acciones de imputación
+    - 'conversacion': saludo, pregunta general, etc.
+    """
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    
+    prompt = f"""Clasifica el siguiente mensaje del usuario en una de estas categorías:
+
+1. "comando" - Si pide realizar acciones de imputación de horas (imputar, añadir, quitar, seleccionar proyecto, iniciar/finalizar jornada, guardar, emitir, etc.)
+2. "conversacion" - Si es un saludo, pregunta general, consulta de información, charla casual, etc.
+
+Mensaje: "{texto}"
+
+Responde SOLO con una palabra: "comando" o "conversacion"
+"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un clasificador de mensajes. Responde solo con 'comando' o 'conversacion'."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            max_tokens=10
+        )
+        
+        clasificacion = response.choices[0].message.content.strip().lower()
+        return clasificacion
+    
+    except Exception as e:
+        # Por defecto, asumimos que es conversación
+        return "conversacion"
+
+
+def responder_conversacion(texto):
+    """
+    Usa GPT para responder a saludos, preguntas generales, etc.
+    """
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    dia_semana = datetime.now().strftime("%A")
+    
+    prompt = f"""Eres un asistente virtual amigable especializado en gestión de imputación de horas laborales.
+
+Hoy es {hoy} ({dia_semana}).
+
+El usuario te dice: "{texto}"
+
+Responde de forma natural, amigable y concisa. Si te pregunta sobre algo externo (noticias, clima, información general), responde normalmente.
+Si es un saludo, preséntate brevemente como el asistente de imputación de horas.
+
+Respuesta:"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un asistente virtual amigable de imputación de horas que también puede conversar sobre temas generales."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        return response.choices[0].message.content.strip()
+    
+    except Exception as e:
+        return "Disculpa, he tenido un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?"
+
+
 def interpretar_con_gpt(texto):
 
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
-    """
-    Traduce la frase del usuario en una lista de comandos JSON para automatizar
-    la imputación de horas en la intranet.
-
-    Acciones posibles:
-    - seleccionar_fecha (requiere 'fecha' en formato YYYY-MM-DD)
-    - volver
-    - seleccionar_proyecto (requiere 'nombre')
-    - imputar_horas_semana
-    - iniciar_jornada
-
-    Reglas:
-    1. Siempre asume que el año es 2025, aunque el usuario no lo diga.
-    2. Si el usuario dice "esta semana", "la próxima", etc., genera la fecha del lunes de esa semana en 2025.
-    3. Si el usuario mezcla acciones (como "imputa horas en el proyecto X la semana del 7 de octubre"),
-       **primero debe ir la fecha**, luego el proyecto, y al final la imputación.
-    4. Devuelve SOLO una lista JSON válida (sin texto adicional).
-    5. Si no se puede interpretar algo, ignóralo.
-    """
 
     prompt = f"""
 Eres un asistente que traduce frases en una lista de comandos JSON para automatizar
@@ -473,7 +601,6 @@ Frase del usuario: "{texto}"
         return data
 
     except Exception as e:
-        print("⚠️ Error interpretando respuesta del modelo:", e)
         return []
 
 
@@ -486,37 +613,37 @@ def ejecutar_accion(driver, wait, orden, contexto):
     Ejecuta la acción recibida desde el modelo de IA.
     El parámetro `contexto` mantiene información temporal,
     como la fila del proyecto actualmente seleccionado.
+    Devuelve el mensaje de respuesta natural.
     """
     accion = orden.get("accion")
 
     # 🕒 Iniciar jornada
     if accion == "iniciar_jornada":
-        iniciar_jornada(driver, wait)
+        return iniciar_jornada(driver, wait)
 
     # 🕓 Finalizar jornada
     elif accion == "finalizar_jornada":
-        finalizar_jornada(driver, wait)
+        return finalizar_jornada(driver, wait)
 
     # 📅 Seleccionar fecha
     elif accion == "seleccionar_fecha":
         try:
             fecha = datetime.fromisoformat(orden["parametros"]["fecha"])
-            seleccionar_fecha(driver, fecha)
+            return seleccionar_fecha(driver, fecha)
         except Exception as e:
-            print("❌ No se pudo procesar la fecha:", e)
+            return f"No he podido procesar la fecha: {e}"
 
     # 📂 Seleccionar proyecto
     elif accion == "seleccionar_proyecto":
         try:
             nombre = orden["parametros"].get("nombre")
-            fila = seleccionar_proyecto(driver, wait, nombre)
+            fila, mensaje = seleccionar_proyecto(driver, wait, nombre)
             if fila:
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
-            else:
-                print("⚠️ No se pudo obtener la fila del proyecto.")
+            return mensaje
         except Exception as e:
-            print(f"⚠️ Error seleccionando proyecto: {e}")
+            return f"Error seleccionando proyecto: {e}"
 
     # ⏱️ Imputar horas del día
     elif accion == "imputar_horas_dia":
@@ -527,8 +654,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
             proyecto = contexto.get("proyecto_actual", "Desconocido")
 
             if not fila:
-                print("⚠️ No hay proyecto seleccionado para imputar horas.")
-                return
+                return "Necesito que primero selecciones un proyecto antes de imputar horas"
 
             # Si GPT devuelve una fecha ISO → convertir a nombre de día
             try:
@@ -545,10 +671,10 @@ def ejecutar_accion(driver, wait, orden, contexto):
             except Exception:
                 dia = dia_param.lower()
 
-            imputar_horas_dia(driver, wait, dia, horas, fila, proyecto)
+            return imputar_horas_dia(driver, wait, dia, horas, fila, proyecto)
 
         except Exception as e:
-            print(f"❌ Error al imputar horas del día: {e}")
+            return f"Error al imputar horas: {e}"
 
     # ⏱️ Imputar horas semanales
     elif accion == "imputar_horas_semana":
@@ -556,26 +682,25 @@ def ejecutar_accion(driver, wait, orden, contexto):
         proyecto = contexto.get("proyecto_actual", "Desconocido")
 
         if not fila:
-            print("⚠️ No hay proyecto seleccionado para imputar la semana.")
-            return
+            return "Necesito que primero selecciones un proyecto antes de imputar la semana"
 
-        imputar_horas_semana(driver, wait, fila, proyecto)
+        return imputar_horas_semana(driver, wait, fila, proyecto)
 
     # 💾 Guardar línea
     elif accion == "guardar_linea":
-        guardar_linea(driver, wait)
+        return guardar_linea(driver, wait)
 
     # 📤 Emitir línea
     elif accion == "emitir_linea":
-        emitir_linea(driver, wait)
+        return emitir_linea(driver, wait)
 
     # ↩️ Volver a inicio
     elif accion == "volver":
-        volver_inicio(driver)
+        return volver_inicio(driver)
 
     # ❓ Desconocido
     else:
-        print("🤔 No entiendo la instrucción o no está implementada todavía.")
+        return "No he entendido esa instrucción"
 
 
 
@@ -591,74 +716,64 @@ def main():
     # 🚀 Login automático al inicio
     hacer_login(driver, wait)
 
-    print("\n🧠 Asistente con IA (OpenAI) para imputación de horas")
-    print("Ya estás logueado en el sistema.")
-    print("Puedes decir cosas como:")
-    print(" - 'selecciona la semana del 7 de octubre'")
-    print(" - 'abre el proyecto Estudio/Investigación de tecnología o proyecto cliente'")
-    print(" - 'vuelve a la pantalla principal'")
-    print("Escribe 'salir' para terminar.\n")
+    print("\n" + "="*60)
+    print("👋 ¡Hola! Soy tu asistente de imputación de horas")
+    print("="*60)
+    print("\nYa he iniciado sesión en el sistema por ti.")
+    print("\nPuedes pedirme cosas como:")
+    print("  • 'Imputa 8 horas en Desarrollo hoy'")
+    print("  • 'Abre el proyecto Estudio y pon toda la semana'")
+    print("  • 'Añade 2.5 horas en Dirección el lunes y emítelo'")
+    print("  • 'Inicia la jornada'")
+    print("\nEscribe 'salir' cuando quieras terminar.\n")
+    print("="*60 + "\n")
 
     try:
         contexto = {"fila_actual": None, "proyecto_actual": None}
 
         while True:
-            texto = input("🗣️  > ")
+            texto = input("💬 Tú: ")
             if texto.lower() in ["salir", "exit", "quit"]:
+                print("\n👋 ¡Hasta pronto! Cerrando el navegador...")
                 break
 
+            # Clasificar el tipo de mensaje
+            tipo_mensaje = clasificar_mensaje(texto)
+            
+            if tipo_mensaje == "conversacion":
+                # Responder con conversación natural
+                respuesta = responder_conversacion(texto)
+                print(f"\n🤖 Asistente: {respuesta}\n")
+                continue
+            
+            # Si es un comando, interpretarlo y ejecutarlo
             ordenes = interpretar_con_gpt(texto)
-            print("🧾 Interpretación:", ordenes)
+            
+            if not ordenes:
+                print("🤔 No he entendido qué quieres que haga. ¿Podrías reformularlo?\n")
+                continue
 
             # 🔄 Reordenar: siempre primero la fecha, luego el resto
             ordenes = sorted(ordenes, key=lambda o: 0 if o["accion"] == "seleccionar_fecha" else 1)
 
-            # 🧠 Nueva ejecución agrupada: proyecto + horas
+            # Ejecutar acciones y acumular respuestas
+            respuestas = []
             i = 0
             while i < len(ordenes):
                 orden = ordenes[i]
-                accion = orden.get("accion")
-
-                # 👉 Si es un proyecto, lo seleccionamos y verificamos si la siguiente acción son horas
-                if accion == "seleccionar_proyecto":
-                    nombre = orden["parametros"].get("nombre")
-                    linea_index = seleccionar_proyecto(driver, wait, nombre)
-                    contexto["fila_actual"] = linea_index
-                    contexto["proyecto_actual"] = nombre
-
-                    # Si la siguiente acción es imputar horas, ejecutarla inmediatamente
-                    if i + 1 < len(ordenes) and ordenes[i + 1]["accion"] == "imputar_horas_dia":
-                        siguiente = ordenes[i + 1]
-                        dia_param = siguiente["parametros"].get("dia")
-                        horas = float(siguiente["parametros"].get("horas"))
-
-                        # convertir la fecha ISO en nombre del día
-                        try:
-                            fecha_obj = datetime.fromisoformat(dia_param)
-                            dia = fecha_obj.strftime("%A").lower()
-                            dias_map = {
-                                "monday": "lunes",
-                                "tuesday": "martes",
-                                "wednesday": "miércoles",
-                                "thursday": "jueves",
-                                "friday": "viernes"
-                            }
-                            dia = dias_map.get(dia, dia)
-                        except Exception:
-                            dia = dia_param.lower()
-
-                        imputar_horas_dia(driver, wait, dia, horas, linea_index, nombre)
-                        i += 1  # saltar la imputación ya procesada
-
-                # 👉 Si no es seleccionar_proyecto, ejecutar normalmente
-                else:
-                    ejecutar_accion(driver, wait, orden, contexto)
-
+                mensaje = ejecutar_accion(driver, wait, orden, contexto)
+                if mensaje:
+                    respuestas.append(mensaje)
                 i += 1
+
+            # Generar respuesta natural con GPT
+            if respuestas:
+                respuesta_natural = generar_respuesta_natural(respuestas, texto)
+                print(f"\n🤖 Asistente: {respuesta_natural}\n")
 
     finally:
         driver.quit()
-        print("🔚 Navegador cerrado.")
+        print("\n🔚 Navegador cerrado. ¡Que tengas un buen día!\n")
 
 
 # ---------------------------------------------------------------------
