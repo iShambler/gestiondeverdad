@@ -1,0 +1,39 @@
+# Archivos de entorno y configuración sensible
+.env
+
+# Entorno virtual de Python
+.venv/
+venv/
+env/
+ENV/
+
+# Archivo HTML del bot
+bot.html
+
+# Archivos de Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Archivos de distribución / empaquetado
+dist/
+build/
+*.egg-info/
+
+# Cookies y caché del navegador
+cookies.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
