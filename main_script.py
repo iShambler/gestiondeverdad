@@ -1,3 +1,63 @@
+def eliminar_linea_proyecto(driver, wait, nombre_proyecto):
+    """
+    Elimina una línea de proyecto completa.
+    Busca el proyecto, encuentra su botón de eliminar y lo pulsa.
+    """
+    import unicodedata
+
+    def normalizar(texto):
+        return ''.join(
+            c for c in unicodedata.normalize('NFD', texto.lower())
+            if unicodedata.category(c) != 'Mn'
+        )
+
+    try:
+        # Buscar el proyecto en la tabla
+        selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
+        
+        if not selects:
+            selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
+        
+        print(f"[DEBUG] 🗑️ Buscando proyecto '{nombre_proyecto}' para eliminar...")
+        
+        for idx, sel in enumerate(selects):
+            # Leer el nombre del proyecto
+            title = sel.get_attribute("title") or ""
+            
+            try:
+                texto_selected = driver.execute_script("""
+                    var select = arguments[0];
+                    var selectedOption = select.options[select.selectedIndex];
+                    return selectedOption ? selectedOption.text : '';
+                """, sel)
+            except:
+                texto_selected = ""
+            
+            texto_completo = f"{title} {texto_selected}".lower()
+            
+            # Si encontramos el proyecto
+            if normalizar(nombre_proyecto) in normalizar(texto_completo):
+                # Buscar el botón de eliminar en la misma fila
+                fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                
+                try:
+                    btn_eliminar = fila.find_element(By.CSS_SELECTOR, "button.botonEliminar, button#botonEliminar")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn_eliminar)
+                    time.sleep(0.3)
+                    btn_eliminar.click()
+                    time.sleep(1)
+                    
+                    print(f"[DEBUG] ✅ Línea del proyecto '{nombre_proyecto}' eliminada")
+                    return f"He eliminado la línea del proyecto '{nombre_proyecto}'"
+                    
+                except Exception as e:
+                    return f"Encontré el proyecto pero no pude eliminar la línea: {e}"
+        
+        return f"No encontré ninguna línea con el proyecto '{nombre_proyecto}'"
+    
+    except Exception as e:
+        return f"Error al intentar eliminar la línea: {e}"
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -97,15 +157,21 @@ def save_cookies(driver, path="cookies.json"):
 def lunes_de_semana(fecha):
     return fecha - timedelta(days=fecha.weekday())
 
-def hacer_login(driver, wait):
-    """Realiza el login en la intranet."""
+def hacer_login(driver, wait, username=None, password=None):
+    """Realiza el login en la intranet con las credenciales proporcionadas."""
+    # Si no se proporcionan credenciales, usar las del .env (modo compatibilidad)
+    if username is None:
+        username = USERNAME
+    if password is None:
+        password = PASSWORD
+    
     driver.get(LOGIN_URL)
     usr = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, USERNAME_SELECTOR)))
     usr.clear()
-    usr.send_keys(USERNAME)
+    usr.send_keys(username)
     pwd = driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR)
     pwd.clear()
-    pwd.send_keys(PASSWORD)
+    pwd.send_keys(password)
     driver.find_element(By.CSS_SELECTOR, SUBMIT_SELECTOR).click()
     time.sleep(3)
 
@@ -221,12 +287,14 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
             except:
                 texto_selected = ""
             
-            # Combinar ambos textos
-            texto_completo = f"{title} {texto_selected}".lower()
-            print(f"[DEBUG]   Línea {idx+1}: '{title}' | Selected: '{texto_selected}'")
+            # Extraer solo la última parte del nombre (el proyecto real)
+            # Ejemplo: "Arelance - Departamento - Desarrollo" → "Desarrollo"
+            nombre_proyecto_real = texto_selected.split(' - ')[-1].strip() if texto_selected else ""
             
-            # Comparar normalizado
-            if normalizar(nombre_proyecto) in normalizar(texto_completo):
+            print(f"[DEBUG]   Línea {idx+1}: Proyecto real='{nombre_proyecto_real}'")
+            
+            # Comparar SOLO con el nombre del proyecto (la última parte)
+            if normalizar(nombre_proyecto) == normalizar(nombre_proyecto_real):
                 # Obtenemos la fila que contiene este select
                 fila = sel.find_element(By.XPATH, "./ancestor::tr")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
@@ -344,19 +412,14 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
 
 
 
-def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None):
+def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo="sumar"):
     """
-    Imputa una cantidad específica de horas en un día concreto (lunes a viernes)
-    dentro de la fila (<tr>) del proyecto correspondiente.
-    Si ya hay horas, las suma.
+    Imputa una cantidad específica de horas en un día concreto.
+    modo: "sumar" (default) añade horas | "establecer" pone exactamente esa cantidad
     """
     mapa_dias = {
-        "lunes": "h1",
-        "martes": "h2",
-        "miércoles": "h3",
-        "miercoles": "h3",
-        "jueves": "h4",
-        "viernes": "h5"
+        "lunes": "h1", "martes": "h2", "miércoles": "h3",
+        "miercoles": "h3", "jueves": "h4", "viernes": "h5"
     }
 
     dia_clave = mapa_dias.get(dia.lower())
@@ -373,24 +436,28 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None):
                 valor_actual = 0.0
 
             nuevas_horas = float(horas)
-            total = round(valor_actual + nuevas_horas, 2)
-
-            campo.clear()
-            campo.send_keys(str(total))
             
-            proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
-            accion = "añadido" if nuevas_horas > 0 else "restado"
-            
-            if valor_actual > 0:
-                return f"He {accion} {abs(nuevas_horas)}h el {dia} {proyecto_texto} (total: {total}h)"
+            if modo == "establecer":
+                total = nuevas_horas
+                campo.clear()
+                campo.send_keys(str(total))
+                proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
+                return f"He establecido {total}h el {dia} {proyecto_texto}"
             else:
-                return f"He imputado {total}h el {dia} {proyecto_texto}"
+                total = round(valor_actual + nuevas_horas, 2)
+                campo.clear()
+                campo.send_keys(str(total))
+                proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
+                accion = "añadido" if nuevas_horas > 0 else "restado"
+                
+                if valor_actual > 0:
+                    return f"He {accion} {abs(nuevas_horas)}h el {dia} {proyecto_texto} (total: {total}h)"
+                else:
+                    return f"He imputado {total}h el {dia} {proyecto_texto}"
         else:
-            return f"El {dia} no está disponible para imputar (puede ser festivo)"
-
+            return f"El {dia} no está disponible para imputar"
     except Exception as e:
         return f"No he podido imputar horas el {dia}: {e}"
-
 
 
 
@@ -421,6 +488,16 @@ def iniciar_jornada(driver, wait):
     Si el botón no está o ya se ha pulsado, lo ignora.
     """
     try:
+        # 🔙 Volver al inicio si estamos en pantalla de imputación
+        try:
+            btn_volver = driver.find_element(By.CSS_SELECTOR, "#btVolver")
+            if btn_volver.is_displayed():
+                print("[DEBUG] 🔙 Volviendo al inicio antes de iniciar jornada...")
+                btn_volver.click()
+                time.sleep(2)
+        except:
+            pass  # Ya estamos en la pantalla correcta
+        
         btn_inicio = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#botonInicioJornada")))
 
         if btn_inicio.is_enabled():
@@ -439,6 +516,16 @@ def finalizar_jornada(driver, wait):
     Si el botón no está o ya se ha pulsado, lo ignora.
     """
     try:
+        # 🔙 Volver al inicio si estamos en pantalla de imputación
+        try:
+            btn_volver = driver.find_element(By.CSS_SELECTOR, "#btVolver")
+            if btn_volver.is_displayed():
+                print("[DEBUG] 🔙 Volviendo al inicio antes de finalizar jornada...")
+                btn_volver.click()
+                time.sleep(2)
+        except:
+            pass  # Ya estamos en la pantalla correcta
+        
         btn_fin = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#botonFinJornada")))
 
         if btn_fin.is_enabled():
@@ -615,27 +702,76 @@ def clasificar_mensaje(texto):
     - 'consulta': pide información sobre horas imputadas
     - 'conversacion': saludo, pregunta general o tema fuera del ámbito laboral
     """
+    print(f"[DEBUG] 🔍 Clasificando: '{texto}'")
+    
+    # Keywords para detectar comandos de jornada sin ambigüedad
+    keywords_jornada = [
+        "iniciar jornada", "empezar jornada", "comenzar jornada", "inicia jornada",
+        "finalizar jornada", "terminar jornada", "acabar jornada", "finaliza jornada", 
+        "termina jornada", "acaba jornada",
+        "finaliza el dia", "termina el dia", "acaba el dia",
+        "finalizar el dia", "terminar el dia", "acabar el dia",
+        "fin de jornada", "cierra jornada"
+    ]
+    
+    texto_lower = texto.lower()
+    
+    # Si contiene keywords de jornada, es comando directo
+    if any(keyword in texto_lower for keyword in keywords_jornada):
+        return "comando"
+    
+    # Keywords para imputación
+    keywords_imputacion = [
+        "imput", "pon", "añade", "agrega", "quita", "resta", "borra",
+        "horas", "proyecto", "guardar", "emitir"
+    ]
+    
+    if any(keyword in texto_lower for keyword in keywords_imputacion):
+        return "comando"
+    
+    # Keywords para consultas - Detectar solicitudes de información
+    # Si menciona "semana" + palabras de consulta = es una consulta
+    if "semana" in texto_lower:
+        print(f"[DEBUG] 📅 Detectado 'semana' en el texto")
+        keywords_consulta = [
+            "resumen", "resume", "resumíme", "qué tengo", "dime", "qué he imputado",
+            "cuántas", "ver", "mostrar", "dame", "info", "consulta", "cuenta"
+        ]
+        
+        matches = [k for k in keywords_consulta if k in texto_lower]
+        print(f"[DEBUG] Keywords de consulta encontradas: {matches}")
+        
+        if matches:
+            print(f"[DEBUG] ✅ Clasificado como CONSULTA por keywords: semana + {matches}")
+            return "consulta"
+        else:
+            print(f"[DEBUG] ⚠️ Tiene 'semana' pero no keywords específicas, pasando a GPT...")
+            # NO retornar nada, dejar que siga a GPT
+    
+    # Si no matchea keywords claras, usar GPT
     hoy = datetime.now().strftime("%Y-%m-%d")
 
     prompt = f"""
 Clasifica el siguiente mensaje en UNA de estas tres categorías:
-1️⃣ "comando" → si el usuario pide hacer algo en la intranet laboral, como:
-   - imputar, añadir, quitar, restar, poner horas
-   - seleccionar semana o proyecto
-   - iniciar/finalizar jornada
-   - emitir o guardar línea
-2️⃣ "consulta" → si pide información sobre sus horas, como:
-   - "qué tengo esta semana", "dime mis horas", "ver resumen", "qué he imputado"
-3️⃣ "conversacion" → si:
-   - es un saludo ("hola", "buenos días", etc.)
-   - es una pregunta general ("capital de España", "quién es Messi", "cuántos continentes hay")
-   - habla de cultura, deportes, clima, política, geografía o conocimiento general
-   - o cualquier cosa que NO tenga relación con imputación de horas ni con tu trabajo.
 
-Responde SOLO con una palabra: "comando", "consulta" o "conversacion".
+1️⃣ "comando" → El usuario quiere HACER algo:
+   - Imputar horas, modificar datos, iniciar/finalizar jornada
+   - Ejemplos: "pon 8 horas", "imputa en desarrollo", "finaliza jornada"
+
+2️⃣ "consulta" → El usuario quiere VER/SABER información:
+   - Resúmenes, qué tiene imputado, cuántas horas, ver semanas
+   - Ejemplos: "resumen de esta semana", "qué tengo imputado", "cuántas horas"
+
+3️⃣ "conversacion" → Saludos o temas NO relacionados con trabajo:
+   - Ejemplos: "hola", "quién es Messi", "capital de Francia"
+
+⚠️ IMPORTANTE: Si pregunta por información de horas/semanas/proyectos = "consulta"
+Si quiere modificar/añadir/cambiar horas = "comando"
+
+Responde SOLO una palabra: "comando", "consulta" o "conversacion".
 
 Mensaje: "{texto}"
-"""
+Respuesta:"""
 
     try:
         from openai import OpenAI
@@ -651,6 +787,7 @@ Mensaje: "{texto}"
         )
 
         clasificacion = response.choices[0].message.content.strip().lower()
+        print(f"[DEBUG] 🧠 GPT clasificó '{texto[:50]}...' como: {clasificacion}")
         return clasificacion
 
     except Exception as e:
@@ -728,21 +865,27 @@ Hoy es {hoy}.
 
 El usuario pregunta: "{texto}"
 
-Extrae la fecha sobre la que pregunta y devuelve SOLO un JSON con este formato:
+Extrae la fecha sobre la que pregunta y devuelve SOLO un JSON válido con este formato:
 {{
   "fecha": "YYYY-MM-DD",
   "tipo": "semana"  
 }}
 
 Reglas:
-- Si dice "esta semana", "semana actual", usa el lunes de la semana actual
+- Si dice "esta semana", "semana actual", usa el lunes de la semana actual ({hoy})
 - Si dice "la semana del X de Y", calcula el lunes de esa semana
 - Si dice "semana pasada", calcula el lunes de la semana anterior
 - Si dice "próxima semana", calcula el lunes de la siguiente semana  
 - Siempre usa el año 2025
 - tipo siempre debe ser "semana"
+- Si menciona un día específico (22 de septiembre), devuelve el lunes de ESA semana
 
-Ejemplo: "dime la semana del 26 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}}
+Ejemplos:
+- "dime la semana del 26 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}}
+- "resumen de la semana del 23 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}}
+- "esta semana" → Calcula el lunes de la semana actual
+
+MUY IMPORTANTE: Devuelve SOLO el JSON, sin texto adicional, sin markdown, sin explicaciones.
 
 Respuesta:"""
     
@@ -750,16 +893,27 @@ Respuesta:"""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Eres un intérprete de fechas. Devuelve solo JSON."},
+                {"role": "system", "content": "Eres un intérprete de fechas. Devuelves solo JSON válido, sin markdown ni texto adicional."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0
         )
         
         raw = response.choices[0].message.content.strip()
+        
+        # Limpiar posible markdown
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1]  # Quitar primera línea
+            raw = raw.rsplit("\n", 1)[0]  # Quitar última línea
+            raw = raw.replace("```", "").strip()
+        
         data = json.loads(raw)
         return data
     
+    except json.JSONDecodeError as e:
+        print(f"[DEBUG] Error parseando JSON de GPT. Raw: {raw}")
+        print(f"[DEBUG] Error: {e}")
+        return None
     except Exception as e:
         print(f"[DEBUG] Error interpretando consulta: {e}")
         return None
@@ -784,6 +938,8 @@ Acciones válidas:
 - finalizar_jornada
 - guardar_linea
 - emitir_linea
+- eliminar_linea (requiere "nombre" del proyecto)
+- imputar_horas_dia acepta "modo": "sumar" (default) o "establecer"
 
 Reglas:
 1️⃣ Siempre usa el año 2025 aunque el usuario no lo diga.
@@ -800,6 +956,23 @@ Reglas:
 8️⃣ Si dice "quita", "resta", "borra" o "elimina", las horas deben ser NEGATIVAS (por ejemplo -2).
 9️⃣ Si dice "suma", "añade", "agrega" o "pon", las horas son POSITIVAS.
 🔟 Si el usuario no menciona día, asume el día actual ({hoy}).
+🔟 Si dice "totales", "establece", "pon exactamente", "cambia a": 
+   usar modo "establecer"
+🔟 Si dice "borra la línea", "elimina el proyecto":
+   usar accion "eliminar_linea"
+   Si dice "totales", "establece", "pon exactamente", "cambia a", "reemplaza por":
+   → usar modo "establecer" en imputar_horas_dia
+   Ejemplo: {{"accion": "imputar_horas_dia", "parametros": {{"dia": "jueves", "horas": 2, "modo": "establecer"}}}}
+
+🔟 Si dice "elimina las horas del [día]", "borra las horas del [día]":
+   → usar modo "establecer" con horas: 0
+   Ejemplo: {{"accion": "imputar_horas_dia", "parametros": {{"dia": "jueves", "horas": 0, "modo": "establecer"}}}}
+
+🔟 Si dice "borra la línea", "elimina el proyecto", "quita la línea":
+   → usar accion "eliminar_linea" con el nombre del proyecto
+   Ejemplo: {{"accion": "eliminar_linea", "parametros": {{"nombre": "Desarrollo"}}}}
+   
+🔟 IMPORTANTE: Después de eliminar_linea, SIEMPRE añadir {{"accion": "guardar_linea"}}
 
 3️⃣ Si la frase incluye varias acciones, ordénalas SIEMPRE así:
    - seleccionar_fecha primero (si procede)
@@ -843,11 +1016,10 @@ Frase del usuario: "{texto}"
         if isinstance(data, dict):
             data = [data]
 
-        # 🧠 Reordenar acciones: fecha → proyecto → imputación
-        orden_correcto = ["seleccionar_fecha", "seleccionar_proyecto",
-                          "imputar_horas_dia", "imputar_horas_semana", "volver"]
-        data = sorted(data, key=lambda x: orden_correcto.index(
-            x["accion"]) if x["accion"] in orden_correcto else 99)
+        # NO reordenar si hay múltiples proyectos intercalados
+        # El prompt de GPT ya genera el orden correcto
+        # data = sorted(data, key=lambda x: orden_correcto.index(
+        #     x["accion"]) if x["accion"] in orden_correcto else 99)
 
         return data
 
@@ -895,12 +1067,32 @@ def ejecutar_accion(driver, wait, orden, contexto):
             return mensaje
         except Exception as e:
             return f"Error seleccionando proyecto: {e}"
+        # 🗑️ Eliminar línea
+# 🗑️ Eliminar línea
+    elif accion == "eliminar_linea":
+        try:
+            nombre = orden["parametros"].get("nombre")
+            resultado = eliminar_linea_proyecto(driver, wait, nombre)
+            
+            # Auto-guardar después de eliminar
+            time.sleep(0.5)
+            try:
+                btn_guardar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#btGuardarLinea")))
+                btn_guardar.click()
+                time.sleep(1.5)
+                return resultado + " y he guardado los cambios"
+            except:
+                return resultado + " (recuerda guardar los cambios)"
+                
+        except Exception as e:
+            return f"Error eliminando línea: {e}"
 
     # ⏱️ Imputar horas del día
     elif accion == "imputar_horas_dia":
         try:
             dia_param = orden["parametros"].get("dia")
             horas = float(orden["parametros"].get("horas", 0))
+            modo = orden["parametros"].get("modo", "sumar")  # ← NUEVO
             fila = contexto.get("fila_actual")
             proyecto = contexto.get("proyecto_actual", "Desconocido")
 
@@ -922,7 +1114,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
             except Exception:
                 dia = dia_param.lower()
 
-            return imputar_horas_dia(driver, wait, dia, horas, fila, proyecto)
+            return imputar_horas_dia(driver, wait, dia, horas, fila, proyecto, modo)  # ← ACTUALIZADO
 
         except Exception as e:
             return f"Error al imputar horas: {e}"

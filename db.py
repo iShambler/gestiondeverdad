@@ -12,7 +12,7 @@ import os
 # 🔧 CONFIGURACIÓN BASE DE DATOS
 # ==============================================================
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bot.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://gestion:123456@localhost:3306/agente_bot")
 
 engine = create_engine(
     DATABASE_URL,
@@ -52,17 +52,15 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Identificadores por canal
-    app_id = Column(String, unique=True, nullable=True)          # ID interno de tu app con login
-    slack_id = Column(String, unique=True, nullable=True)        # ID de usuario de Slack
-    external_id = Column(String, unique=True, nullable=True)     # Otras integraciones futuras
+    app_id = Column(String(255), unique=True, nullable=True)
+    slack_id = Column(String(255), unique=True, nullable=True)
+    external_id = Column(String(255), unique=True, nullable=True)
+    nombre = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    canal_principal = Column(String(50), default="webapp")
+    username_intranet = Column(String(255), nullable=True)
+    password_intranet = Column(String(255), nullable=True)
 
-    nombre = Column(String, nullable=True)
-    email = Column(String, nullable=True)
-    canal_principal = Column(String, default="webapp")           # webapp / slack / otro
-
-    # Credenciales de intranet
-    username_intranet = Column(String, nullable=True)
-    password_intranet = Column(String, nullable=True)            # Cifrada
 
     creado = Column(DateTime, default=datetime.utcnow)
     ultimo_acceso = Column(DateTime, default=datetime.utcnow)
@@ -92,12 +90,12 @@ class Peticion(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
-    canal = Column(String, default="webapp")                     # Slack, WebApp, API...
+    canal = Column(String(50), default="webapp")                     # Slack, WebApp, API...
     texto_usuario = Column(Text, nullable=False)
-    tipo_mensaje = Column(String, nullable=True)                 # comando / consulta / conversacion
+    tipo_mensaje = Column(String(50), nullable=True)                 # comando / consulta / conversacion
     acciones_ejecutadas = Column(JSON, nullable=True)
     respuesta = Column(Text, nullable=True)
-    estado = Column(String, default="ok")
+    estado = Column(String(50), default="ok")
     duracion_ms = Column(Integer, nullable=True)
     fecha = Column(DateTime, default=datetime.utcnow)
 

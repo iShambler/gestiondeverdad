@@ -1,0 +1,83 @@
+# ===================================================================
+# ACTUALIZACIÓN PARA interpretar_con_gpt() 
+# ===================================================================
+
+# Añadir estas nuevas acciones a la lista:
+# - eliminar_linea (requiere "nombre" del proyecto)
+# - imputar_horas_dia (ahora acepta "modo": "sumar" o "establecer")
+
+# Nuevas reglas para el prompt:
+
+"""
+Acciones válidas:
+- seleccionar_fecha (requiere "fecha" en formato YYYY-MM-DD)
+- volver
+- seleccionar_proyecto (requiere "nombre")
+- imputar_horas_dia (requiere "dia", "horas" y opcionalmente "modo": "sumar" o "establecer")
+- imputar_horas_semana
+- eliminar_linea (requiere "nombre" del proyecto a eliminar)
+- iniciar_jornada
+- finalizar_jornada
+- guardar_linea
+- emitir_linea
+
+Reglas IMPORTANTES:
+🔟 Si dice "totales", "establece", "pon exactamente", "cambia a", "reemplaza por":
+   → usar modo "establecer" en imputar_horas_dia
+   Ejemplo: {{"accion": "imputar_horas_dia", "parametros": {{"dia": "jueves", "horas": 2, "modo": "establecer"}}}}
+
+🔟 Si dice "añade", "suma", "agrega" (o no menciona nada específico):
+   → usar modo "sumar" (o no especificar modo, es el default)
+
+🔟 Si dice "borra la línea", "elimina el proyecto", "quita la línea":
+   → usar accion "eliminar_linea" con el nombre del proyecto
+   Ejemplo: {{"accion": "eliminar_linea", "parametros": {{"nombre": "Desarrollo"}}}}
+"""
+
+# ===================================================================
+# ACTUALIZACIÓN PARA ejecutar_accion()
+# ===================================================================
+
+# Añadir en ejecutar_accion() estos casos:
+
+"""
+    # 🗑️ Eliminar línea de proyecto
+    elif accion == "eliminar_linea":
+        try:
+            nombre = orden["parametros"].get("nombre")
+            return eliminar_linea_proyecto(driver, wait, nombre)
+        except Exception as e:
+            return f"Error eliminando línea: {e}"
+
+    # ⏱️ Imputar horas del día (ACTUALIZAR el caso existente)
+    elif accion == "imputar_horas_dia":
+        try:
+            dia_param = orden["parametros"].get("dia")
+            horas = float(orden["parametros"].get("horas", 0))
+            modo = orden["parametros"].get("modo", "sumar")  # ← NUEVO
+            fila = contexto.get("fila_actual")
+            proyecto = contexto.get("proyecto_actual", "Desconocido")
+
+            if not fila:
+                return "Necesito que primero selecciones un proyecto antes de imputar horas"
+
+            # Si GPT devuelve una fecha ISO → convertir a nombre de día
+            try:
+                fecha_obj = datetime.fromisoformat(dia_param)
+                dia = fecha_obj.strftime("%A").lower()
+                dias_map = {
+                    "monday": "lunes",
+                    "tuesday": "martes",
+                    "wednesday": "miércoles",
+                    "thursday": "jueves",
+                    "friday": "viernes"
+                }
+                dia = dias_map.get(dia, dia)
+            except Exception:
+                dia = dia_param.lower()
+
+            return imputar_horas_dia_mejorada(driver, wait, dia, horas, fila, proyecto, modo)  # ← ACTUALIZADO
+
+        except Exception as e:
+            return f"Error al imputar horas: {e}"
+"""

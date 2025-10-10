@@ -2,3 +2,9 @@ selenium
 webdriver-manager
 openai
 python-dotenv
+fastapi
+uvicorn
+requests
+sqlalchemy
+pymysql
+cryptography
