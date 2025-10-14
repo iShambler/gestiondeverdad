@@ -29,10 +29,12 @@ class BrowserSession:
         try:
             service = ChromeService(ChromeDriverManager().install())
             options = webdriver.ChromeOptions()
-            # Opcional: modo headless para servidores sin GUI
-            # options.add_argument('--headless')
+            # 🆕 MODO HEADLESS ACTIVADO
+            options.add_argument('--headless')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')  # Recomendado para headless
+            options.add_argument('--window-size=1920,1080')  # Tamaño de ventana fijo
             
             self.driver = webdriver.Chrome(service=service, options=options)
             self.wait = WebDriverWait(self.driver, 15)
@@ -47,7 +49,7 @@ class BrowserSession:
         """Actualiza el timestamp de última actividad."""
         self.last_activity = datetime.now()
     
-    def is_expired(self, timeout_minutes: int = 30) -> bool:
+    def is_expired(self, timeout_minutes: int = 3) -> bool:
         """Verifica si la sesión ha expirado por inactividad."""
         return datetime.now() - self.last_activity > timedelta(minutes=timeout_minutes)
     
@@ -70,7 +72,7 @@ class BrowserPool:
     Pool de navegadores que gestiona sesiones para múltiples usuarios.
     """
     
-    def __init__(self, max_sessions: int = 10, session_timeout_minutes: int = 30):
+    def __init__(self, max_sessions: int = 10, session_timeout_minutes: int = 3):
         self.sessions = {}  # user_id -> BrowserSession
         self.max_sessions = max_sessions
         self.session_timeout_minutes = session_timeout_minutes
@@ -139,7 +141,7 @@ class BrowserPool:
     def _cleanup_expired_sessions(self):
         """Thread que limpia sesiones expiradas periódicamente."""
         while True:
-            time.sleep(60)  # Revisar cada minuto
+            time.sleep(30)  # Revisar cada 30 segundos (más frecuente para timeout de 3 min)
             
             with self.lock:
                 expired = [
@@ -174,4 +176,4 @@ class BrowserPool:
 
 
 # Instancia global del pool
-browser_pool = BrowserPool(max_sessions=10, session_timeout_minutes=30)
+browser_pool = BrowserPool(max_sessions=10, session_timeout_minutes=3)

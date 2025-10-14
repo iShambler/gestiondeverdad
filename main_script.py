@@ -375,12 +375,33 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
             f"'{normalizar(nombre_proyecto)}')]"
         )
 
-        elemento = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
-        elemento.click()
-        time.sleep(1)
+        try:
+            elemento = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
+            elemento.click()
+            time.sleep(1)
 
-        return fila, f"He abierto el proyecto '{nombre_proyecto}'"
+            return fila, f"He abierto el proyecto '{nombre_proyecto}'"
+            
+        except Exception as e:
+            # 🆕 Si no encuentra el proyecto, cerrar el overlay automáticamente
+            print(f"[DEBUG] ⚠️ No se encontró el proyecto '{nombre_proyecto}', cerrando overlay...")
+            try:
+                # Ejecutar el código del botón Cerrar
+                driver.execute_script("""
+                    document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
+                    document.getElementById('textoBusqueda').style.color='gray';
+                    buscadorJTree();
+                    var tree = $('#treeTipologia');
+                    tree.jstree('deselect_all');
+                    tree.jstree('close_all');
+                    hideOverlay();
+                """)
+                time.sleep(1)
+            except:
+                pass
+            
+            return None, f"No he encontrado el proyecto '{nombre_proyecto}' en el sistema"
 
     except Exception as e:
         return None, f"No he podido seleccionar el proyecto '{nombre_proyecto}': {e}"
