@@ -158,22 +158,47 @@ def lunes_de_semana(fecha):
     return fecha - timedelta(days=fecha.weekday())
 
 def hacer_login(driver, wait, username=None, password=None):
-    """Realiza el login en la intranet con las credenciales proporcionadas."""
+    """Realiza el login en la intranet con las credenciales proporcionadas.
+    
+    Returns:
+        tuple: (success: bool, message: str)
+            - success: True si el login fue exitoso, False si falló
+            - message: Mensaje descriptivo del resultado
+    """
     # Si no se proporcionan credenciales, usar las del .env (modo compatibilidad)
     if username is None:
         username = USERNAME
     if password is None:
         password = PASSWORD
     
-    driver.get(LOGIN_URL)
-    usr = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, USERNAME_SELECTOR)))
-    usr.clear()
-    usr.send_keys(username)
-    pwd = driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR)
-    pwd.clear()
-    pwd.send_keys(password)
-    driver.find_element(By.CSS_SELECTOR, SUBMIT_SELECTOR).click()
-    time.sleep(3)
+    try:
+        driver.get(LOGIN_URL)
+        usr = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, USERNAME_SELECTOR)))
+        usr.clear()
+        usr.send_keys(username)
+        pwd = driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR)
+        pwd.clear()
+        pwd.send_keys(password)
+        driver.find_element(By.CSS_SELECTOR, SUBMIT_SELECTOR).click()
+        time.sleep(3)
+        
+        # 🔍 Verificar si hay error de login
+        try:
+            error_div = driver.find_element(By.CSS_SELECTOR, ".errorLogin, div[class*='error']")
+            if error_div.is_displayed():
+                error_text = error_div.text.strip()
+                print(f"[DEBUG] ❌ Error de login detectado: {error_text}")
+                return False, "credenciales_invalidas"
+        except:
+            # No hay div de error, el login fue exitoso
+            pass
+        
+        # ✅ Login exitoso
+        return True, "login_exitoso"
+        
+    except Exception as e:
+        print(f"[DEBUG] ❌ Excepción durante login: {e}")
+        return False, f"error_tecnico: {e}"
 
 def volver_inicio(driver):
     """Pulsa el botón 'Volver' para regresar a la pantalla principal tras login."""

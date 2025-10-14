@@ -73,12 +73,9 @@ def verificar_y_solicitar_credenciales(db: Session, user_id: str, canal: str = "
     if not usuario.username_intranet or not usuario.password_intranet:
         estado_auth.iniciar_proceso(user_id)
         mensaje = (
-            "👋 ¡Hola! Veo que es la primera vez que usas este servicio.\n\n"
-            "Para poder ayudarte con la imputación de horas, necesito que me proporciones "
-            "tus credenciales de GestiónITT.\n\n"
-            "🔐 Por favor, envíame tu **nombre de usuario** de la intranet.\n\n"
-            "⚠️ Tranquilo/a, tus credenciales se guardarán cifradas y solo se usarán "
-            "para automatizar tus imputaciones."
+            "👋 **¡Hola!** Para ayudarte con la imputación de horas, necesito tus credenciales de GestiónITT.\n\n"
+            "🔑 Por favor, envíame tu **nombre de usuario** de la intranet.\n\n"
+            "🔒 Tus credenciales se guardarán cifradas y solo se usarán para automatizar tus imputaciones."
         )
         return usuario, mensaje
     
@@ -163,6 +160,20 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
         return True, "⚠️ Ha ocurrido un error. Por favor, intenta de nuevo."
     
     # 🧠 Extraer credenciales con GPT
+    # Pero primero, validar que no sean saludos o mensajes muy cortos
+    texto_lower = texto.lower().strip()
+    saludos = ['hola', 'hi', 'hey', 'buenos dias', 'buenas tardes', 'buenas noches', 'ola', 'holi']
+    
+    if texto_lower in saludos:
+        # Es un saludo, no credenciales
+        if estado["esperando"] == "username":
+            return False, "❌ Por favor, envíame tu **nombre de usuario** de GestiónITT (no un saludo 😄):"
+        else:
+            return False, "❌ Por favor, envíame tu **contraseña** de GestiónITT:"
+    
+    if len(texto.strip()) < 3:
+        return False, "❌ El texto es demasiado corto. Por favor, envíame tus credenciales:"
+    
     credenciales = extraer_credenciales_con_gpt(texto)
     
     # Procesar según lo que estemos esperando
@@ -183,16 +194,8 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
             db.commit()
             estado_auth.finalizar_proceso(user_id)
             
-            mensaje = (
-                f"🎉 ¡Perfecto! He guardado tus credenciales:\n"
-                f"  • Usuario: **{username}**\n"
-                f"  • Contraseña: ******\n\n"
-                "Ya puedes empezar a usar el servicio. Prueba a decirme cosas como:\n"
-                "  • 'Imputa 8 horas en Desarrollo hoy'\n"
-                "  • 'Pon toda la semana en el proyecto Estudio'\n"
-                "  • 'Inicia la jornada'\n\n"
-                "¿En qué puedo ayudarte? 😊"
-            )
+            # Mensaje temporal (será reemplazado por el de verificación)
+            mensaje = "🔄 Verificando tus credenciales..."
             return True, mensaje
         
         # Solo nos dio el username
@@ -203,9 +206,8 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
             estado_auth.guardar_username(user_id, username)
             
             mensaje = (
-                f"✅ Perfecto, he guardado tu usuario: **{username}**\n\n"
-                "🔑 Ahora envíame tu **contraseña** de GestiónITT.\n\n"
-                "🔒 Recuerda que será cifrada y almacenada de forma segura."
+                f"✅ Usuario recibido: **{username}**\n\n"
+                "🔑 Ahora envíame tu **contraseña** de GestiónITT."
             )
             return False, mensaje
         
@@ -228,17 +230,11 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
         usuario.establecer_credenciales_intranet(username, password)
         db.commit()
         
-        # Finalizar proceso
+        # Finalizar proceso (la verificación se hará en server.py)
         estado_auth.finalizar_proceso(user_id)
         
-        mensaje = (
-            "🎉 ¡Excelente! Tus credenciales han sido guardadas correctamente.\n\n"
-            "Ya puedes empezar a usar el servicio. Prueba a decirme cosas como:\n"
-            "  • 'Imputa 8 horas en Desarrollo hoy'\n"
-            "  • 'Pon toda la semana en el proyecto Estudio'\n"
-            "  • 'Inicia la jornada'\n\n"
-            "¿En qué puedo ayudarte? 😊"
-        )
+        # Mensaje temporal (será reemplazado por el de verificación)
+        mensaje = "🔄 Verificando tus credenciales..."
         return True, mensaje
     
     return True, None
