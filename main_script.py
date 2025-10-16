@@ -661,6 +661,63 @@ def leer_tabla_imputacion(driver):
         return []
 
 
+def consultar_dia(driver, wait, fecha_obj):
+    """
+    Consulta la información de un día específico.
+    Navega a la fecha, lee la tabla y devuelve un resumen del día.
+    """
+    try:
+        # Calcular el lunes de esa semana para navegar
+        lunes = lunes_de_semana(fecha_obj)
+        seleccionar_fecha(driver, lunes)
+        time.sleep(2)  # Esperar a que cargue la tabla
+        
+        # Leer la información de la tabla
+        proyectos = leer_tabla_imputacion(driver)
+        
+        if not proyectos:
+            fecha_str = fecha_obj.strftime('%d/%m/%Y')
+            return f"No hay horas imputadas el {fecha_str}"
+        
+        # Determinar qué día de la semana es
+        dia_semana_num = fecha_obj.weekday()  # 0=lunes, 4=viernes
+        dias_nombres = ["lunes", "martes", "miércoles", "jueves", "viernes"]
+        dia_nombre = dias_nombres[dia_semana_num] if dia_semana_num < 5 else None
+        
+        if not dia_nombre:
+            return f"El día seleccionado es fin de semana"
+        
+        # Formatear la información
+        fecha_str = fecha_obj.strftime('%d/%m/%Y')
+        dia_nombre_capitalize = dia_nombre.capitalize()
+        
+        resumen = f"📅 {dia_nombre_capitalize} {fecha_str}\n\n"
+        
+        total_dia = 0
+        proyectos_con_horas = []
+        
+        for proyecto in proyectos:
+            nombre_corto = proyecto['proyecto'].split(' - ')[-1]  # Solo la última parte
+            horas_dia = proyecto['horas'][dia_nombre]
+            
+            if horas_dia > 0:
+                proyectos_con_horas.append((nombre_corto, horas_dia))
+                total_dia += horas_dia
+        
+        if not proyectos_con_horas:
+            return f"📅 {dia_nombre_capitalize} {fecha_str}\n\n⚪ No hay horas imputadas este día"
+        
+        for nombre, horas in proyectos_con_horas:
+            resumen += f"🔹 {nombre}: {horas}h\n"
+        
+        resumen += f"\n📊 Total: {total_dia} horas"
+        
+        return resumen
+    
+    except Exception as e:
+        return f"No he podido consultar ese día: {e}"
+
+
 def consultar_semana(driver, wait, fecha_obj):
     """
     Consulta la información de una semana específica.
@@ -715,6 +772,8 @@ Información de la semana:
 
 Genera una respuesta natural, amigable y bien formateada con emojis. 
 Destaca lo más importante y presenta la información de forma clara.
+
+⚠️ IMPORTANTE: NO incluyas saludos ni presentaciones. Ve directo a la información solicitada.
 
 Respuesta:"""
     
@@ -776,15 +835,33 @@ def clasificar_mensaje(texto):
         return "comando"
     
     # Keywords para consultas - Detectar solicitudes de información
+    keywords_consulta = [
+        "qué tengo", "que tengo", "dime", "qué he imputado", "que he imputado",
+        "cuántas", "cuantas", "cuántas horas", "cuantas horas",
+        "ver", "mostrar", "dame", "info", "consulta", 
+        "resumen", "resume", "resumíme", "qué hice", "que hice",
+        "he hecho", "tengo hecho"
+    ]
+    
+    # Detectar consultas por keywords
+    if any(keyword in texto_lower for keyword in keywords_consulta):
+        print(f"[DEBUG] 📊 Detectada keyword de consulta")
+        return "consulta"
+    
+    # 🔴 DETECCIÓN ADICIONAL: Frases tipo "cuántas horas..."
+    if ("cuantas" in texto_lower or "cuántas" in texto_lower) and "horas" in texto_lower:
+        print(f"[DEBUG] 📊 Detectada consulta de horas")
+        return "consulta"
+    
     # Si menciona "semana" + palabras de consulta = es una consulta
     if "semana" in texto_lower:
         print(f"[DEBUG] 📅 Detectado 'semana' en el texto")
-        keywords_consulta = [
+        keywords_consulta_semana = [
             "resumen", "resume", "resumíme", "qué tengo", "dime", "qué he imputado",
             "cuántas", "ver", "mostrar", "dame", "info", "consulta", "cuenta"
         ]
         
-        matches = [k for k in keywords_consulta if k in texto_lower]
+        matches = [k for k in keywords_consulta_semana if k in texto_lower]
         print(f"[DEBUG] Keywords de consulta encontradas: {matches}")
         
         if matches:
@@ -805,8 +882,8 @@ Clasifica el siguiente mensaje en UNA de estas tres categorías:
    - Ejemplos: "pon 8 horas", "imputa en desarrollo", "finaliza jornada"
 
 2️⃣ "consulta" → El usuario quiere VER/SABER información:
-   - Resúmenes, qué tiene imputado, cuántas horas, ver semanas
-   - Ejemplos: "resumen de esta semana", "qué tengo imputado", "cuántas horas"
+   - Resúmenes, qué tiene imputado, cuántas horas, ver semanas/días
+   - Ejemplos: "resumen de esta semana", "qué tengo imputado", "cuántas horas", "cuántas horas tengo hoy", "cuántas horas he hecho"
 
 3️⃣ "conversacion" → Saludos o temas NO relacionados con trabajo:
    - Ejemplos: "hola", "quién es Messi", "capital de Francia"
@@ -869,13 +946,14 @@ Hoy es {hoy} ({dia_semana}).
 
 Si el usuario te saluda por primera vez, preséntate brevemente. 
 Si ya has conversado con el usuario y te vuelve a saludar, responde de forma natural sin volver a presentarte.
+Si el usuario NO te saluda, NO le saludes tú tampoco. Ve directo al punto.
 Responde de forma natural, amigable y concisa."""
     else:
         system_content = f"""Eres un asistente virtual amigable especializado en gestión de imputación de horas laborales.
 
 Hoy es {hoy} ({dia_semana}).
 
-Estás en medio de una conversación. NO te presentes de nuevo, solo responde a la pregunta de forma natural y directa.
+Estás en medio de una conversación. NO te presentes de nuevo, NO saludes, solo responde a la pregunta de forma natural y directa.
 Si te pregunta sobre algo externo (noticias, clima, información general), responde normalmente."""
     
     try:
@@ -904,34 +982,46 @@ def interpretar_consulta(texto):
     Interpreta consultas sobre horas imputadas y extrae la fecha solicitada.
     """
     hoy = datetime.now().strftime("%Y-%m-%d")
+    dia_semana = datetime.now().strftime("%A")
     
     prompt = f"""Eres un asistente que interpreta consultas sobre horas laborales imputadas.
 
-Hoy es {hoy}.
+Hoy es {hoy} ({dia_semana}).
 
 El usuario pregunta: "{texto}"
 
 Extrae la fecha sobre la que pregunta y devuelve SOLO un JSON válido con este formato:
 {{
   "fecha": "YYYY-MM-DD",
-  "tipo": "semana"  
+  "tipo": "semana" | "dia"  
 }}
 
-Reglas:
-- Si dice "esta semana", "semana actual", usa el lunes de la semana actual ({hoy})
-- Si dice "la semana del X de Y", calcula el lunes de esa semana
-- Si dice "semana pasada", calcula el lunes de la semana anterior
-- Si dice "próxima semana", calcula el lunes de la siguiente semana  
-- Siempre usa el año 2025
-- tipo siempre debe ser "semana"
-- Si menciona un día específico (22 de septiembre), devuelve el lunes de ESA semana
+Reglas CRÍTICAS:
+- Siempre usa el año 2025 (estamos en 2025)
+- Si pregunta por "esta semana", "semana actual", "la semana" → tipo: "semana", fecha: lunes de la semana
+- Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
+- Si pregunta por "MAÑANA" → tipo: "dia", fecha: calcular día siguiente a {hoy}
+- Si pregunta por "AYER" → tipo: "dia", fecha: calcular día anterior a {hoy}
+- Si pregunta por un DÍA ESPECÍFICO ("el miércoles 15", "el 22 de septiembre", "el 15 de octubre") → tipo: "dia", fecha: ese día exacto
+- Si dice "semana pasada", calcula el lunes de la semana anterior a {hoy}
+- Si dice "próxima semana", calcula el lunes de la siguiente semana
 
 Ejemplos:
-- "dime la semana del 26 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}}
-- "resumen de la semana del 23 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}}
-- "esta semana" → Calcula el lunes de la semana actual
+- "esta semana" → {{"fecha": "(lunes de la semana actual)", "tipo": "semana"}}
+- "semana pasada" → {{"fecha": "(lunes de la semana anterior)", "tipo": "semana"}}
+- "la semana del 26 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}} (lunes de esa semana)
+- "cuántas horas tengo hoy" → {{"fecha": "{hoy}", "tipo": "dia"}}
+- "qué tengo imputado el miércoles 15" → {{"fecha": "2025-10-15", "tipo": "dia"}} (ese día exacto)
+- "qué tengo el 22 de septiembre" → {{"fecha": "2025-09-22", "tipo": "dia"}} (ese día exacto)
+- "dime qué tengo hoy" → {{"fecha": "{hoy}", "tipo": "dia"}}
+- "cuántas horas he hecho hoy" → {{"fecha": "{hoy}", "tipo": "dia"}}
+- "cuantas horas tengo el 15 de octubre" → {{"fecha": "2025-10-15", "tipo": "dia"}}
+- "qué tengo el jueves" → {{"fecha": "(calcular próximo jueves)", "tipo": "dia"}}
 
-MUY IMPORTANTE: Devuelve SOLO el JSON, sin texto adicional, sin markdown, sin explicaciones.
+MUY IMPORTANTE: 
+- Devuelve SOLO el JSON, sin texto adicional, sin markdown, sin explicaciones
+- Si pregunta por un día específico → tipo: "dia" y la fecha EXACTA de ese día
+- Si pregunta por una semana → tipo: "semana" y el LUNES de esa semana
 
 Respuesta:"""
     
@@ -954,6 +1044,20 @@ Respuesta:"""
             raw = raw.replace("```", "").strip()
         
         data = json.loads(raw)
+        
+        # ✅ VALIDACIÓN ADICIONAL: Asegurar que la fecha sea un lunes SOLO si tipo="semana"
+        try:
+            if data.get("tipo") == "semana":
+                fecha_obj = datetime.fromisoformat(data["fecha"])
+                # Si no es lunes (weekday != 0), calcular el lunes de esa semana
+                if fecha_obj.weekday() != 0:
+                    dias_hasta_lunes = fecha_obj.weekday()
+                    lunes = fecha_obj - timedelta(days=dias_hasta_lunes)
+                    data["fecha"] = lunes.strftime("%Y-%m-%d")
+                    print(f"[DEBUG] 🔧 Ajustado a lunes: {data['fecha']}")
+        except:
+            pass
+        
         return data
     
     except json.JSONDecodeError as e:
@@ -996,6 +1100,11 @@ Reglas:
     genera varias acciones intercaladas en este orden:
     seleccionar_proyecto → imputar_horas_dia → seleccionar_proyecto → imputar_horas_dia.
     Así cada imputación se asocia al proyecto anterior.
+⚠️ Si el usuario menciona el nombre de un proyecto (por ejemplo: "Desarrollo", "Dirección", "Estudio"),
+SIEMPRE debes incluir una acción {{ "accion": "seleccionar_proyecto", "parametros": {{ "nombre": "<nombre>" }} }} 
+antes de cualquier imputación, incluso si parece que ya estaba seleccionado.
+
+
 6️⃣ Si menciona "expide", "emite", "envía", "envíalo", "expídelo" o similares,
     añade una acción {{"accion": "emitir_linea"}} al final.
 7️⃣ Si no menciona ninguna de esas palabras, añade {{"accion": "guardar_linea"}} después de imputar horas.
@@ -1056,6 +1165,7 @@ Frase del usuario: "{texto}"
         )
 
         raw = response.choices[0].message.content.strip()
+        print(f"[DEBUG] 🧠 GPT generó: {raw}")
         data = json.loads(raw)
 
         # Si devuelve un solo objeto, lo convertimos a lista
@@ -1167,13 +1277,20 @@ def ejecutar_accion(driver, wait, orden, contexto):
 
     # ⏱️ Imputar horas semanales
     elif accion == "imputar_horas_semana":
+       
+        proyecto = contexto.get("proyecto_actual")
+        if not proyecto:
+            return "No sé en qué proyecto quieres imputar. Dímelo, por favor."
+
         fila = contexto.get("fila_actual")
-        proyecto = contexto.get("proyecto_actual", "Desconocido")
-
         if not fila:
-            return "Necesito que primero selecciones un proyecto antes de imputar la semana"
+            fila, msg = seleccionar_proyecto(driver, wait, proyecto)
+            if not fila:
+                return f"No he podido abrir el proyecto '{proyecto}'."
+            contexto["fila_actual"] = fila
+            print(f"[DEBUG] 🔁 Re-seleccionado proyecto '{proyecto}' antes de imputar semana.")
 
-        return imputar_horas_semana(driver, wait, fila, proyecto)
+        return imputar_horas_semana(driver, wait, fila, nombre_proyecto=proyecto)
 
     # 💾 Guardar línea
     elif accion == "guardar_linea":
@@ -1239,16 +1356,26 @@ def main():
             if tipo_mensaje == "consulta":
                 consulta_info = interpretar_consulta(texto)
                 
-                if consulta_info and consulta_info.get("tipo") == "semana":
+                if consulta_info:
                     try:
                         fecha = datetime.fromisoformat(consulta_info["fecha"])
-                        info_bruta = consultar_semana(driver, wait, fecha)
-                        resumen_natural = generar_resumen_natural(info_bruta, texto)
-                        print(f"\n🤖 Asistente:\n{resumen_natural}\n")
+                        
+                        if consulta_info.get("tipo") == "dia":
+                            # Consulta de un día específico
+                            info_bruta = consultar_dia(driver, wait, fecha)
+                            resumen_natural = generar_resumen_natural(info_bruta, texto)
+                            print(f"\n🤖 Asistente:\n{resumen_natural}\n")
+                        elif consulta_info.get("tipo") == "semana":
+                            # Consulta de una semana completa
+                            info_bruta = consultar_semana(driver, wait, fecha)
+                            resumen_natural = generar_resumen_natural(info_bruta, texto)
+                            print(f"\n🤖 Asistente:\n{resumen_natural}\n")
+                        else:
+                            print("\n🤔 No he entendido si preguntas por un día o una semana.\n")
                     except Exception as e:
-                        print(f"\n⚠️ No he podido consultar esa semana: {e}\n")
+                        print(f"\n⚠️ No he podido consultar: {e}\n")
                 else:
-                    print("\n🤔 No he entendido qué semana quieres consultar. ¿Podrías ser más específico?\n")
+                    print("\n🤔 No he entendido qué quieres consultar. ¿Podrías ser más específico?\n")
                 continue
             
             # Si es un comando, interpretarlo y ejecutarlo

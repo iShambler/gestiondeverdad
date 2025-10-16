@@ -20,6 +20,7 @@ from main_script import (
     clasificar_mensaje,
     responder_conversacion,
     interpretar_consulta,
+    consultar_dia,
     consultar_semana,
     generar_resumen_natural,
 )
@@ -130,8 +131,12 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
                             
                             mensaje_error = (
                                 "❌ **Error**: Las credenciales no son válidas en GestiónITT.\n\n"
-                                "Por favor, verifica tus datos y envíamelos de nuevo:\n\n"
-                                "🔑 **Nombre de usuario**:"
+                                "Necesito tus credenciales de GestiónITT.\n\n"
+                                "📝 **Envíamelas así:**\n"
+                                "```\n"
+                                "Usuario: tu_usuario\n"
+                                "Contraseña: tu_contraseña\n"
+                                "```"
                             )
                             registrar_peticion(db, usuario.id, texto, "autenticacion_fallida", canal=canal, respuesta=mensaje_error, estado="credenciales_invalidas")
                             return mensaje_error
@@ -177,9 +182,14 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
                             credential_manager.iniciar_cambio_credenciales(user_id)
                             error_msg = (
                                 "❌ **Error de login**: Las credenciales de GestiónITT no son correctas.\n\n"
-                                "¿Quieres actualizar tus credenciales?\n\n"
-                                "👉 Si es así, envíame tu **nuevo nombre de usuario** de GestiónITT.\n"
-                                "👉 Si no, escribe 'cancelar' y revisaré el problema."
+                                "Necesito tus credenciales de GestiónITT.\n\n"
+                                "📝 **Envíamelas así:**\n"
+                                "```\n"
+                                "Usuario: tu_usuario\n"
+                                "Contraseña: tu_contraseña\n"
+                                "```\n\n"
+                                "🔒 **Tranquilo:** Tus credenciales se guardan cifradas.\n\n"
+                                "⚠️ Si no quieres cambiarlas, escribe 'cancelar'."
                             )
                             registrar_peticion(db, usuario.id, texto, "error_login", canal=canal, respuesta=error_msg, estado="credenciales_invalidas")
                             return error_msg
@@ -209,18 +219,33 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
                 session.update_activity()
                 return respuesta
 
-            # 📊 Consultas (resumen semanal)
+            # 📊 Consultas (resumen semanal o diario)
             elif tipo_mensaje == "consulta":
                 consulta_info = interpretar_consulta(texto)
-                if consulta_info and consulta_info.get("tipo") == "semana":
+                if consulta_info:
                     fecha = datetime.fromisoformat(consulta_info["fecha"])
-                    info_bruta = consultar_semana(session.driver, session.wait, fecha)
-                    resumen_natural = generar_resumen_natural(info_bruta, texto)
-                    registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=resumen_natural)
-                    session.update_activity()
-                    return resumen_natural
+                    
+                    if consulta_info.get("tipo") == "dia":
+                        # Consulta de un día específico
+                        info_bruta = consultar_dia(session.driver, session.wait, fecha)
+                        resumen_natural = generar_resumen_natural(info_bruta, texto)
+                        registrar_peticion(db, usuario.id, texto, "consulta_dia", canal=canal, respuesta=resumen_natural)
+                        session.update_activity()
+                        return resumen_natural
+                    elif consulta_info.get("tipo") == "semana":
+                        # Consulta de una semana completa
+                        info_bruta = consultar_semana(session.driver, session.wait, fecha)
+                        resumen_natural = generar_resumen_natural(info_bruta, texto)
+                        registrar_peticion(db, usuario.id, texto, "consulta_semana", canal=canal, respuesta=resumen_natural)
+                        session.update_activity()
+                        return resumen_natural
+                    else:
+                        respuesta = "🤔 No he entendido si preguntas por un día o una semana."
+                        registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
+                        session.update_activity()
+                        return respuesta
                 else:
-                    respuesta = "🤔 No he entendido qué semana quieres consultar."
+                    respuesta = "🤔 No he entendido qué quieres consultar."
                     registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
                     session.update_activity()
                     return respuesta

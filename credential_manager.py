@@ -16,9 +16,7 @@ class CredentialManager:
     def iniciar_cambio_credenciales(self, user_id: str):
         """Inicia el proceso de cambio de credenciales"""
         self.usuarios_cambiando_credenciales[user_id] = {
-            "esperando_confirmacion": False,
-            "esperando": "username",
-            "nuevo_username": None
+            "esperando": "ambas"  # Ahora siempre pedimos ambas a la vez
         }
     
     def esta_cambiando_credenciales(self, user_id: str) -> bool:
@@ -27,7 +25,8 @@ class CredentialManager:
     
     def procesar_nueva_credencial(self, db: Session, user_id: str, texto: str, canal: str = "webapp"):
         """
-        Procesa el username o password nuevo que el usuario está proporcionando.
+        Procesa el username y password nuevos que el usuario está proporcionando.
+        Ahora siempre espera AMBAS credenciales juntas.
         
         Returns:
             (completado, mensaje)
@@ -47,37 +46,42 @@ class CredentialManager:
             self.finalizar_cambio(user_id)
             return True, "⚠️ Error al cambiar credenciales. Intenta de nuevo."
         
-        # Procesar según lo que estemos esperando
-        if estado["esperando"] == "username":
-            username = texto.strip()
-            
-            if len(username) < 3:
-                return False, "❌ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo:"
-            
-            # Guardar temporalmente
-            estado["nuevo_username"] = username
-            estado["esperando"] = "password"
-            
-            return False, f"✅ Perfecto, nuevo usuario: **{username}**\n\n🔑 Ahora envíame tu **nueva contraseña** de GestiónITT."
+        # Usar la misma función de extracción que auth_handler
+        from auth_handler import extraer_credenciales_con_gpt
         
-        elif estado["esperando"] == "password":
-            password = texto.strip()
-            
-            if len(password) < 4:
-                return False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo:"
-            
-            # Guardar nuevas credenciales
-            username = estado["nuevo_username"]
-            usuario.username_intranet = username
-            usuario.password_intranet = cifrar(password)
-            db.commit()
-            
-            # Finalizar proceso
-            self.finalizar_cambio(user_id)
-            
-            return True, f"🎉 ¡Credenciales actualizadas correctamente!\n\n✅ Usuario: **{username}**\n✅ Contraseña: ******\n\nYa puedes volver a usar el servicio normalmente."
+        credenciales = extraer_credenciales_con_gpt(texto)
         
-        return True, None
+        username = credenciales.get("username")
+        password = credenciales.get("password")
+        
+        # Validar que tengamos AMBAS credenciales
+        if not credenciales["ambos"]:
+            mensaje_incompleto = (
+                "⚠️ Necesito AMBAS credenciales para continuar.\n\n"
+                "📝 **Envíamelas así:**\n"
+                "```\n"
+                "Usuario: tu_usuario\n"
+                "Contraseña: tu_contraseña\n"
+                "```"
+            )
+            return False, mensaje_incompleto
+        
+        # Validar longitud mínima
+        if not username or len(username) < 3:
+            return False, "❌ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo."
+        
+        if not password or len(password) < 4:
+            return False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo."
+        
+        # Guardar nuevas credenciales
+        usuario.username_intranet = username
+        usuario.password_intranet = cifrar(password)
+        db.commit()
+        
+        # Finalizar proceso
+        self.finalizar_cambio(user_id)
+        
+        return True, f"🎉 ¡Credenciales actualizadas correctamente!\n\n✅ Usuario: **{username}**\n✅ Contraseña: ******\n\nYa puedes volver a usar el servicio normalmente."
     
     def finalizar_cambio(self, user_id: str):
         """Finaliza el proceso de cambio de credenciales"""

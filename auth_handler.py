@@ -73,9 +73,15 @@ def verificar_y_solicitar_credenciales(db: Session, user_id: str, canal: str = "
     if not usuario.username_intranet or not usuario.password_intranet:
         estado_auth.iniciar_proceso(user_id)
         mensaje = (
-            "👋 **¡Hola!** Para ayudarte con la imputación de horas, necesito tus credenciales de GestiónITT.\n\n"
-            "🔑 Por favor, envíame tu **nombre de usuario** de la intranet.\n\n"
-            "🔒 Tus credenciales se guardarán cifradas y solo se usarán para automatizar tus imputaciones."
+            "👋 **¡Hola! Bienvenido al asistente de imputación de horas**\n\n"
+            "Estoy aquí para ayudarte a gestionar tus horas en GestiónITT de forma automática.\n\n"
+            "Para empezar, necesito tus credenciales de acceso.\n\n"
+            "📝 **Envíamelas así:**\n"
+            "```\n"
+            "Usuario: tu_usuario\n"
+            "Contraseña: tu_contraseña\n"
+            "```\n\n"
+            "🔒 **Tranquilo:** Tus credenciales se guardan cifradas y solo las uso para automatizar tus imputaciones."
         )
         return usuario, mensaje
     
@@ -137,7 +143,7 @@ Respuesta:"""
 def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "webapp") -> tuple[bool, str]:
     """
     Procesa las credenciales que el usuario está proporcionando.
-    Usa GPT para extraer username y password del texto en lenguaje natural.
+    Ahora siempre espera AMBAS credenciales juntas.
     
     Returns:
         (completado, mensaje):
@@ -160,84 +166,65 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
         return True, "⚠️ Ha ocurrido un error. Por favor, intenta de nuevo."
     
     # 🧠 Extraer credenciales con GPT
-    # Pero primero, validar que no sean saludos o mensajes muy cortos
+    # Validar que no sean saludos
     texto_lower = texto.lower().strip()
     saludos = ['hola', 'hi', 'hey', 'buenos dias', 'buenas tardes', 'buenas noches', 'ola', 'holi']
     
     if texto_lower in saludos:
-        # Es un saludo, no credenciales
-        if estado["esperando"] == "username":
-            return False, "❌ Por favor, envíame tu **nombre de usuario** de GestiónITT (no un saludo 😄):"
-        else:
-            return False, "❌ Por favor, envíame tu **contraseña** de GestiónITT:"
+        mensaje_saludo = (
+            "👋 ¡Hola! Encantado de conocerte.\n\n"
+            "Para poder ayudarte, necesito tus credenciales de GestiónITT.\n\n"
+            "📝 **Envíamelas así:**\n"
+            "```\n"
+            "Usuario: tu_usuario\n"
+            "Contraseña: tu_contraseña\n"
+            "```"
+        )
+        return False, mensaje_saludo
     
-    if len(texto.strip()) < 3:
-        return False, "❌ El texto es demasiado corto. Por favor, envíame tus credenciales:"
+    if len(texto.strip()) < 5:
+        mensaje_corto = (
+            "❌ El texto es demasiado corto.\n\n"
+            "📝 **Envíame tus credenciales así:**\n"
+            "```\n"
+            "Usuario: tu_usuario\n"
+            "Contraseña: tu_contraseña\n"
+            "```"
+        )
+        return False, mensaje_corto
     
     credenciales = extraer_credenciales_con_gpt(texto)
     
-    # Procesar según lo que estemos esperando
-    if estado["esperando"] == "username":
-        username = credenciales.get("username")
-        password = credenciales.get("password")
-        
-        # Si nos dio ambas credenciales de una vez
-        if credenciales["ambos"]:
-            if not username or len(username) < 3:
-                return False, "❌ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo:"
-            
-            if not password or len(password) < 4:
-                return False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo:"
-            
-            # Guardar ambas credenciales directamente
-            usuario.establecer_credenciales_intranet(username, password)
-            db.commit()
-            estado_auth.finalizar_proceso(user_id)
-            
-            # Mensaje temporal (será reemplazado por el de verificación)
-            mensaje = "🔄 Verificando tus credenciales..."
-            return True, mensaje
-        
-        # Solo nos dio el username
-        elif username:
-            if len(username) < 3:
-                return False, "❌ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo:"
-            
-            estado_auth.guardar_username(user_id, username)
-            
-            mensaje = (
-                f"✅ Usuario recibido: **{username}**\n\n"
-                "🔑 Ahora envíame tu **contraseña** de GestiónITT."
-            )
-            return False, mensaje
-        
-        else:
-            return False, "❌ No he podido extraer el nombre de usuario. Por favor, envíamelo de nuevo:"
+    username = credenciales.get("username")
+    password = credenciales.get("password")
     
-    elif estado["esperando"] == "password":
-        # Intentar extraer password primero
-        password = credenciales.get("password")
-        
-        # Si no encontró password explícito, el texto completo es la password
-        if not password:
-            password = texto.strip()
-        
-        if not password or len(password) < 4:
-            return False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo:"
-        
-        # Guardar credenciales en la base de datos (cifradas)
-        username = estado["username_temporal"]
-        usuario.establecer_credenciales_intranet(username, password)
-        db.commit()
-        
-        # Finalizar proceso (la verificación se hará en server.py)
-        estado_auth.finalizar_proceso(user_id)
-        
-        # Mensaje temporal (será reemplazado por el de verificación)
-        mensaje = "🔄 Verificando tus credenciales..."
-        return True, mensaje
+    # ✅ Validar que tengamos AMBAS credenciales
+    if not credenciales["ambos"]:
+        mensaje_incompleto = (
+            "⚠️ Necesito AMBAS credenciales para continuar.\n\n"
+            "📝 **Envíamelas así:**\n"
+            "```\n"
+            "Usuario: tu_usuario\n"
+            "Contraseña: tu_contraseña\n"
+            "```"
+        )
+        return False, mensaje_incompleto
     
-    return True, None
+    # Validar longitud mínima
+    if not username or len(username) < 3:
+        return False, "❌ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo."
+    
+    if not password or len(password) < 4:
+        return False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo."
+    
+    # 💾 Guardar credenciales
+    usuario.establecer_credenciales_intranet(username, password)
+    db.commit()
+    estado_auth.finalizar_proceso(user_id)
+    
+    # Mensaje temporal (será reemplazado por el de verificación)
+    mensaje = "🔄 Verificando tus credenciales..."
+    return True, mensaje
 
 
 def obtener_credenciales(db: Session, user_id: str, canal: str = "webapp") -> tuple[str, str]:
