@@ -258,6 +258,7 @@ def seleccionar_fecha(driver, fecha_obj):
     try:
         driver.find_element(By.XPATH, f"//a[text()='{dia_seleccionado}']").click()
         fecha_formateada = fecha_obj.strftime('%d/%m/%Y')
+        time.sleep(2)  # ⏸️ Esperar a que cargue la pantalla de imputación
         return f"He seleccionado la fecha {fecha_formateada}"
     except Exception as e:
         return f"No he podido seleccionar el día {dia_seleccionado}: {e}"
@@ -369,10 +370,11 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
         time.sleep(1)
 
         # 6️⃣ Buscar y seleccionar el proyecto
+        # IMPORTANTE: NO normalizar (quitar tildes) porque el sistema es sensible a tildes
         xpath = (
             f"//li[@rel='subproyectos']//a[contains(translate(normalize-space(.), "
-            f"'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúü'), "
-            f"'{normalizar(nombre_proyecto)}')]"
+            f"'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "
+            f"'{nombre_proyecto.lower()}')]"
         )
 
         try:
@@ -1075,97 +1077,152 @@ def interpretar_con_gpt(texto):
     dia_semana = datetime.now().strftime("%A")
 
     prompt = f"""
-Eres un asistente que traduce frases en una lista de comandos JSON para automatizar
-una web de imputación de horas. Hoy es {hoy} ({dia_semana}).
+Eres un asistente avanzado que traduce frases en lenguaje natural a una lista de comandos JSON 
+para automatizar una web de imputación de horas laborales. 
 
-Acciones válidas:
+📅 CONTEXTO TEMPORAL:
+Hoy es {hoy} ({dia_semana}).
+
+🎯 ACCIONES VÁLIDAS:
 - seleccionar_fecha (requiere "fecha" en formato YYYY-MM-DD)
 - volver
 - seleccionar_proyecto (requiere "nombre")
-- imputar_horas_dia (requiere "dia" y "horas")
+- imputar_horas_dia (requiere "dia" y "horas", acepta "modo": "sumar" o "establecer")
 - imputar_horas_semana
 - iniciar_jornada
 - finalizar_jornada
 - guardar_linea
 - emitir_linea
 - eliminar_linea (requiere "nombre" del proyecto)
-- imputar_horas_dia acepta "modo": "sumar" (default) o "establecer"
 
-Reglas:
-1️⃣ Siempre usa el año 2025 aunque el usuario no lo diga.
-2️⃣ Si el usuario dice "hoy", la fecha es {hoy}.
-3️⃣ Si el usuario dice "ayer" o "mañana", calcula la fecha correspondiente a partir de {hoy}.
-5️⃣ Si el usuario menciona varios proyectos y horas en la misma frase (por ejemplo:
-    "3.5 en Desarrollo y 2 en Dirección el lunes"),
-    genera varias acciones intercaladas en este orden:
-    seleccionar_proyecto → imputar_horas_dia → seleccionar_proyecto → imputar_horas_dia.
-    Así cada imputación se asocia al proyecto anterior.
-⚠️ Si el usuario menciona el nombre de un proyecto (por ejemplo: "Desarrollo", "Dirección", "Estudio"),
-SIEMPRE debes incluir una acción {{ "accion": "seleccionar_proyecto", "parametros": {{ "nombre": "<nombre>" }} }} 
-antes de cualquier imputación, incluso si parece que ya estaba seleccionado.
+📋 REGLAS CRÍTICAS:
 
+1️⃣ FECHAS Y TIEMPO:
+   - Siempre usa el año 2025 aunque el usuario no lo diga
+   - "hoy" = {hoy}
+   - "ayer" = calcula día anterior a {hoy}
+   - "mañana" = calcula día siguiente a {hoy}
+   - Si menciona un DÍA DE LA SEMANA (lunes, martes, etc.), calcula su fecha exacta en formato YYYY-MM-DD
+   - CRÍTICO: Cuando se mencione un día específico, SIEMPRE genera primero {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}} con el LUNES de esa semana
 
-6️⃣ Si menciona "expide", "emite", "envía", "envíalo", "expídelo" o similares,
-    añade una acción {{"accion": "emitir_linea"}} al final.
-7️⃣ Si no menciona ninguna de esas palabras, añade {{"accion": "guardar_linea"}} después de imputar horas.
-8️⃣ Si dice "quita", "resta", "borra" o "elimina", las horas deben ser NEGATIVAS (por ejemplo -2).
-9️⃣ Si dice "suma", "añade", "agrega" o "pon", las horas son POSITIVAS.
-🔟 Si el usuario no menciona día, asume el día actual ({hoy}).
-🔟 Si dice "totales", "establece", "pon exactamente", "cambia a": 
-   usar modo "establecer"
-🔟 Si dice "borra la línea", "elimina el proyecto":
-   usar accion "eliminar_linea"
-   Si dice "totales", "establece", "pon exactamente", "cambia a", "reemplaza por":
-   → usar modo "establecer" en imputar_horas_dia
-   Ejemplo: {{"accion": "imputar_horas_dia", "parametros": {{"dia": "jueves", "horas": 2, "modo": "establecer"}}}}
-
-🔟 Si dice "elimina las horas del [día]", "borra las horas del [día]":
-   → usar modo "establecer" con horas: 0
-   Ejemplo: {{"accion": "imputar_horas_dia", "parametros": {{"dia": "jueves", "horas": 0, "modo": "establecer"}}}}
-
-🔟 Si dice "borra la línea", "elimina el proyecto", "quita la línea":
-   → usar accion "eliminar_linea" con el nombre del proyecto
-   Ejemplo: {{"accion": "eliminar_linea", "parametros": {{"nombre": "Desarrollo"}}}}
+2️⃣ PROYECTOS MÚLTIPLES:
+   Si el usuario menciona varios proyectos en una frase:
+   "3.5 en Desarrollo y 2 en Dirección el lunes"
    
-🔟 IMPORTANTE: Después de eliminar_linea, SIEMPRE añadir {{"accion": "guardar_linea"}}
+   Genera acciones INTERCALADAS:
+   seleccionar_proyecto(Desarrollo) → imputar_horas_dia(lunes, 3.5) → 
+   seleccionar_proyecto(Dirección) → imputar_horas_dia(lunes, 2)
+   
+   ⚠️ CRÍTICO: SIEMPRE incluye seleccionar_proyecto antes de cada imputación,
+   incluso si parece que ya estaba seleccionado.
 
-3️⃣ Si la frase incluye varias acciones, ordénalas SIEMPRE así:
-   - seleccionar_fecha primero (si procede)
-   - luego seleccionar_proyecto
-   - luego imputar_horas_dia o imputar_horas_semana
-   - finalmente guardar_linea o emitir_linea (si aplica)
+3️⃣ MODOS DE IMPUTACIÓN:
+   - "sumar", "añadir", "agregar", "pon" → modo: "sumar" (default)
+   - "totales", "establece", "cambia a", "pon exactamente" → modo: "establecer"
+   - "quita", "resta", "borra", "elimina" horas → horas NEGATIVAS + modo "sumar"
 
-❗ Solo incluye {{"accion": "iniciar_jornada"}} si el usuario dice explícitamente
-   frases como "inicia jornada", "empieza jornada", "comienza el día" o similares.
+4️⃣ ELIMINACIÓN DE LÍNEAS:
+   - "borra la línea", "elimina el proyecto" → usar "eliminar_linea"
+   - "elimina las horas del [día]" → modo "establecer" con horas: 0
+   - SIEMPRE añadir {{"accion": "guardar_linea"}} después de eliminar_linea
 
-4️⃣ Devuelve SOLO un JSON válido (nada de texto explicativo ni comentarios).
-5️⃣ Si algo no se entiende, omítelo.
+5️⃣ GUARDAR VS EMITIR:
+   - Si menciona "expide", "emite", "envía", "envíalo" → usar "emitir_linea" al final
+   - En cualquier otro caso → usar "guardar_linea" al final
 
-Ejemplo correcto:
+6️⃣ JORNADA LABORAL:
+   - Usa "iniciar_jornada" cuando el usuario diga: "inicia jornada", "empieza jornada", "iniciar jornada", "comenzar jornada"
+   - Usa "finalizar_jornada" cuando el usuario diga: "finaliza jornada", "termina jornada", "finalizar jornada", "terminar jornada", "acabar jornada", "cierra jornada"
+   - NO generes estas acciones si el usuario solo menciona "trabajo" o "día" sin referirse específicamente a la jornada laboral
+
+7️⃣ ORDEN DE EJECUCIÓN:
+   Ordena las acciones SIEMPRE así:
+   a) seleccionar_fecha (si aplica)
+   b) iniciar_jornada (si se mencionó)
+   c) seleccionar_proyecto
+   d) imputar_horas_dia o imputar_horas_semana
+   e) finalizar_jornada (si se mencionó)
+   f) guardar_linea o emitir_linea
+
+8️⃣ FORMATO DE SALIDA:
+   - Devuelve SOLO un array JSON válido
+   - SIN markdown (nada de ```json```), SIN texto explicativo, SIN comentarios
+   - El JSON debe empezar directamente con [ y terminar con ]
+   - Si algo no se entiende, omítelo (pero intenta interpretarlo inteligentemente primero)
+
+💡 EJEMPLOS:
+
+Ejemplo 1 - Simple:
+Entrada: "Pon 8 horas en Desarrollo hoy"
+Salida:
 [
   {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 2}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Estudio"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 3}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 8}}}},
   {{"accion": "guardar_linea"}}
 ]
 
+Ejemplo 2 - Múltiples proyectos:
+Entrada: "3.5 en Desarrollo y 2 en Dirección el lunes"
+Salida:
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-10-13"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "lunes", "horas": 3.5}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Dirección"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "lunes", "horas": 2}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 3 - Modo establecer:
+Entrada: "Cambia Desarrollo a 4 horas totales el martes"
+Salida:
+[
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "martes", "horas": 4, "modo": "establecer"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 4 - Eliminar línea:
+Entrada: "Borra la línea de Dirección"
+Salida:
+[
+  {{"accion": "eliminar_linea", "parametros": {{"nombre": "Dirección"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 5 - Jornada laboral:
+Entrada: "Finaliza la jornada"
+Salida:
+[
+  {{"accion": "finalizar_jornada"}}
+]
+
+🎯 AHORA PROCESA:
 Frase del usuario: "{texto}"
 """
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",  # 🚀 ACTUALIZADO: Modelo más potente para interpretación compleja
             messages=[
-                {"role": "system", "content": "Eres un traductor de lenguaje natural a comandos JSON."},
+                {"role": "system", "content": "Eres un intérprete experto de lenguaje natural a comandos JSON estructurados. Procesas instrucciones complejas con alta precisión, manejando múltiples proyectos, fechas relativas y contextos ambiguos."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0
+            temperature=0  # Mantener en 0 para máxima precisión y consistencia
         )
 
         raw = response.choices[0].message.content.strip()
         print(f"[DEBUG] 🧠 GPT generó: {raw}")
+        
+        # 🧹 Limpiar markdown si GPT-4o lo añade (```json ... ```)
+        if raw.startswith("```"):
+            # Quitar la primera línea (```json o ```)
+            lines = raw.split("\n")
+            raw = "\n".join(lines[1:-1])  # Quitar primera y última línea
+            raw = raw.strip()
+            print(f"[DEBUG] 🧹 JSON limpio: {raw}")
+        
         data = json.loads(raw)
 
         # Si devuelve un solo objeto, lo convertimos a lista
@@ -1220,7 +1277,11 @@ def ejecutar_accion(driver, wait, orden, contexto):
             if fila:
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
-            return mensaje
+            else:
+                # ❌ Si no se pudo seleccionar, devolver error claro
+                contexto["fila_actual"] = None
+                contexto["proyecto_actual"] = None
+            return mensaje  # Devuelve el mensaje (sea éxito o error)
         except Exception as e:
             return f"Error seleccionando proyecto: {e}"
         # 🗑️ Eliminar línea
@@ -1280,15 +1341,11 @@ def ejecutar_accion(driver, wait, orden, contexto):
        
         proyecto = contexto.get("proyecto_actual")
         if not proyecto:
-            return "No sé en qué proyecto quieres imputar. Dímelo, por favor."
+            return "❌ No sé en qué proyecto quieres imputar. Dímelo, por favor."
 
         fila = contexto.get("fila_actual")
         if not fila:
-            fila, msg = seleccionar_proyecto(driver, wait, proyecto)
-            if not fila:
-                return f"No he podido abrir el proyecto '{proyecto}'."
-            contexto["fila_actual"] = fila
-            print(f"[DEBUG] 🔁 Re-seleccionado proyecto '{proyecto}' antes de imputar semana.")
+            return f"❌ No he podido seleccionar el proyecto '{proyecto}'. ¿Estás en la pantalla de imputación?"
 
         return imputar_horas_semana(driver, wait, fila, nombre_proyecto=proyecto)
 
