@@ -60,6 +60,7 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto):
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -289,44 +290,65 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
         # ⏸️ Dar tiempo a que la página se estabilice tras guardar
         time.sleep(0.5)
         
-        # 🔍 Buscar si el proyecto ya existe - MEJORADO para selects disabled
-        # Buscar TODOS los selects de subproyecto (incluso disabled)
+        # 🔍 Buscar si el proyecto ya existe en TODAS las líneas (guardadas o no)
         selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
         
         # Si no encuentra por name, intentar por id
         if not selects:
             selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
         
-        print(f"[DEBUG] 🔍 Buscando proyecto '{nombre_proyecto}' en {len(selects)} líneas existentes...")
+        print(f"[DEBUG] 🔍 Buscando proyecto '{nombre_proyecto}' en {len(selects)} líneas totales...")
         
         for idx, sel in enumerate(selects):
-            # Obtener el atributo 'title' que contiene el nombre completo del proyecto
-            title = sel.get_attribute("title") or ""
+            # Verificar si el select está disabled (guardado)
+            is_disabled = sel.get_attribute("disabled")
+            estado = "guardada" if is_disabled else "editable"
             
-            # También buscar la opción seleccionada usando JavaScript (funciona con disabled)
+            # Obtener el texto de la opción seleccionada usando JavaScript
             try:
-                texto_selected = driver.execute_script("""
+                texto_completo = driver.execute_script("""
                     var select = arguments[0];
                     var selectedOption = select.options[select.selectedIndex];
                     return selectedOption ? selectedOption.text : '';
                 """, sel)
             except:
-                texto_selected = ""
+                texto_completo = ""
             
-            # Extraer solo la última parte del nombre (el proyecto real)
+            if not texto_completo or texto_completo == "Seleccione opción":
+                print(f"[DEBUG]   Línea {idx+1} ({estado}): Vacía o sin selección")
+                continue
+            
+            # 🎯 CRÍTICO: Extraer SOLO la última parte (el proyecto real)
             # Ejemplo: "Arelance - Departamento - Desarrollo" → "Desarrollo"
-            nombre_proyecto_real = texto_selected.split(' - ')[-1].strip() if texto_selected else ""
+            partes = texto_completo.split(' - ')
+            nombre_proyecto_real = partes[-1].strip() if partes else ""
             
-            print(f"[DEBUG]   Línea {idx+1}: Proyecto real='{nombre_proyecto_real}'")
+            print(f"[DEBUG]   Línea {idx+1} ({estado}): '{texto_completo}' → Proyecto: '{nombre_proyecto_real}'")
             
-            # Comparar SOLO con el nombre del proyecto (la última parte)
-            if normalizar(nombre_proyecto) == normalizar(nombre_proyecto_real):
-                # Obtenemos la fila que contiene este select
-                fila = sel.find_element(By.XPATH, "./ancestor::tr")
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
-                time.sleep(0.3)
-                print(f"[DEBUG] ✅ ¡Encontrado! Reutilizando línea {idx+1}")
-                return fila, f"Ya tenías el proyecto '{nombre_proyecto}' abierto, lo estoy usando"
+            # 🎯 BÚSQUEDA FLEXIBLE: Comparar si el nombre buscado está CONTENIDO en el nombre real
+            # Esto permite que "Estudio" coincida con "Estudio/Investigación"
+            nombre_buscado_norm = normalizar(nombre_proyecto)
+            nombre_real_norm = normalizar(nombre_proyecto_real)
+            
+            # Coincidencia si:
+            # 1. Son exactamente iguales, O
+            # 2. El nombre buscado está contenido en el nombre real
+            if nombre_buscado_norm == nombre_real_norm or nombre_buscado_norm in nombre_real_norm:
+                # Si el proyecto YA está guardado (disabled), reutilizamos esa fila
+                if is_disabled:
+                    print(f"[DEBUG] ✅ ¡Proyecto '{nombre_proyecto}' encontrado en línea {idx+1} (GUARDADA)! Reutilizando...")
+                    fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
+                    time.sleep(0.3)
+                    return fila, f"He encontrado el proyecto '{nombre_proyecto}' ya guardado, añadiendo horas"
+                
+                # Si el proyecto está en una línea editable (no guardada), también la reutilizamos
+                else:
+                    print(f"[DEBUG] ✅ ¡Proyecto '{nombre_proyecto}' encontrado en línea {idx+1} (EDITABLE)! Reutilizando...")
+                    fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
+                    time.sleep(0.3)
+                    return fila, f"Ya tenías el proyecto '{nombre_proyecto}' abierto, lo estoy usando"
 
         # 🆕 Si no existe → añadimos nueva línea
         print(f"[DEBUG] ➕ Proyecto '{nombre_proyecto}' NO encontrado, añadiendo nueva línea...")
@@ -386,10 +408,11 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
             return fila, f"He abierto el proyecto '{nombre_proyecto}'"
             
         except Exception as e:
-            # 🆕 Si no encuentra el proyecto, cerrar el overlay automáticamente
-            print(f"[DEBUG] ⚠️ No se encontró el proyecto '{nombre_proyecto}', cerrando overlay...")
+            # 🛑 CRÍTICO: Si no encuentra el proyecto, cerrar todo y devolver error
+            print(f"[DEBUG] ❌ No se encontró el proyecto '{nombre_proyecto}' en el sistema")
+            
+            # Cerrar el overlay del buscador
             try:
-                # Ejecutar el código del botón Cerrar
                 driver.execute_script("""
                     document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
                     document.getElementById('textoBusqueda').style.color='gray';
@@ -399,11 +422,23 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto):
                     tree.jstree('close_all');
                     hideOverlay();
                 """)
-                time.sleep(1)
-            except:
-                pass
+                time.sleep(0.5)
+            except Exception as close_error:
+                print(f"[DEBUG] ⚠️ Error cerrando overlay: {close_error}")
             
-            return None, f"No he encontrado el proyecto '{nombre_proyecto}' en el sistema"
+            # Eliminar la línea vacía que quedó
+            try:
+                btn_eliminar = fila.find_element(By.CSS_SELECTOR, "button.botonEliminar, button#botonEliminar, input[id*='btEliminar']")
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn_eliminar)
+                time.sleep(0.2)
+                btn_eliminar.click()
+                time.sleep(0.5)
+                print(f"[DEBUG] 🗑️ Línea vacía eliminada")
+            except Exception as del_error:
+                print(f"[DEBUG] ⚠️ No se pudo eliminar la línea vacía: {del_error}")
+            
+            # 🛑 Devolver None para indicar ERROR y detener la ejecución
+            return None, f"❌ No he encontrado el proyecto '{nombre_proyecto}' en el sistema. Verifica el nombre e inténtalo de nuevo."
 
     except Exception as e:
         return None, f"No he podido seleccionar el proyecto '{nombre_proyecto}': {e}"
@@ -458,6 +493,78 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
         return f"Ha habido un problema al imputar la semana: {e}"
 
 
+
+
+def borrar_todas_horas_dia(driver, wait, dia):
+    """
+    Pone a 0 las horas de TODOS los proyectos en un día específico.
+    Busca todas las líneas de la tabla y pone 0 en la columna del día indicado.
+    """
+    mapa_dias = {
+        "lunes": "h1", "martes": "h2", "miércoles": "h3",
+        "miercoles": "h3", "jueves": "h4", "viernes": "h5"
+    }
+
+    dia_clave = mapa_dias.get(dia.lower())
+    if not dia_clave:
+        return f"No reconozco el día '{dia}'"
+
+    try:
+        # Buscar TODAS las filas de proyectos
+        selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
+        if not selects:
+            selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
+        
+        proyectos_modificados = []
+        
+        for idx, sel in enumerate(selects):
+            try:
+                # Obtener el nombre del proyecto
+                proyecto_nombre = driver.execute_script("""
+                    var select = arguments[0];
+                    var selectedOption = select.options[select.selectedIndex];
+                    return selectedOption ? selectedOption.text : '';
+                """, sel)
+                
+                if not proyecto_nombre or proyecto_nombre == "Seleccione opción":
+                    continue
+                
+                # Extraer solo el nombre del proyecto (última parte)
+                partes = proyecto_nombre.split(' - ')
+                nombre_corto = partes[-1].strip() if partes else proyecto_nombre
+                
+                # Buscar la fila
+                fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                
+                # Buscar el campo de horas del día
+                campo = fila.find_element(By.CSS_SELECTOR, f"input[id$='.{dia_clave}']")
+                
+                if campo.is_enabled():
+                    valor_actual = campo.get_attribute("value") or "0"
+                    try:
+                        valor_actual = float(valor_actual.replace(",", "."))
+                    except ValueError:
+                        valor_actual = 0.0
+                    
+                    # Solo modificar si tenía horas
+                    if valor_actual > 0:
+                        campo.clear()
+                        campo.send_keys("0")
+                        proyectos_modificados.append(f"{nombre_corto} ({valor_actual}h)")
+                        time.sleep(0.2)
+            
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Error procesando línea {idx+1}: {e}")
+                continue
+        
+        if proyectos_modificados:
+            proyectos_texto = ", ".join(proyectos_modificados)
+            return f"He borrado las horas del {dia} en: {proyectos_texto}"
+        else:
+            return f"No había horas que borrar el {dia}"
+    
+    except Exception as e:
+        return f"No he podido borrar las horas del {dia}: {e}"
 
 
 def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo="sumar"):
@@ -515,17 +622,69 @@ def guardar_linea(driver, wait):
         btn_guardar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#btGuardarLinea")))
         btn_guardar.click()
         time.sleep(1.5)
+        
+        # 🔍 Verificar si hay algún popup de error
+        try:
+            # Buscar el popup de error (puede tener diferentes clases)
+            popup_error = driver.find_element(By.CSS_SELECTOR, ".ui-dialog, .modal, [role='dialog']")
+            
+            if popup_error.is_displayed():
+                # Leer el mensaje de error
+                try:
+                    mensaje_error = popup_error.find_element(By.CSS_SELECTOR, ".ui-dialog-content, .modal-body, p").text
+                    print(f"[DEBUG] ⚠️ Error detectado al guardar: {mensaje_error}")
+                    
+                    # Cerrar el popup haciendo clic en "Aceptar" o botón de cerrar
+                    try:
+                        btn_aceptar = popup_error.find_element(By.XPATH, ".//button[contains(text(), 'Aceptar') or contains(text(), 'OK') or contains(text(), 'Cerrar')]")
+                        btn_aceptar.click()
+                        time.sleep(0.5)
+                    except:
+                        # Si no encuentra el botón, intentar con Escape
+                        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+                        time.sleep(0.5)
+                    
+                    return f"❌ Error al guardar: {mensaje_error}"
+                except:
+                    return "❌ Error al guardar (no se pudo leer el mensaje de error)"
+        except:
+            # No hay popup de error, todo OK
+            pass
+        
         return "He guardado los cambios"
     except Exception as e:
         return f"No he podido guardar: {e}"
 
 def emitir_linea(driver, wait):
-    """Pulsa el botón 'Emitir' tras imputar horas."""
+    """Pulsa el botón 'Emitir' tras imputar horas y acepta el alert de confirmación."""
     try:
         btn_emitir = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#btEmitir")))
         btn_emitir.click()
-        time.sleep(1.5)
-        return "He emitido las horas correctamente"
+        
+        # ⏳ Esperar a que aparezca el alert de confirmación
+        time.sleep(0.5)  # Pequeña espera para que se muestre el alert
+        
+        try:
+            # 📢 Capturar el alert de JavaScript
+            alert = wait.until(EC.alert_is_present())
+            
+            # 📝 Leer el mensaje del alert (opcional, para debug)
+            mensaje_alert = alert.text
+            print(f"[DEBUG] 📢 Alert detectado: '{mensaje_alert}'")
+            
+            # ✅ Aceptar el alert (equivalente a pulsar "Aceptar")
+            alert.accept()
+            print(f"[DEBUG] ✅ Alert aceptado")
+            
+            time.sleep(1.5)  # Esperar a que se procese la emisión
+            return "He emitido las horas correctamente"
+            
+        except Exception as e_alert:
+            # Si no hay alert o falla, continuar
+            print(f"[DEBUG] ⚠️ No se detectó alert o error al aceptarlo: {e_alert}")
+            time.sleep(1.5)
+            return "He pulsado emitir (no se detectó confirmación)"
+            
     except Exception as e:
         return f"No he podido emitir: {e}"
 
@@ -1076,6 +1235,7 @@ def interpretar_con_gpt(texto):
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
 
+    # Usar f-string pero con llaves cuádruples {{{{ para que se escapen correctamente
     prompt = f"""
 Eres un asistente avanzado que traduce frases en lenguaje natural a una lista de comandos JSON 
 para automatizar una web de imputación de horas laborales. 
@@ -1089,6 +1249,7 @@ Hoy es {hoy} ({dia_semana}).
 - seleccionar_proyecto (requiere "nombre")
 - imputar_horas_dia (requiere "dia" y "horas", acepta "modo": "sumar" o "establecer")
 - imputar_horas_semana
+- borrar_todas_horas_dia (requiere "dia") - Pone a 0 TODOS los proyectos en ese día
 - iniciar_jornada
 - finalizar_jornada
 - guardar_linea
@@ -1103,7 +1264,10 @@ Hoy es {hoy} ({dia_semana}).
    - "ayer" = calcula día anterior a {hoy}
    - "mañana" = calcula día siguiente a {hoy}
    - Si menciona un DÍA DE LA SEMANA (lunes, martes, etc.), calcula su fecha exacta en formato YYYY-MM-DD
-   - CRÍTICO: Cuando se mencione un día específico, SIEMPRE genera primero {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}} con el LUNES de esa semana
+   - ⚠️ CRÍTICO: Si el usuario NO especifica fecha explícitamente, asume que es "HOY" ({hoy})
+   - ⚠️ MUY IMPORTANTE: Si menciona "próxima semana", "semana que viene", "la semana del [fecha]", o CUALQUIER referencia temporal diferente de HOY, SIEMPRE debes generar {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}} con el LUNES de esa semana como PRIMERA acción, antes de cualquier otra cosa
+   - Ejemplo CRÍTICO: "borra la línea de Formación de la próxima semana" → PRIMERO seleccionar_fecha(lunes próxima semana), LUEGO eliminar_linea(Formación)
+   - CRÍTICO: SIEMPRE genera {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}} con el LUNES de la semana correspondiente cuando hay referencias temporales
 
 2️⃣ PROYECTOS MÚLTIPLES:
    Si el usuario menciona varios proyectos en una frase:
@@ -1121,10 +1285,31 @@ Hoy es {hoy} ({dia_semana}).
    - "totales", "establece", "cambia a", "pon exactamente" → modo: "establecer"
    - "quita", "resta", "borra", "elimina" horas → horas NEGATIVAS + modo "sumar"
 
-4️⃣ ELIMINACIÓN DE LÍNEAS:
-   - "borra la línea", "elimina el proyecto" → usar "eliminar_linea"
-   - "elimina las horas del [día]" → modo "establecer" con horas: 0
-   - SIEMPRE añadir {{"accion": "guardar_linea"}} después de eliminar_linea
+4️⃣ ELIMINACIÓN DE LÍNEAS Y HORAS - ⚠️ MUY IMPORTANTE:
+   
+   HAY 3 TIPOS DE ELIMINACIÓN:
+   
+   A) "Borra/elimina/quita las horas del [DÍA]" SIN mencionar proyecto específico:
+      → usar "borrar_todas_horas_dia" con el día
+      → Esto pone a 0 TODOS los proyectos en ese día
+      → Ejemplos: "borra las horas del martes", "elimina las horas del miércoles"
+   
+   B) "Borra/elimina las horas del [DÍA] en [PROYECTO]" (menciona proyecto específico):
+      → usar "seleccionar_proyecto" + "imputar_horas_dia" con modo "establecer" y horas: 0
+      → Esto pone a 0 SOLO ese proyecto en ese día
+      → Ejemplos: "borra las horas del miércoles en Desarrollo", "quita las del lunes de Estudio"
+   
+   C) "Borra la línea" o "elimina el proyecto [NOMBRE]":
+      → usar "eliminar_linea" con el nombre del proyecto
+      → Esto elimina TODA la línea del proyecto (todos los días)
+      → Ejemplos: "borra la línea de Desarrollo", "elimina el proyecto Estudio"
+   
+   ⚠️ REGLA DECISIVA:
+   - Si NO menciona proyecto → borrar_todas_horas_dia (afecta TODOS los proyectos en ese día)
+   - Si menciona proyecto → seleccionar_proyecto + imputar_horas_dia con 0 (afecta SOLO ese proyecto)
+   - Si dice "línea" o "proyecto completo" → eliminar_linea
+   
+   - SIEMPRE añadir {{"accion": "guardar_linea"}} después de cualquier eliminación
 
 5️⃣ GUARDAR VS EMITIR:
    - Si menciona "expide", "emite", "envía", "envíalo" → usar "emitir_linea" al final
@@ -1137,12 +1322,15 @@ Hoy es {hoy} ({dia_semana}).
 
 7️⃣ ORDEN DE EJECUCIÓN:
    Ordena las acciones SIEMPRE así:
-   a) seleccionar_fecha (si aplica)
+   a) seleccionar_fecha (si aplica - SIEMPRE si menciona una semana/día específico diferente de HOY)
    b) iniciar_jornada (si se mencionó)
-   c) seleccionar_proyecto
-   d) imputar_horas_dia o imputar_horas_semana
+   c) seleccionar_proyecto (si aplica)
+   d) imputar_horas_dia, imputar_horas_semana, eliminar_linea, borrar_todas_horas_dia, etc.
    e) finalizar_jornada (si se mencionó)
-   f) guardar_linea o emitir_linea
+   f) guardar_linea o emitir_linea (SIEMPRE al final, OBLIGATORIO)
+   
+   ⚠️ CRÍTICO: NUNCA omitas guardar_linea/emitir_linea. Es OBLIGATORIO al final de cualquier imputación/modificación.
+   ⚠️ IMPORTANTE: Si el usuario menciona "próxima semana", "esa semana", "el martes", etc., seleccionar_fecha es el PRIMER paso obligatorio.
 
 8️⃣ FORMATO DE SALIDA:
    - Devuelve SOLO un array JSON válido
@@ -1152,13 +1340,23 @@ Hoy es {hoy} ({dia_semana}).
 
 💡 EJEMPLOS:
 
-Ejemplo 1 - Simple:
+Ejemplo 1 - Simple (con fecha implícita "hoy"):
 Entrada: "Pon 8 horas en Desarrollo hoy"
 Salida:
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana de hoy)"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 8}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 1b - Sin especificar fecha (asumir HOY):
+Entrada: "Pon 3 horas en Estudio"
+Salida:
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana de hoy)"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Estudio"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 3}}}},
   {{"accion": "guardar_linea"}}
 ]
 
@@ -1166,7 +1364,7 @@ Ejemplo 2 - Múltiples proyectos:
 Entrada: "3.5 en Desarrollo y 2 en Dirección el lunes"
 Salida:
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-10-13"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-10-20"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "lunes", "horas": 3.5}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Dirección"}}}},
@@ -1197,6 +1395,76 @@ Salida:
 [
   {{"accion": "finalizar_jornada"}}
 ]
+
+Ejemplo 6 - Toda la semana:
+Entrada: "Imputa toda la semana en Estudio"
+Salida:
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Estudio"}}}},
+  {{"accion": "imputar_horas_semana"}},
+  {{"accion": "guardar_linea"}}
+]
+
+⚠️ MUY IMPORTANTE: SIEMPRE, SIEMPRE incluye "guardar_linea" o "emitir_linea" al final de CUALQUIER imputación, incluyendo "imputar_horas_semana". NO OMITIR NUNCA.
+
+Ejemplo 7 - Borrar horas de un día específico:
+Entrada: "Borra las horas del miércoles en Desarrollo"
+Salida:
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "miércoles", "horas": 0, "modo": "establecer"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 7b - Borrar horas de TODOS los proyectos en un día:
+Entrada: "Bórramen las horas del martes"
+Salida:
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "martes"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 7c - Borrar horas de UN proyecto específico en un día:
+Entrada: "Quita las horas del viernes en Desarrollo"
+Salida:
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "viernes", "horas": 0, "modo": "establecer"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 7d - Eliminar línea completa (semana actual):
+Entrada: "Borra la línea de Desarrollo"
+Salida:
+[
+  {{"accion": "eliminar_linea", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+Ejemplo 7e - Eliminar línea de una semana específica:
+Entrada: "Borra la línea de Formación de la próxima semana"
+Salida:
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(calcular lunes de la próxima semana)"}}}},
+  {{"accion": "eliminar_linea", "parametros": {{"nombre": "Formación"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+⚠️ CRÍTICO PARA BORRAR HORAS:
+1. "Borra las horas del [DÍA]" (SIN proyecto) → borrar_todas_horas_dia [TODOS los proyectos en ese día a 0]
+2. "Borra las horas del [DÍA] en [PROYECTO]" → seleccionar_proyecto + imputar_horas_dia con 0 [SOLO ese proyecto en ese día]
+3. "Borra la línea" o "elimina el proyecto" → eliminar_linea [elimina TODO el proyecto]
+
+REGLA DE ORO: Si NO menciona proyecto específico → usar borrar_todas_horas_dia (afecta a TODOS)
+
+🚨 RECORDATORIO FINAL ANTES DE GENERAR JSON:
+- Si menciona "próxima semana", "esa semana", "el [día de la semana]", o cualquier referencia temporal diferente de HOY → SIEMPRE empieza con {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}}
+- Ejemplo: "borra la línea de Formación de la próxima semana" debe generar: [seleccionar_fecha, eliminar_linea, guardar_linea]
+- NO omitas seleccionar_fecha aunque la acción principal sea eliminar_linea, borrar_todas_horas_dia, etc.
 
 🎯 AHORA PROCESA:
 Frase del usuario: "{texto}"
@@ -1274,14 +1542,19 @@ def ejecutar_accion(driver, wait, orden, contexto):
         try:
             nombre = orden["parametros"].get("nombre")
             fila, mensaje = seleccionar_proyecto(driver, wait, nombre)
+            
             if fila:
+                # ✅ Proyecto encontrado o creado correctamente
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
+                return mensaje
             else:
-                # ❌ Si no se pudo seleccionar, devolver error claro
+                # ❌ Proyecto NO encontrado - DETENER ejecución
                 contexto["fila_actual"] = None
                 contexto["proyecto_actual"] = None
-            return mensaje  # Devuelve el mensaje (sea éxito o error)
+                contexto["error_critico"] = True  # Marcar error crítico
+                return mensaje  # El mensaje ya viene con el error
+                
         except Exception as e:
             return f"Error seleccionando proyecto: {e}"
         # 🗑️ Eliminar línea
@@ -1303,6 +1576,31 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 
         except Exception as e:
             return f"Error eliminando línea: {e}"
+
+    # 🗑️ Borrar todas las horas de un día
+    elif accion == "borrar_todas_horas_dia":
+        try:
+            dia_param = orden["parametros"].get("dia")
+            
+            # Si GPT devuelve una fecha ISO → convertir a nombre de día
+            try:
+                fecha_obj = datetime.fromisoformat(dia_param)
+                dia = fecha_obj.strftime("%A").lower()
+                dias_map = {
+                    "monday": "lunes",
+                    "tuesday": "martes",
+                    "wednesday": "miércoles",
+                    "thursday": "jueves",
+                    "friday": "viernes"
+                }
+                dia = dias_map.get(dia, dia)
+            except Exception:
+                dia = dia_param.lower()
+            
+            return borrar_todas_horas_dia(driver, wait, dia)
+        
+        except Exception as e:
+            return f"Error al borrar horas: {e}"
 
     # ⏱️ Imputar horas del día
     elif accion == "imputar_horas_dia":
