@@ -173,6 +173,7 @@ def hacer_login(driver, wait, username=None, password=None):
         password = PASSWORD
     
     try:
+        print(f"[DEBUG] Intentando login con usuario: {username}")
         driver.get(LOGIN_URL)
         usr = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, USERNAME_SELECTOR)))
         usr.clear()
@@ -181,46 +182,52 @@ def hacer_login(driver, wait, username=None, password=None):
         pwd.clear()
         pwd.send_keys(password)
         driver.find_element(By.CSS_SELECTOR, SUBMIT_SELECTOR).click()
+        print(f"[DEBUG] Formulario enviado, esperando respuesta...")
         time.sleep(3)
         
-        # 🔍 VERIFICACIÓN 1: Buscar div de error de credenciales
+        # Guardar HTML completo para debugging
+        html_completo = driver.page_source
+        
+        # 🔍 VERIFICACIÓN 1: Buscar div de error
+        print(f"[DEBUG] Buscando div.errorLogin...")
+        if "errorLogin" in html_completo:
+            print(f"[DEBUG] ⚠️ Encontrado 'errorLogin' en el HTML")
+            # Extraer el texto del error
+            import re
+            match = re.search(r'<div[^>]*class="[^"]*errorLogin[^"]*"[^>]*>(.*?)</div>', html_completo, re.DOTALL)
+            if match:
+                error_text = match.group(1).strip()
+                # Limpiar tags HTML del texto
+                error_text = re.sub(r'<[^>]+>', '', error_text).strip()
+                print(f"[DEBUG] ❌ Texto del error: '{error_text}'")
+                if "credenciales no válidas" in error_text.lower() or "credenciales no validas" in error_text.lower():
+                    print(f"[DEBUG] ❌ CONFIRMADO: Credenciales inválidas")
+                    return False, "credenciales_invalidas"
+        else:
+            print(f"[DEBUG] No se encontró 'errorLogin' en el HTML")
+        
+        # ✅ VERIFICACIÓN 2: Buscar botón de salir
+        print(f"[DEBUG] Buscando botonSalirHtml...")
+        if "botonSalirHtml" in html_completo:
+            print(f"[DEBUG] ✅ Encontrado 'botonSalirHtml' en el HTML")
+            print(f"[DEBUG] ✅ CONFIRMADO: Login exitoso")
+            return True, "login_exitoso"
+        else:
+            print(f"[DEBUG] No se encontró 'botonSalirHtml' en el HTML")
+        
+        # ❌ Si no encontramos ni error ni botón
+        print(f"[DEBUG] ⚠️ No se encontró ni errorLogin ni botonSalirHtml")
+        print(f"[DEBUG] Título de la página: {driver.title}")
+        print(f"[DEBUG] URL actual: {driver.current_url}")
+        
+        # Guardar HTML en archivo para inspección
         try:
-            # Buscar cualquier div con clase errorLogin
-            error_divs = driver.find_elements(By.CSS_SELECTOR, "div.errorLogin")
-            for error_div in error_divs:
-                if error_div.is_displayed():
-                    error_text = error_div.text.strip()
-                    print(f"[DEBUG] ❌ Error de login detectado: '{error_text}'")
-                    # Verificar si contiene el texto de credenciales inválidas
-                    if "credenciales no válidas" in error_text.lower() or "credenciales no validas" in error_text.lower():
-                        print(f"[DEBUG] ❌ Credenciales incorrectas confirmadas")
-                        return False, "credenciales_invalidas"
-        except Exception as e:
-            print(f"[DEBUG] No se encontró div de error (esto es normal si login correcto): {e}")
+            with open("/tmp/ultimo_login.html", "w", encoding="utf-8") as f:
+                f.write(html_completo)
+            print(f"[DEBUG] HTML guardado en /tmp/ultimo_login.html para inspección")
+        except:
             pass
         
-        # ✅ VERIFICACIÓN 2: Buscar botón de salir (confirma login exitoso)
-        try:
-            # Intentar encontrar el botón de salir con id específico
-            boton_salir = driver.find_element(By.CSS_SELECTOR, "button#botonSalirHtml")
-            if boton_salir.is_displayed():
-                print(f"[DEBUG] ✅ Login exitoso confirmado (botón #botonSalirHtml presente)")
-                return True, "login_exitoso"
-        except Exception as e:
-            print(f"[DEBUG] ⚠️ No se encontró botón #botonSalirHtml: {e}")
-            # Intentar con un selector más genérico
-            try:
-                boton_salir_generico = driver.find_element(By.XPATH, "//button[contains(@id, 'botonSalir') or contains(text(), 'Salir')]")
-                if boton_salir_generico.is_displayed():
-                    print(f"[DEBUG] ✅ Login exitoso confirmado (botón de salir genérico encontrado)")
-                    return True, "login_exitoso"
-            except Exception as e2:
-                print(f"[DEBUG] ⚠️ Tampoco se encontró botón de salir genérico: {e2}")
-                pass
-        
-        # ❌ Si no encontramos ni error ni botón de salir
-        print(f"[DEBUG] ⚠️ No se encontró ni error ni botón de salir")
-        print(f"[DEBUG] HTML actual (primeros 500 caracteres): {driver.page_source[:500]}")
         return False, "estado_indeterminado"
         
     except Exception as e:
