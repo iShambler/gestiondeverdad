@@ -183,19 +183,35 @@ def hacer_login(driver, wait, username=None, password=None):
         driver.find_element(By.CSS_SELECTOR, SUBMIT_SELECTOR).click()
         time.sleep(3)
         
-        # 🔍 Verificar si hay error de login
+        # 🔍 PASO 1: Verificar si hay error de login (elemento específico)
         try:
-            error_div = driver.find_element(By.CSS_SELECTOR, ".errorLogin, div[class*='error']")
+            error_div = driver.find_element(By.CSS_SELECTOR, "div.errorLogin")
             if error_div.is_displayed():
                 error_text = error_div.text.strip()
                 print(f"[DEBUG] ❌ Error de login detectado: {error_text}")
-                return False, "credenciales_invalidas"
+                
+                # Verificar que el error contenga "Credenciales no válidas"
+                if "credenciales no válidas" in error_text.lower() or "credenciales no validas" in error_text.lower():
+                    print(f"[DEBUG] ❌ Credenciales incorrectas confirmadas")
+                    return False, "credenciales_invalidas"
         except:
-            # No hay div de error, el login fue exitoso
+            # No se encontró div de error, continuar con verificación positiva
             pass
         
-        # ✅ Login exitoso
-        return True, "login_exitoso"
+        # ✅ PASO 2: Verificar login exitoso (botón de salir presente)
+        try:
+            boton_salir = driver.find_element(By.CSS_SELECTOR, "button#botonSalirHtml")
+            if boton_salir.is_displayed():
+                print(f"[DEBUG] ✅ Login exitoso confirmado (botón salir presente)")
+                return True, "login_exitoso"
+        except:
+            # No se encontró botón de salir
+            print(f"[DEBUG] ⚠️ No se encontró botón de salir después del login")
+            pass
+        
+        # ❌ Si no hay ni error ni botón de salir, algo salió mal
+        print(f"[DEBUG] ⚠️ Estado indeterminado después del login")
+        return False, "estado_indeterminado"
         
     except Exception as e:
         print(f"[DEBUG] ❌ Excepción durante login: {e}")
