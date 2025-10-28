@@ -305,6 +305,109 @@ async def chat(request: Request, db: Session = Depends(get_db)):
 
 
 # -------------------------------------------------------------------
+# 🔐 Endpoint para verificar y guardar credenciales (para Agente Co)
+# -------------------------------------------------------------------
+@app.post("/verify-credentials")
+async def verify_credentials(request: Request, db: Session = Depends(get_db)):
+    """
+    Verifica si las credenciales de GestionITT son válidas y las guarda en la BD.
+    Este endpoint es usado por otros servicios (como Agente Co)
+    para validar credenciales y crearlas en gestiondeverdad.
+    
+    Requiere:
+        - username: str (de GestionITT)
+        - password: str (de GestionITT)
+        - agente_co_user_id: str (ID del usuario en Agente Co, para vincularlo)
+    
+    Devuelve:
+        - success: bool
+        - message: str
+        - username: str (si success=True)
+    """
+    try:
+        data = await request.json()
+        username = data.get("username", "").strip()
+        password = data.get("password", "").strip()
+        agente_co_user_id = data.get("agente_co_user_id", "").strip()  # ID del usuario en Agente Co
+        
+        if not username or not password:
+            return JSONResponse({
+                "success": False,
+                "message": "Usuario y contraseña son requeridos"
+            }, status_code=400)
+        
+        if not agente_co_user_id:
+            return JSONResponse({
+                "success": False,
+                "message": "ID de usuario de Agente Co es requerido"
+            }, status_code=400)
+        
+        print(f"\n🔐 [VERIFY] Verificando credenciales para: {username}")
+        print(f"   Agente Co User ID: {agente_co_user_id}")
+        
+        # Obtener una sesión temporal del pool para verificación
+        verification_user_id = f"verify_{username}_{int(time.time())}"
+        session = browser_pool.get_session(verification_user_id)
+        
+        if not session or not session.driver:
+            return JSONResponse({
+                "success": False,
+                "message": "Error al inicializar el navegador para verificación"
+            }, status_code=500)
+        
+        try:
+            with session.lock:
+                # Intentar hacer login
+                success, mensaje = hacer_login(session.driver, session.wait, username, password)
+                
+                if success:
+                    print(f"✅ [VERIFY] Credenciales válidas para: {username}")
+                    
+                    # 💾 GUARDAR o ACTUALIZAR usuario en la BD de gestiondeverdad
+                    # Buscar si ya existe un usuario con este app_id (vinculado a Agente Co)
+                    from db import obtener_usuario_por_origen, crear_usuario
+                    
+                    usuario = obtener_usuario_por_origen(db, app_id=agente_co_user_id)
+                    
+                    if not usuario:
+                        # Crear nuevo usuario en gestiondeverdad
+                        usuario = crear_usuario(db, app_id=agente_co_user_id, canal="webapp")
+                        print(f"✅ [VERIFY] Usuario creado en gestiondeverdad: {usuario.id}")
+                    
+                    # Guardar/actualizar credenciales de GestionITT
+                    usuario.establecer_credenciales_intranet(username, password)
+                    db.commit()
+                    
+                    print(f"💾 [VERIFY] Credenciales guardadas en BD para usuario ID: {usuario.id}")
+                    
+                    return JSONResponse({
+                        "success": True,
+                        "message": "Credenciales verificadas y guardadas correctamente",
+                        "username": username,
+                        "gestiondeverdad_user_id": usuario.id  # Devolver el ID en gestiondeverdad
+                    })
+                else:
+                    print(f"❌ [VERIFY] Credenciales inválidas para: {username}")
+                    return JSONResponse({
+                        "success": False,
+                        "message": "Usuario o contraseña incorrectos"
+                    }, status_code=401)
+        
+        finally:
+            # Cerrar la sesión temporal de verificación
+            browser_pool.close_session(verification_user_id)
+    
+    except Exception as e:
+        print(f"❌ [VERIFY] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({
+            "success": False,
+            "message": f"Error al verificar credenciales: {str(e)}"
+        }, status_code=500)
+
+
+# -------------------------------------------------------------------
 # 💬 Endpoint Slack Events
 # -------------------------------------------------------------------
 eventos_procesados = deque(maxlen=1000)
