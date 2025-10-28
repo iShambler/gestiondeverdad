@@ -29,10 +29,9 @@ from main_script import (
 from db import get_db, registrar_peticion
 from auth_handler import (
     verificar_y_solicitar_credenciales,
-    procesar_credencial,
-    obtener_credenciales,
-    estado_auth
+    obtener_credenciales
 )
+
 
 # 🆕 Importar el pool de navegadores
 from browser_pool import browser_pool
