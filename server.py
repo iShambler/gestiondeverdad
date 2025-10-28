@@ -89,65 +89,7 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
         
         return mensaje
     
-    # Si está esperando credenciales iniciales, procesarlas
-    if estado_auth.esta_en_proceso(user_id):
-        completado, mensaje = procesar_credencial(db, user_id, texto, canal=canal)
-        
-        # Si completó el proceso de credenciales, verificarlas con login de prueba
-        if completado:
-            username, password = obtener_credenciales(db, user_id, canal=canal)
-            
-            if username and password:
-                # Obtener sesión para verificar login
-                session = browser_pool.get_session(user_id)
-                
-                if session and session.driver:
-                    print(f"[INFO] 🔍 Verificando credenciales para: {username}")
-                    
-                    try:
-                        with session.lock:
-                            success, mensaje_login = hacer_login(session.driver, session.wait, username, password)
-                        
-                        if success:
-                            # ✅ Credenciales válidas
-                            session.is_logged_in = True
-                            mensaje_verificado = (
-                                f"✅ **¡Perfecto!** He verificado tus credenciales y funcionan correctamente.\n\n"
-                                f"✅ Usuario: **{username}**\n"
-                                f"✅ Contraseña: ******\n\n"
-                                "🚀 Ya puedes usar el servicio. ¿En qué te ayudo?"
-                            )
-                            registrar_peticion(db, usuario.id, texto, "autenticacion", canal=canal, respuesta=mensaje_verificado)
-                            return mensaje_verificado
-                        else:
-                            # Eliminar credenciales incorrectas
-                            usuario.username_intranet = None
-                            usuario.password_intranet = None
-                            db.commit()
-                            
-                            # Reiniciar proceso
-                            estado_auth.iniciar_proceso(user_id)
-                            
-                            mensaje_error = (
-                                "❌ **Error**: Las credenciales no son válidas en GestiónITT.\n\n"
-                                "Necesito tus credenciales de GestiónITT.\n\n"
-                                "📝 **Envíamelas así:**\n"
-                                "```\n"
-                                "Usuario: tu_usuario\n"
-                                "Contraseña: tu_contraseña\n"
-                                "```"
-                            )
-                            registrar_peticion(db, usuario.id, texto, "autenticacion_fallida", canal=canal, respuesta=mensaje_error, estado="credenciales_invalidas")
-                            return mensaje_error
-                    except Exception as e:
-                        mensaje_error = f"⚠️ Error al verificar credenciales: {e}"
-                        registrar_peticion(db, usuario.id, texto, "error", canal=canal, respuesta=mensaje_error, estado="error")
-                        return mensaje_error
-        
-        # Si no completó aún (esperando más datos)
-        registrar_peticion(db, usuario.id, texto, "autenticacion", canal=canal, respuesta=mensaje)
-        return mensaje
-    
+
     # Si necesita proporcionar credenciales por primera vez
     if mensaje_auth:
         registrar_peticion(db, usuario.id, texto, "autenticacion", canal=canal, respuesta=mensaje_auth)
