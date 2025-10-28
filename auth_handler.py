@@ -159,52 +159,15 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
         estado_auth.finalizar_proceso(user_id)
         return True, "⚠️ Ha ocurrido un error. Por favor, intenta de nuevo."
     
-    # 🧠 Extraer credenciales con GPT
-    # Validar que no sean saludos
-    texto_lower = texto.lower().strip()
-    saludos = ['hola', 'hi', 'hey', 'buenos dias', 'buenas tardes', 'buenas noches', 'ola', 'holi']
+    # 🧠 Simplemente redirigir al perfil para cualquier mensaje
+    # Ya no intentamos extraer credenciales aquí
+    mensaje = (
+        "👋 **¡Hola!** Aún no tengo tus credenciales de GestiónITT.\n\n"
+        "🔧 Dirígete a **Mi Perfil → Integración con GestiónITT** y configura tus credenciales.\n\n"
+        "Una vez configuradas, ¡podré ayudarte a gestionar tus imputaciones! 😊"
+    )
     
-    if texto_lower in saludos:
-        mensaje_saludo = (
-            "👋 ¡Hola! Encantado de conocerte.\n\n"
-            "🔧 Dirígete a **Mi Perfil → Integración con GestiónITT** para configurar tus credenciales."
-        )
-        return False, mensaje_saludo
-    
-    if len(texto.strip()) < 5:
-        mensaje_corto = (
-            "❌ El texto es demasiado corto.\n\n"
-            "🔧 Ve a **Mi Perfil → Integración con GestiónITT** para configurar tus credenciales."
-        )
-        return False, mensaje_corto
-    
-    credenciales = extraer_credenciales_con_gpt(texto)
-    
-    username = credenciales.get("username")
-    password = credenciales.get("password")
-    
-    # ✅ Validar que tengamos AMBAS credenciales
-    if not credenciales["ambos"]:
-        mensaje_incompleto = (
-            "⚠️ Para configurar tus credenciales correctamente, ve a **Mi Perfil → Integración con GestiónITT**."
-        )
-        return False, mensaje_incompleto
-    
-    # Validar longitud mínima
-    if not username or len(username) < 3:
-        return False, "❌ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo."
-    
-    if not password or len(password) < 4:
-        return False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo."
-    
-    # 💾 Guardar credenciales
-    usuario.establecer_credenciales_intranet(username, password)
-    db.commit()
-    estado_auth.finalizar_proceso(user_id)
-    
-    # Mensaje temporal (será reemplazado por el de verificación)
-    mensaje = "🔄 Verificando tus credenciales..."
-    return True, mensaje
+    return False, mensaje
 
 
 def obtener_credenciales(db: Session, user_id: str, canal: str = "webapp") -> tuple[str, str]:
