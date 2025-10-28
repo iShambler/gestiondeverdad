@@ -134,42 +134,6 @@ Respuesta:"""
         return {"username": texto.strip() if len(texto.strip()) > 0 else None, "password": None, "ambos": False}
 
 
-def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "webapp") -> tuple[bool, str]:
-    """
-    Procesa las credenciales que el usuario está proporcionando.
-    Ahora siempre espera AMBAS credenciales juntas.
-    
-    Returns:
-        (completado, mensaje):
-            - completado: True si ya tiene ambas credenciales guardadas
-            - mensaje: Respuesta para el usuario
-    """
-    estado = estado_auth.obtener_estado(user_id)
-    
-    if not estado:
-        return True, None  # No está en proceso de autenticación
-    
-    # Determinar el tipo de ID según el canal
-    if canal == "slack":
-        usuario = obtener_usuario_por_origen(db, slack_id=user_id)
-    else:
-        usuario = obtener_usuario_por_origen(db, app_id=user_id)
-    
-    if not usuario:
-        estado_auth.finalizar_proceso(user_id)
-        return True, "⚠️ Ha ocurrido un error. Por favor, intenta de nuevo."
-    
-    # 🧠 Simplemente redirigir al perfil para cualquier mensaje
-    # Ya no intentamos extraer credenciales aquí
-    mensaje = (
-        "👋 **¡Hola!** Aún no tengo tus credenciales de GestiónITT.\n\n"
-        "🔧 Dirígete a **Mi Perfil → Integración con GestiónITT** y configura tus credenciales.\n\n"
-        "Una vez configuradas, ¡podré ayudarte a gestionar tus imputaciones! 😊"
-    )
-    
-    return False, mensaje
-
-
 def obtener_credenciales(db: Session, user_id: str, canal: str = "webapp") -> tuple[str, str]:
     """
     Obtiene las credenciales de un usuario.
