@@ -73,15 +73,9 @@ def verificar_y_solicitar_credenciales(db: Session, user_id: str, canal: str = "
     if not usuario.username_intranet or not usuario.password_intranet:
         estado_auth.iniciar_proceso(user_id)
         mensaje = (
-            "👋 **¡Hola! Bienvenido al asistente de imputación de horas**\n\n"
-            "Estoy aquí para ayudarte a gestionar tus horas en GestiónITT de forma automática.\n\n"
-            "Para empezar, necesito tus credenciales de acceso.\n\n"
-            "📝 **Envíamelas así:**\n"
-            "```\n"
-            "Usuario: tu_usuario\n"
-            "Contraseña: tu_contraseña\n"
-            "```\n\n"
-            "🔒 **Tranquilo:** Tus credenciales se guardan cifradas y solo las uso para automatizar tus imputaciones."
+            "👋 **¡Hola!** Aún no tengo tus credenciales de GestiónITT.\n\n"
+            "🔧 Dirígete a **Mi Perfil → Integración con GestiónITT** y configura tus credenciales.\n\n"
+            "Una vez configuradas, ¡podré ayudarte a gestionar tus imputaciones! 😊"
         )
         return usuario, mensaje
     
@@ -173,23 +167,14 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
     if texto_lower in saludos:
         mensaje_saludo = (
             "👋 ¡Hola! Encantado de conocerte.\n\n"
-            "Para poder ayudarte, necesito tus credenciales de GestiónITT.\n\n"
-            "📝 **Envíamelas así:**\n"
-            "```\n"
-            "Usuario: tu_usuario\n"
-            "Contraseña: tu_contraseña\n"
-            "```"
+            "🔧 Dirígete a **Mi Perfil → Integración con GestiónITT** para configurar tus credenciales."
         )
         return False, mensaje_saludo
     
     if len(texto.strip()) < 5:
         mensaje_corto = (
             "❌ El texto es demasiado corto.\n\n"
-            "📝 **Envíame tus credenciales así:**\n"
-            "```\n"
-            "Usuario: tu_usuario\n"
-            "Contraseña: tu_contraseña\n"
-            "```"
+            "🔧 Ve a **Mi Perfil → Integración con GestiónITT** para configurar tus credenciales."
         )
         return False, mensaje_corto
     
@@ -201,12 +186,7 @@ def procesar_credencial(db: Session, user_id: str, texto: str, canal: str = "web
     # ✅ Validar que tengamos AMBAS credenciales
     if not credenciales["ambos"]:
         mensaje_incompleto = (
-            "⚠️ Necesito AMBAS credenciales para continuar.\n\n"
-            "📝 **Envíamelas así:**\n"
-            "```\n"
-            "Usuario: tu_usuario\n"
-            "Contraseña: tu_contraseña\n"
-            "```"
+            "⚠️ Para configurar tus credenciales correctamente, ve a **Mi Perfil → Integración con GestiónITT**."
         )
         return False, mensaje_incompleto
     
