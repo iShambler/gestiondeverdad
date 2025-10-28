@@ -296,63 +296,28 @@ async def chat(request: Request, db: Session = Depends(get_db)):
     data = await request.json()
     texto = data.get("message", "").strip()
     user_id = data.get("user_id", "web_user_default")  # ID del usuario desde el frontend
-
-    if not texto:
-        return JSONResponse({"reply": "No he recibido ningún mensaje."})
     
-    respuesta = procesar_mensaje_usuario(texto, user_id, db, canal="webapp")
-    return JSONResponse({"reply": respuesta})
-
-
-# -------------------------------------------------------------------
-# 🔐 Endpoint para verificar y guardar credenciales (para Agente Co)
-# -------------------------------------------------------------------
-@app.post("/verify-credentials")
-async def verify_credentials(request: Request, db: Session = Depends(get_db)):
-    """
-    Verifica si las credenciales de GestionITT son válidas y las guarda en la BD.
-    Este endpoint es usado por otros servicios (como Agente Co)
-    para validar credenciales y crearlas en gestiondeverdad.
+    # 🆕 Credenciales opcionales enviadas desde Agente Co
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+    agente_co_user_id = data.get("agente_co_user_id", "").strip()
     
-    Requiere:
-        - username: str (de GestionITT)
-        - password: str (de GestionITT)
-        - agente_co_user_id: str (ID del usuario en Agente Co, para vincularlo)
-    
-    Devuelve:
-        - success: bool
-        - message: str
-        - username: str (si success=True)
-    """
-    try:
-        data = await request.json()
-        username = data.get("username", "").strip()
-        password = data.get("password", "").strip()
-        agente_co_user_id = data.get("agente_co_user_id", "").strip()  # ID del usuario en Agente Co
-        
-        if not username or not password:
-            return JSONResponse({
-                "success": False,
-                "message": "Usuario y contraseña son requeridos"
-            }, status_code=400)
-        
-        if not agente_co_user_id:
-            return JSONResponse({
-                "success": False,
-                "message": "ID de usuario de Agente Co es requerido"
-            }, status_code=400)
-        
-        print(f"\n🔐 [VERIFY] Verificando credenciales para: {username}")
+    # 🔐 Si se envían credenciales, verificar y guardar
+    if username and password and agente_co_user_id:
+        print(f"\n🔐 [CHATS] Recibidas credenciales desde Agente Co")
+        print(f"   Usuario GestionITT: {username}")
         print(f"   Agente Co User ID: {agente_co_user_id}")
         
-        # Obtener una sesión temporal del pool para verificación
-        verification_user_id = f"verify_{username}_{int(time.time())}"
-        session = browser_pool.get_session(verification_user_id)
+        # Usar el agente_co_user_id como user_id para gestiondeverdad
+        user_id = agente_co_user_id
+        
+        # Obtener una sesión del pool para este usuario
+        session = browser_pool.get_session(user_id)
         
         if not session or not session.driver:
             return JSONResponse({
                 "success": False,
-                "message": "Error al inicializar el navegador para verificación"
+                "error": "Error al inicializar el navegador"
             }, status_code=500)
         
         try:
@@ -361,10 +326,10 @@ async def verify_credentials(request: Request, db: Session = Depends(get_db)):
                 success, mensaje = hacer_login(session.driver, session.wait, username, password)
                 
                 if success:
-                    print(f"✅ [VERIFY] Credenciales válidas para: {username}")
+                    print(f"✅ [CHATS] Login exitoso para: {username}")
+                    session.is_logged_in = True
                     
-                    # 💾 GUARDAR o ACTUALIZAR usuario en la BD de gestiondeverdad
-                    # Buscar si ya existe un usuario con este app_id (vinculado a Agente Co)
+                    # 💾 Guardar credenciales en la BD de gestiondeverdad
                     from db import obtener_usuario_por_origen, crear_usuario
                     
                     usuario = obtener_usuario_por_origen(db, app_id=agente_co_user_id)
@@ -372,39 +337,44 @@ async def verify_credentials(request: Request, db: Session = Depends(get_db)):
                     if not usuario:
                         # Crear nuevo usuario en gestiondeverdad
                         usuario = crear_usuario(db, app_id=agente_co_user_id, canal="webapp")
-                        print(f"✅ [VERIFY] Usuario creado en gestiondeverdad: {usuario.id}")
+                        print(f"✅ [CHATS] Usuario creado en gestiondeverdad: {usuario.id}")
                     
                     # Guardar/actualizar credenciales de GestionITT
                     usuario.establecer_credenciales_intranet(username, password)
                     db.commit()
                     
-                    print(f"💾 [VERIFY] Credenciales guardadas en BD para usuario ID: {usuario.id}")
+                    print(f"💾 [CHATS] Credenciales guardadas en BD para usuario ID: {usuario.id}")
                     
                     return JSONResponse({
                         "success": True,
-                        "message": "Credenciales verificadas y guardadas correctamente",
+                        "message": "✅ Credenciales verificadas y guardadas correctamente",
                         "username": username,
-                        "gestiondeverdad_user_id": usuario.id  # Devolver el ID en gestiondeverdad
+                        "gestiondeverdad_user_id": usuario.id
                     })
                 else:
-                    print(f"❌ [VERIFY] Credenciales inválidas para: {username}")
+                    print(f"❌ [CHATS] Login fallido para: {username}")
+                    print(f"   Mensaje: {mensaje}")
+                    
                     return JSONResponse({
                         "success": False,
-                        "message": "Usuario o contraseña incorrectos"
+                        "error": "Usuario o contraseña incorrectos"
                     }, status_code=401)
         
-        finally:
-            # Cerrar la sesión temporal de verificación
-            browser_pool.close_session(verification_user_id)
+        except Exception as e:
+            print(f"❌ [CHATS] Error al verificar credenciales: {e}")
+            import traceback
+            traceback.print_exc()
+            return JSONResponse({
+                "success": False,
+                "error": f"Error al verificar credenciales: {str(e)}"
+            }, status_code=500)
     
-    except Exception as e:
-        print(f"❌ [VERIFY] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return JSONResponse({
-            "success": False,
-            "message": f"Error al verificar credenciales: {str(e)}"
-        }, status_code=500)
+    # 💬 Procesamiento normal de mensajes (si no hay credenciales)
+    if not texto:
+        return JSONResponse({"reply": "No he recibido ningún mensaje."})
+    
+    respuesta = procesar_mensaje_usuario(texto, user_id, db, canal="webapp")
+    return JSONResponse({"reply": respuesta})
 
 
 # -------------------------------------------------------------------
