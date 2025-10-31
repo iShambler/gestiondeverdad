@@ -238,6 +238,14 @@ async def chat(request: Request, db: Session = Depends(get_db)):
     texto = data.get("message", "").strip()
     user_id = data.get("user_id", "web_user_default")  # ID del usuario desde el frontend
     
+    # 📱 WhatsApp ID (si viene desde WhatsApp)
+    wa_id = data.get("wa_id", "").strip()
+    
+    # 🔍 Auto-detectar si user_id es un número de WhatsApp (solo dígitos y longitud 10-15)
+    if not wa_id and user_id and user_id.isdigit() and 10 <= len(user_id) <= 15:
+        print(f"🔍 [CHATS] Auto-detectado número de WhatsApp en user_id: {user_id}")
+        wa_id = user_id
+    
     # 🆕 Credenciales opcionales enviadas desde Agente Co
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
@@ -309,6 +317,138 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 "success": False,
                 "error": f"Error al verificar credenciales: {str(e)}"
             }, status_code=500)
+    
+    # 📱 Si viene desde WhatsApp, manejar flujo especial
+    if wa_id:
+        print(f"\n📱 [CHATS] Petición desde WhatsApp: {wa_id}")
+        
+        if not texto:
+            return JSONResponse({"reply": "No he recibido ningún mensaje."})
+        
+        # Obtener o crear usuario de WhatsApp
+        from db import obtener_usuario_por_origen, crear_usuario
+        usuario_wa = obtener_usuario_por_origen(db, wa_id=wa_id)
+        
+        if not usuario_wa:
+            usuario_wa = crear_usuario(db, wa_id=wa_id, canal="whatsapp")
+            print(f"✅ [CHATS] Usuario de WhatsApp creado: {usuario_wa.id}")
+        
+        # Si el usuario NO tiene credenciales, intentar extraerlas del mensaje
+        if not usuario_wa.username_intranet or not usuario_wa.password_intranet:
+            print(f"🔐 [CHATS] Usuario sin credenciales, intentando extraer...")
+            print(f"📝 [CHATS] Texto recibido: {texto}")
+            
+            from auth_handler import extraer_credenciales_con_gpt
+            credenciales = extraer_credenciales_con_gpt(texto)
+            
+            print(f"🔍 [CHATS] Credenciales extraídas: {credenciales}")
+            
+            if credenciales["ambos"]:
+                # Intentar hacer login con las credenciales extraídas
+                print(f"🔑 [CHATS] Credenciales extraídas: {credenciales['username']}")
+                
+                session = browser_pool.get_session(wa_id)
+                
+                if not session or not session.driver:
+                    return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador. Intenta de nuevo en unos momentos."})
+                
+                try:
+                    with session.lock:
+                        success, mensaje = hacer_login(
+                            session.driver, 
+                            session.wait, 
+                            credenciales["username"], 
+                            credenciales["password"]
+                        )
+                        
+                        if success:
+                            print(f"✅ [CHATS] Login exitoso para WhatsApp: {credenciales['username']}")
+                            session.is_logged_in = True
+                            
+                            # Guardar credenciales
+                            usuario_wa.establecer_credenciales_intranet(
+                                credenciales["username"], 
+                                credenciales["password"]
+                            )
+                            db.commit()
+                            
+                            registrar_peticion(
+                                db, 
+                                usuario_wa.id, 
+                                texto, 
+                                "registro_whatsapp", 
+                                canal="whatsapp",
+                                respuesta="Credenciales guardadas exitosamente"
+                            )
+                            
+                            return JSONResponse({
+                                "reply": (
+                                    "✅ *¡Credenciales guardadas correctamente!*\n\n"
+                                    f"✓ Usuario: *{credenciales['username']}*\n"
+                                    "✓ Contraseña: ******\n\n"
+                                    "🚀 Ya puedes empezar a usar el bot. \u00bfEn qué puedo ayudarte?"
+                                )
+                            })
+                        else:
+                            print(f"❌ [CHATS] Login fallido: {mensaje}")
+                            registrar_peticion(
+                                db, 
+                                usuario_wa.id, 
+                                texto, 
+                                "error_login_whatsapp", 
+                                canal="whatsapp",
+                                respuesta=mensaje,
+                                estado="credenciales_invalidas"
+                            )
+                            
+                            return JSONResponse({
+                                "reply": (
+                                    "❌ *Error de login*\n\n"
+                                    "Las credenciales no son correctas. Por favor, verifica tus datos e inténtalo de nuevo.\n\n"
+                                    "📝 Envíamelas así:\n"
+                                    "```\n"
+                                    "Usuario: tu_usuario\n"
+                                    "Contraseña: tu_contraseña\n"
+                                    "```"
+                                )
+                            })
+                
+                except Exception as e:
+                    print(f"❌ [CHATS] Error al verificar credenciales de WhatsApp: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return JSONResponse({
+                        "reply": f"⚠️ Error al verificar credenciales: {str(e)}"
+                    })
+            
+            else:
+                # No se pudieron extraer las credenciales, pedir que las envíe
+                print(f"⚠️ [CHATS] No se pudieron extraer credenciales del mensaje")
+                registrar_peticion(
+                    db, 
+                    usuario_wa.id, 
+                    texto, 
+                    "solicitud_credenciales", 
+                    canal="whatsapp",
+                    respuesta="Solicitando credenciales"
+                )
+                
+                return JSONResponse({
+                    "reply": (
+                        "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
+                        "📝 Por favor, envíamelas en este formato:\n\n"
+                        "```\n"
+                        "Usuario: tu_usuario\n"
+                        "Contraseña: tu_contraseña\n"
+                        "```\n\n"
+                        "🔒 Tus credenciales se guardan cifradas y seguras."
+                    )
+                })
+        
+        # Si ya tiene credenciales, procesar el mensaje normalmente
+        print(f"✅ [CHATS] Usuario de WhatsApp con credenciales, procesando mensaje...")
+        respuesta = procesar_mensaje_usuario(texto, wa_id, db, canal="whatsapp")
+        return JSONResponse({"reply": respuesta})
     
     # 💬 Procesamiento normal de mensajes (si no hay credenciales)
     if not texto:
@@ -390,4 +530,4 @@ async def close_user_session(user_id: str):
 @app.on_event("shutdown")
 def shutdown_event():
     print("[SERVER] 🛑 Apagando servidor, cerrando todos los navegadores...")
-    browser_pool.close_all()
+    browser_pool.close_all()   

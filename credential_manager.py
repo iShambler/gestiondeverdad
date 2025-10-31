@@ -39,6 +39,8 @@ class CredentialManager:
         # Obtener usuario
         if canal == "slack":
             usuario = obtener_usuario_por_origen(db, slack_id=user_id)
+        elif canal == "whatsapp":
+            usuario = obtener_usuario_por_origen(db, wa_id=user_id)
         else:
             usuario = obtener_usuario_por_origen(db, app_id=user_id)
         

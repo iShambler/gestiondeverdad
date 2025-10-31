@@ -54,6 +54,7 @@ class Usuario(Base):
     # Identificadores por canal
     app_id = Column(String(255), unique=True, nullable=True)
     slack_id = Column(String(255), unique=True, nullable=True)
+    wa_id = Column(String(255), unique=True, nullable=True)
     external_id = Column(String(255), unique=True, nullable=True)
     nombre = Column(String(255), nullable=True)
     email = Column(String(255), nullable=True)
@@ -116,18 +117,21 @@ def get_db():
 
 # --- Buscar o crear usuario según origen ----------------------
 
-def obtener_usuario_por_origen(db, *, app_id=None, slack_id=None):
+def obtener_usuario_por_origen(db, *, app_id=None, slack_id=None, wa_id=None):
     if app_id:
         return db.query(Usuario).filter(Usuario.app_id == app_id).first()
     if slack_id:
         return db.query(Usuario).filter(Usuario.slack_id == slack_id).first()
+    if wa_id:
+        return db.query(Usuario).filter(Usuario.wa_id == wa_id).first()
     return None
 
 
-def crear_usuario(db, *, app_id=None, slack_id=None, canal="webapp", nombre=None, email=None):
+def crear_usuario(db, *, app_id=None, slack_id=None, wa_id=None, canal="webapp", nombre=None, email=None):
     nuevo = Usuario(
         app_id=app_id,
         slack_id=slack_id,
+        wa_id=wa_id,
         canal_principal=canal,
         nombre=nombre,
         email=email,
