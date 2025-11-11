@@ -30,7 +30,7 @@ class BrowserSession:
             service = ChromeService(ChromeDriverManager().install())
             options = webdriver.ChromeOptions()
             # 🆕 MODO HEADLESS ACTIVADO
-            options.add_argument('--headless')
+
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-gpu')  # Recomendado para headless

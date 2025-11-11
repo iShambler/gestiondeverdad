@@ -11,19 +11,23 @@ import time
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-# 🧩 Importa todas las funciones necesarias del script principal
-from main_script import (
-    interpretar_con_gpt,
-    ejecutar_accion,
-    hacer_login,
-    generar_respuesta_natural,
+# 🧩 Importa todas las funciones necesarias desde los módulos refactorizados
+from ai import (
     clasificar_mensaje,
+    interpretar_con_gpt,
     responder_conversacion,
     interpretar_consulta,
-    consultar_dia,
-    consultar_semana,
-    generar_resumen_natural,
+    generar_respuesta_natural,
+    generar_resumen_natural
 )
+
+from core import (
+    ejecutar_accion,
+    consultar_dia,
+    consultar_semana
+)
+
+from web_automation import hacer_login
 
 # Importar funciones de base de datos y autenticación
 from db import get_db, registrar_peticion
