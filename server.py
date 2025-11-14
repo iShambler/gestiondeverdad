@@ -1,15 +1,15 @@
 import os
-
 from dotenv import load_dotenv  
-
 import requests
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from collections import deque
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 # 🧩 Importa todas las funciones necesarias desde los módulos refactorizados
 from ai import (
@@ -36,12 +36,14 @@ from auth_handler import (
     obtener_credenciales
 )
 
-
 # 🆕 Importar el pool de navegadores
 from browser_pool import browser_pool
 
 # 🚀 Inicialización de la app FastAPI
 app = FastAPI()
+
+# 🔥 ThreadPoolExecutor para operaciones bloqueantes de Selenium
+executor = ThreadPoolExecutor(max_workers=50)  # 50 threads concurrentes
 
 # 🌐 Habilitar CORS (para tu frontend o Slack)
 app.add_middleware(
@@ -60,10 +62,12 @@ SLACK_API_URL = "https://slack.com/api/chat.postMessage"
 # -------------------------------------------------------------------
 # 🔧 FUNCIONES AUXILIARES
 # -------------------------------------------------------------------
-def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str = "webapp"):
+def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: str = "webapp"):
     """
     Lógica común para procesar mensajes de usuarios (webapp o slack).
     Usa el pool de navegadores para obtener una sesión individual por usuario.
+    
+    ⚠️ Esta función es SÍNCRONA y debe ejecutarse en un thread separado
     
     Returns:
         str: Respuesta para el usuario
@@ -93,7 +97,6 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
         
         return mensaje
     
-
     # Si necesita proporcionar credenciales por primera vez
     if mensaje_auth:
         registrar_peticion(db, usuario.id, texto, "autenticacion", canal=canal, respuesta=mensaje_auth)
@@ -117,7 +120,8 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
             try:
                 from credential_manager import credential_manager
                 
-                with session.lock:  # Thread-safe
+                # 🔒 LOCK SOLO PARA LOGIN - operación crítica
+                with session.lock:
                     success, mensaje_login = hacer_login(session.driver, session.wait, username, password)
                     
                     if not success:
@@ -153,84 +157,111 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
                 return error_msg
 
     try:
-        with session.lock:  # Thread-safe para operaciones del navegador
-            tipo_mensaje = clasificar_mensaje(texto)
-            contexto = session.contexto  # Usar el contexto de la sesión del usuario
+        # 🔥 SIN LOCK AQUÍ - cada operación maneja su propio lock si es necesario
+        tipo_mensaje = clasificar_mensaje(texto)
+        contexto = session.contexto  # Usar el contexto de la sesión del usuario
 
-            # 🗣️ Conversación natural (saludos o charla)
-            if tipo_mensaje == "conversacion":
-                respuesta = responder_conversacion(texto)
-                registrar_peticion(db, usuario.id, texto, "conversacion", canal=canal, respuesta=respuesta)
-                session.update_activity()
-                return respuesta
+        # 🗣️ Conversación natural (saludos o charla)
+        if tipo_mensaje == "conversacion":
+            respuesta = responder_conversacion(texto)
+            registrar_peticion(db, usuario.id, texto, "conversacion", canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
 
-            # 📊 Consultas (resumen semanal o diario)
-            elif tipo_mensaje == "consulta":
-                consulta_info = interpretar_consulta(texto)
-                if consulta_info:
-                    fecha = datetime.fromisoformat(consulta_info["fecha"])
-                    
-                    if consulta_info.get("tipo") == "dia":
-                        # Consulta de un día específico
+        # 📊 Consultas (resumen semanal o diario)
+        elif tipo_mensaje == "consulta":
+            consulta_info = interpretar_consulta(texto)
+            if consulta_info:
+                fecha = datetime.fromisoformat(consulta_info["fecha"])
+                
+                if consulta_info.get("tipo") == "dia":
+                    # 🔒 LOCK SOLO PARA LA OPERACIÓN DEL NAVEGADOR
+                    with session.lock:
                         info_bruta = consultar_dia(session.driver, session.wait, fecha)
-                        resumen_natural = generar_resumen_natural(info_bruta, texto)
-                        registrar_peticion(db, usuario.id, texto, "consulta_dia", canal=canal, respuesta=resumen_natural)
-                        session.update_activity()
-                        return resumen_natural
-                    elif consulta_info.get("tipo") == "semana":
-                        # Consulta de una semana completa
+                    
+                    # Generar respuesta SIN lock
+                    resumen_natural = generar_resumen_natural(info_bruta, texto)
+                    registrar_peticion(db, usuario.id, texto, "consulta_dia", canal=canal, respuesta=resumen_natural)
+                    session.update_activity()
+                    return resumen_natural
+                    
+                elif consulta_info.get("tipo") == "semana":
+                    # 🔒 LOCK SOLO PARA LA OPERACIÓN DEL NAVEGADOR
+                    with session.lock:
                         info_bruta = consultar_semana(session.driver, session.wait, fecha)
-                        resumen_natural = generar_resumen_natural(info_bruta, texto)
-                        registrar_peticion(db, usuario.id, texto, "consulta_semana", canal=canal, respuesta=resumen_natural)
-                        session.update_activity()
-                        return resumen_natural
-                    else:
-                        respuesta = "🤔 No he entendido si preguntas por un día o una semana."
-                        registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
-                        session.update_activity()
-                        return respuesta
+                    
+                    # Generar respuesta SIN lock
+                    resumen_natural = generar_resumen_natural(info_bruta, texto)
+                    registrar_peticion(db, usuario.id, texto, "consulta_semana", canal=canal, respuesta=resumen_natural)
+                    session.update_activity()
+                    return resumen_natural
                 else:
-                    respuesta = "🤔 No he entendido qué quieres consultar."
+                    respuesta = "🤔 No he entendido si preguntas por un día o una semana."
                     registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
                     session.update_activity()
                     return respuesta
-
-            # ⚙️ Comandos de imputación
-            elif tipo_mensaje == "comando":
-                ordenes = interpretar_con_gpt(texto)
-                if not ordenes:
-                    respuesta = "🤔 No he entendido qué quieres que haga."
-                    registrar_peticion(db, usuario.id, texto, "comando", canal=canal, respuesta=respuesta)
-                    session.update_activity()
-                    return respuesta
-
-                respuestas = []
-                for orden in ordenes:
-                    mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
-                    if mensaje:
-                        respuestas.append(mensaje)
-
-                if respuestas:
-                    respuesta_natural = generar_respuesta_natural(respuestas, texto)
-                else:
-                    respuesta_natural = "He procesado la instrucción, pero no hubo mensajes de salida."
-
-                registrar_peticion(db, usuario.id, texto, "comando", canal=canal, 
-                                respuesta=respuesta_natural, acciones=ordenes)
-                session.update_activity()
-                return respuesta_natural
-
             else:
-                respuesta = "No he entendido el tipo de mensaje."
-                registrar_peticion(db, usuario.id, texto, "desconocido", canal=canal, respuesta=respuesta)
+                respuesta = "🤔 No he entendido qué quieres consultar."
+                registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
                 session.update_activity()
                 return respuesta
+
+        # ⚙️ Comandos de imputación
+        elif tipo_mensaje == "comando":
+            ordenes = interpretar_con_gpt(texto)
+            if not ordenes:
+                respuesta = "🤔 No he entendido qué quieres que haga."
+                registrar_peticion(db, usuario.id, texto, "comando", canal=canal, respuesta=respuesta)
+                session.update_activity()
+                return respuesta
+
+            respuestas = []
+            for orden in ordenes:
+                # 🔒 LOCK SOLO PARA CADA ACCIÓN INDIVIDUAL
+                with session.lock:
+                    mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
+                if mensaje:
+                    respuestas.append(mensaje)
+
+            # Generar respuesta SIN lock
+            if respuestas:
+                respuesta_natural = generar_respuesta_natural(respuestas, texto)
+            else:
+                respuesta_natural = "He procesado la instrucción, pero no hubo mensajes de salida."
+
+            registrar_peticion(db, usuario.id, texto, "comando", canal=canal, 
+                            respuesta=respuesta_natural, acciones=ordenes)
+            session.update_activity()
+            return respuesta_natural
+
+        else:
+            respuesta = "No he entendido el tipo de mensaje."
+            registrar_peticion(db, usuario.id, texto, "desconocido", canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
 
     except Exception as e:
         error_msg = f"⚠️ Error procesando la solicitud: {e}"
         registrar_peticion(db, usuario.id, texto, "error", canal=canal, 
                          respuesta=error_msg, estado="error")
         return error_msg
+
+
+# 🔥 Función asíncrona que ejecuta el procesamiento en un thread separado
+async def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str = "webapp"):
+    """
+    Versión asíncrona que ejecuta el procesamiento síncrono en un thread pool.
+    """
+    loop = asyncio.get_event_loop()
+    resultado = await loop.run_in_executor(
+        executor,
+        procesar_mensaje_usuario_sync,
+        texto,
+        user_id,
+        db,
+        canal
+    )
+    return resultado
 
 
 # -------------------------------------------------------------------
@@ -240,12 +271,12 @@ def procesar_mensaje_usuario(texto: str, user_id: str, db: Session, canal: str =
 async def chat(request: Request, db: Session = Depends(get_db)):
     data = await request.json()
     texto = data.get("message", "").strip()
-    user_id = data.get("user_id", "web_user_default")  # ID del usuario desde el frontend
+    user_id = data.get("user_id", "web_user_default")
     
     # 📱 WhatsApp ID (si viene desde WhatsApp)
     wa_id = data.get("wa_id", "").strip()
     
-    # 🔍 Auto-detectar si user_id es un número de WhatsApp (solo dígitos y longitud 10-15)
+    # 🔍 Auto-detectar si user_id es un número de WhatsApp
     if not wa_id and user_id and user_id.isdigit() and 10 <= len(user_id) <= 15:
         print(f"🔍 [CHATS] Auto-detectado número de WhatsApp en user_id: {user_id}")
         wa_id = user_id
@@ -261,10 +292,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         print(f"   Usuario GestionITT: {username}")
         print(f"   Agente Co User ID: {agente_co_user_id}")
         
-        # Usar el agente_co_user_id como user_id para gestiondeverdad
         user_id = agente_co_user_id
-        
-        # Obtener una sesión del pool para este usuario
         session = browser_pool.get_session(user_id)
         
         if not session or not session.driver:
@@ -274,44 +302,41 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             }, status_code=500)
         
         try:
-            with session.lock:
-                # Intentar hacer login
-                success, mensaje = hacer_login(session.driver, session.wait, username, password)
+            # 🔥 Ejecutar login en thread separado
+            loop = asyncio.get_event_loop()
+            success, mensaje = await loop.run_in_executor(
+                executor,
+                lambda: hacer_login_with_lock(session, username, password)
+            )
+            
+            if success:
+                print(f"✅ [CHATS] Login exitoso para: {username}")
+                session.is_logged_in = True
                 
-                if success:
-                    print(f"✅ [CHATS] Login exitoso para: {username}")
-                    session.is_logged_in = True
-                    
-                    # 💾 Guardar credenciales en la BD de gestiondeverdad
-                    from db import obtener_usuario_por_origen, crear_usuario
-                    
-                    usuario = obtener_usuario_por_origen(db, app_id=agente_co_user_id)
-                    
-                    if not usuario:
-                        # Crear nuevo usuario en gestiondeverdad
-                        usuario = crear_usuario(db, app_id=agente_co_user_id, canal="webapp")
-                        print(f"✅ [CHATS] Usuario creado en gestiondeverdad: {usuario.id}")
-                    
-                    # Guardar/actualizar credenciales de GestionITT
-                    usuario.establecer_credenciales_intranet(username, password)
-                    db.commit()
-                    
-                    print(f"💾 [CHATS] Credenciales guardadas en BD para usuario ID: {usuario.id}")
-                    
-                    return JSONResponse({
-                        "success": True,
-                        "message": "✅ Credenciales verificadas y guardadas correctamente",
-                        "username": username,
-                        "gestiondeverdad_user_id": usuario.id
-                    })
-                else:
-                    print(f"❌ [CHATS] Login fallido para: {username}")
-                    print(f"   Mensaje: {mensaje}")
-                    
-                    return JSONResponse({
-                        "success": False,
-                        "error": "Usuario o contraseña incorrectos"
-                    }, status_code=401)
+                from db import obtener_usuario_por_origen, crear_usuario
+                usuario = obtener_usuario_por_origen(db, app_id=agente_co_user_id)
+                
+                if not usuario:
+                    usuario = crear_usuario(db, app_id=agente_co_user_id, canal="webapp")
+                    print(f"✅ [CHATS] Usuario creado en gestiondeverdad: {usuario.id}")
+                
+                usuario.establecer_credenciales_intranet(username, password)
+                db.commit()
+                
+                print(f"💾 [CHATS] Credenciales guardadas en BD para usuario ID: {usuario.id}")
+                
+                return JSONResponse({
+                    "success": True,
+                    "message": "✅ Credenciales verificadas y guardadas correctamente",
+                    "username": username,
+                    "gestiondeverdad_user_id": usuario.id
+                })
+            else:
+                print(f"❌ [CHATS] Login fallido para: {username}")
+                return JSONResponse({
+                    "success": False,
+                    "error": "Usuario o contraseña incorrectos"
+                }, status_code=401)
         
         except Exception as e:
             print(f"❌ [CHATS] Error al verificar credenciales: {e}")
@@ -322,14 +347,13 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 "error": f"Error al verificar credenciales: {str(e)}"
             }, status_code=500)
     
-    # 📱 Si viene desde WhatsApp, manejar flujo especial
+    # 📱 Si viene desde WhatsApp
     if wa_id:
         print(f"\n📱 [CHATS] Petición desde WhatsApp: {wa_id}")
         
         if not texto:
             return JSONResponse({"reply": "No he recibido ningún mensaje."})
         
-        # Obtener o crear usuario de WhatsApp
         from db import obtener_usuario_por_origen, crear_usuario
         usuario_wa = obtener_usuario_por_origen(db, wa_id=wa_id)
         
@@ -337,129 +361,91 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             usuario_wa = crear_usuario(db, wa_id=wa_id, canal="whatsapp")
             print(f"✅ [CHATS] Usuario de WhatsApp creado: {usuario_wa.id}")
         
-        # Si el usuario NO tiene credenciales, intentar extraerlas del mensaje
         if not usuario_wa.username_intranet or not usuario_wa.password_intranet:
             print(f"🔐 [CHATS] Usuario sin credenciales, intentando extraer...")
-            print(f"📝 [CHATS] Texto recibido: {texto}")
             
             from auth_handler import extraer_credenciales_con_gpt
             credenciales = extraer_credenciales_con_gpt(texto)
             
-            print(f"🔍 [CHATS] Credenciales extraídas: {credenciales}")
-            
             if credenciales["ambos"]:
-                # Intentar hacer login con las credenciales extraídas
                 print(f"🔑 [CHATS] Credenciales extraídas: {credenciales['username']}")
                 
                 session = browser_pool.get_session(wa_id)
                 
                 if not session or not session.driver:
-                    return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador. Intenta de nuevo en unos momentos."})
+                    return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador."})
                 
                 try:
-                    with session.lock:
-                        success, mensaje = hacer_login(
-                            session.driver, 
-                            session.wait, 
+                    # 🔥 Login en thread separado
+                    loop = asyncio.get_event_loop()
+                    success, mensaje = await loop.run_in_executor(
+                        executor,
+                        lambda: hacer_login_with_lock(session, credenciales["username"], credenciales["password"])
+                    )
+                    
+                    if success:
+                        print(f"✅ [CHATS] Login exitoso para WhatsApp: {credenciales['username']}")
+                        session.is_logged_in = True
+                        
+                        usuario_wa.establecer_credenciales_intranet(
                             credenciales["username"], 
                             credenciales["password"]
                         )
+                        db.commit()
                         
-                        if success:
-                            print(f"✅ [CHATS] Login exitoso para WhatsApp: {credenciales['username']}")
-                            session.is_logged_in = True
-                            
-                            # Guardar credenciales
-                            usuario_wa.establecer_credenciales_intranet(
-                                credenciales["username"], 
-                                credenciales["password"]
+                        registrar_peticion(db, usuario_wa.id, texto, "registro_whatsapp", 
+                                         canal="whatsapp", respuesta="Credenciales guardadas exitosamente")
+                        
+                        return JSONResponse({
+                            "reply": (
+                                "✅ *¡Credenciales guardadas correctamente!*\n\n"
+                                f"✓ Usuario: *{credenciales['username']}*\n"
+                                "✓ Contraseña: ******\n\n"
+                                "🚀 Ya puedes empezar a usar el bot. ¿En qué puedo ayudarte?"
                             )
-                            db.commit()
-                            
-                            registrar_peticion(
-                                db, 
-                                usuario_wa.id, 
-                                texto, 
-                                "registro_whatsapp", 
-                                canal="whatsapp",
-                                respuesta="Credenciales guardadas exitosamente"
+                        })
+                    else:
+                        return JSONResponse({
+                            "reply": (
+                                "❌ *Error de login*\n\n"
+                                "Las credenciales no son correctas."
                             )
-                            
-                            return JSONResponse({
-                                "reply": (
-                                    "✅ *¡Credenciales guardadas correctamente!*\n\n"
-                                    f"✓ Usuario: *{credenciales['username']}*\n"
-                                    "✓ Contraseña: ******\n\n"
-                                    "🚀 Ya puedes empezar a usar el bot. \u00bfEn qué puedo ayudarte?"
-                                )
-                            })
-                        else:
-                            print(f"❌ [CHATS] Login fallido: {mensaje}")
-                            registrar_peticion(
-                                db, 
-                                usuario_wa.id, 
-                                texto, 
-                                "error_login_whatsapp", 
-                                canal="whatsapp",
-                                respuesta=mensaje,
-                                estado="credenciales_invalidas"
-                            )
-                            
-                            return JSONResponse({
-                                "reply": (
-                                    "❌ *Error de login*\n\n"
-                                    "Las credenciales no son correctas. Por favor, verifica tus datos e inténtalo de nuevo.\n\n"
-                                    "📝 Envíamelas así:\n"
-                                    "```\n"
-                                    "Usuario: tu_usuario\n"
-                                    "Contraseña: tu_contraseña\n"
-                                    "```"
-                                )
-                            })
+                        })
                 
                 except Exception as e:
-                    print(f"❌ [CHATS] Error al verificar credenciales de WhatsApp: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    return JSONResponse({
-                        "reply": f"⚠️ Error al verificar credenciales: {str(e)}"
-                    })
+                    print(f"❌ [CHATS] Error: {e}")
+                    return JSONResponse({"reply": f"⚠️ Error: {str(e)}"})
             
             else:
-                # No se pudieron extraer las credenciales, pedir que las envíe
-                print(f"⚠️ [CHATS] No se pudieron extraer credenciales del mensaje")
-                registrar_peticion(
-                    db, 
-                    usuario_wa.id, 
-                    texto, 
-                    "solicitud_credenciales", 
-                    canal="whatsapp",
-                    respuesta="Solicitando credenciales"
-                )
-                
                 return JSONResponse({
                     "reply": (
                         "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
-                        "📝 Por favor, envíamelas en este formato:\n\n"
+                        "📝 Envíamelas así:\n"
                         "```\n"
                         "Usuario: tu_usuario\n"
                         "Contraseña: tu_contraseña\n"
-                        "```\n\n"
-                        "🔒 Tus credenciales se guardan cifradas y seguras."
+                        "```"
                     )
                 })
         
-        # Si ya tiene credenciales, procesar el mensaje normalmente
-        print(f"✅ [CHATS] Usuario de WhatsApp con credenciales, procesando mensaje...")
-        respuesta = procesar_mensaje_usuario(texto, wa_id, db, canal="whatsapp")
+        # 🔥 Procesar mensaje en thread separado
+        respuesta = await procesar_mensaje_usuario(texto, wa_id, db, canal="whatsapp")
         return JSONResponse({"reply": respuesta})
     
-    # 💬 Procesamiento normal de mensajes (si no hay credenciales)
+    # 💬 Procesamiento normal
     if not texto:
         return JSONResponse({"reply": "No he recibido ningún mensaje."})
     
-    respuesta = procesar_mensaje_usuario(texto, user_id, db, canal="webapp")
+    # 🔥 Procesar mensaje en thread separado
+    respuesta = await procesar_mensaje_usuario(texto, user_id, db, canal="webapp")
     return JSONResponse({"reply": respuesta})
+
+
+# Helper para login con lock
+def hacer_login_with_lock(session, username, password):
+    """Helper para hacer login con lock"""
+    with session.lock:
+        return hacer_login(session.driver, session.wait, username, password)
 
 
 # -------------------------------------------------------------------
@@ -471,32 +457,28 @@ eventos_procesados = deque(maxlen=1000)
 async def slack_events(request: Request, db: Session = Depends(get_db)):
     data = await request.json()
 
-    # 1️⃣ Challenge de verificación inicial de Slack
     if "challenge" in data:
         return JSONResponse({"challenge": data["challenge"]})
 
-    # 2️⃣ Evitar procesar el mismo evento varias veces
     event_id = data.get("event_id")
     if event_id in eventos_procesados:
         print(f"⚠️ Evento duplicado ignorado: {event_id}")
         return JSONResponse({"status": "duplicate_ignored"})
     eventos_procesados.append(event_id)
 
-    # 3️⃣ Extraer información del evento
     event = data.get("event", {})
     texto = event.get("text", "")
     user = event.get("user", "")
     bot_id = event.get("bot_id", None)
     channel = event.get("channel", "")
 
-    # 4️⃣ Evitar responderse a sí mismo
     if bot_id or not texto:
         return JSONResponse({"status": "ignored"})
 
     print(f"📩 Mensaje de {user}: {texto}")
     
-    # Procesar mensaje con la función común
-    respuesta = procesar_mensaje_usuario(texto, user, db, canal="slack")
+    # 🔥 Procesar en thread separado
+    respuesta = await procesar_mensaje_usuario(texto, user, db, canal="slack")
     
     # ✅ Enviar respuesta a Slack
     requests.post(
@@ -534,4 +516,5 @@ async def close_user_session(user_id: str):
 @app.on_event("shutdown")
 def shutdown_event():
     print("[SERVER] 🛑 Apagando servidor, cerrando todos los navegadores...")
-    browser_pool.close_all()   
+    browser_pool.close_all()
+    executor.shutdown(wait=True)
