@@ -150,7 +150,20 @@ Información de la semana:
 Genera una respuesta natural, amigable y bien formateada con emojis. 
 Destaca lo más importante y presenta la información de forma clara.
 
-⚠️ IMPORTANTE: NO incluyas saludos ni presentaciones. Ve directo a la información solicitada.
+⚠️ IMPORTANTE: 
+- NO incluyas saludos ni presentaciones. Ve directo a la información solicitada.
+- USA SIEMPRE FORMATO MARKDOWN para listas, negritas y estructura.
+- Formato ejemplo:
+  **Resumen de la semana (DD/MM/YYYY - DD/MM/YYYY)**
+  
+  🔹 **Actividad:** **XX.X horas**
+     - Lunes: X.Xh
+     - Martes: X.Xh
+     - Miércoles: X.Xh
+     - Jueves: X.Xh
+     - Viernes: X.Xh
+  
+  📋 **Total de horas trabajadas:** **XX.X horas**
 
 Respuesta:"""
     

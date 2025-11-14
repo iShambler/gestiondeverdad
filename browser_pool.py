@@ -30,7 +30,7 @@ class BrowserSession:
             service = ChromeService(ChromeDriverManager().install())
             options = webdriver.ChromeOptions()
             # 🆕 MODO HEADLESS ACTIVADO
-
+            options.add_argument('--headless')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-gpu')  # Recomendado para headless
@@ -176,4 +176,4 @@ class BrowserPool:
 
 
 # Instancia global del pool
-browser_pool = BrowserPool(max_sessions=10, session_timeout_minutes=3)
+browser_pool = BrowserPool(max_sessions=50, session_timeout_minutes=2)
