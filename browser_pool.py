@@ -176,4 +176,5 @@ class BrowserPool:
 
 
 # Instancia global del pool
-browser_pool = BrowserPool(max_sessions=50, session_timeout_minutes=2)
+# ⚠️ Timeout aumentado a 10 minutos para evitar re-logins frecuentes
+browser_pool = BrowserPool(max_sessions=50, session_timeout_minutes=10)

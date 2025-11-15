@@ -43,7 +43,11 @@ from browser_pool import browser_pool
 app = FastAPI()
 
 # 🔥 ThreadPoolExecutor para operaciones bloqueantes de Selenium
-executor = ThreadPoolExecutor(max_workers=50)  # 50 threads concurrentes
+# ⚠️ Ajustar según tu hardware:
+# - 50 workers = 50 usuarios simultáneos (requiere ~5GB RAM)
+# - 100 workers = 100 usuarios simultáneos (requiere ~10GB RAM)
+# - 200 workers = 200 usuarios simultáneos (requiere ~20GB RAM)
+executor = ThreadPoolExecutor(max_workers=50)  # 👉 CAMBIAR AQUÍ para más usuarios
 
 # 🌐 Habilitar CORS (para tu frontend o Slack)
 app.add_middleware(
