@@ -17,6 +17,12 @@ DATABASE_URL = "mysql+pymysql://agente:1234@localhost:3306/agente_bot"
 
 engine = create_engine(
     DATABASE_URL,
+    # 🚀 CONFIGURACIÓN OPTIMIZADA PARA CONCURRENCIA
+    pool_size=20,              # 20 conexiones permanentes
+    max_overflow=30,           # Hasta 30 conexiones adicionales (total: 50)
+    pool_pre_ping=True,        # Verificar conexiones antes de usar
+    pool_recycle=3600,         # Reciclar conexiones cada hora
+    echo=False,                # No imprimir SQL (performance)
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
