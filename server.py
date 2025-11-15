@@ -297,7 +297,11 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         print(f"   Agente Co User ID: {agente_co_user_id}")
         
         user_id = agente_co_user_id
-        session = browser_pool.get_session(user_id)
+        loop = asyncio.get_event_loop()
+        session = await loop.run_in_executor(
+            executor,
+            lambda: browser_pool.get_session(user_id)
+        )
         
         if not session or not session.driver:
             return JSONResponse({
@@ -374,7 +378,11 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             if credenciales["ambos"]:
                 print(f"🔑 [CHATS] Credenciales extraídas: {credenciales['username']}")
                 
-                session = browser_pool.get_session(wa_id)
+                loop = asyncio.get_event_loop()
+                session = await loop.run_in_executor(
+                    executor,
+                    lambda: browser_pool.get_session(wa_id)
+                )
                 
                 if not session or not session.driver:
                     return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador."})
