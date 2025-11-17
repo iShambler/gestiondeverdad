@@ -6,7 +6,7 @@ Versión refactorizada usando arquitectura modular.
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
+
 
 from core import (
     iniciar_sesion_automatica,
@@ -21,7 +21,7 @@ def main():
     Inicializa el navegador, hace login automático y entra en el loop interactivo.
     """
     # Inicializar WebDriver
-    service = ChromeService(ChromeDriverManager().install())
+    service = ChromeService('/usr/bin/chromedriver')
     options = webdriver.ChromeOptions()
     driver = webdriver.Chrome(service=service, options=options)
     wait = WebDriverWait(driver, 15)

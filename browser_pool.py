@@ -6,7 +6,6 @@ Cada usuario obtiene su propio navegador Chrome.
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime, timedelta
 import threading
 import time
@@ -27,7 +26,7 @@ class BrowserSession:
     def initialize(self):
         """Inicializa el navegador Chrome."""
         try:
-            service = ChromeService(ChromeDriverManager().install())
+            service = ChromeService('/usr/bin/chromedriver')
             options = webdriver.ChromeOptions()
             # 🆕 MODO HEADLESS ACTIVADO
             options.add_argument('--headless')
