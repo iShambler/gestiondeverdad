@@ -17,7 +17,8 @@ from .ejecutor import (
 
 from .consultas import (
     consultar_dia,
-    consultar_semana
+    consultar_semana,
+    mostrar_comandos
 )
 
 __all__ = [
@@ -33,5 +34,6 @@ __all__ = [
     
     # Consultas
     'consultar_dia',
-    'consultar_semana'
+    'consultar_semana',
+    'mostrar_comandos'
 ]

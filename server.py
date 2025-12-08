@@ -24,7 +24,8 @@ from ai import (
 from core import (
     ejecutar_accion,
     consultar_dia,
-    consultar_semana
+    consultar_semana,
+    mostrar_comandos
 )
 
 from web_automation import hacer_login
@@ -165,6 +166,13 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
         tipo_mensaje = clasificar_mensaje(texto)
         contexto = session.contexto  # Usar el contexto de la sesión del usuario
 
+        # 🆘 Comando de ayuda - Mostrar lista de comandos
+        if tipo_mensaje == "ayuda":
+            respuesta = mostrar_comandos()
+            registrar_peticion(db, usuario.id, texto, "ayuda", canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
+
         # 🗣️ Conversación natural (saludos o charla)
         if tipo_mensaje == "conversacion":
             respuesta = responder_conversacion(texto)
@@ -175,30 +183,26 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
         # 📊 Consultas (resumen semanal o diario)
         elif tipo_mensaje == "consulta":
             consulta_info = interpretar_consulta(texto)
+            
+            # 🔍 DEBUG: Ver qué interpretó GPT
+            print(f"[DEBUG] 📊 Consulta interpretada: {consulta_info}")
+            
             if consulta_info:
                 fecha = datetime.fromisoformat(consulta_info["fecha"])
                 
                 if consulta_info.get("tipo") == "dia":
-                    # 🔒 LOCK SOLO PARA LA OPERACIÓN DEL NAVEGADOR
                     with session.lock:
-                        info_bruta = consultar_dia(session.driver, session.wait, fecha)
-                    
-                    # Generar respuesta SIN lock
-                    resumen_natural = generar_resumen_natural(info_bruta, texto)
-                    registrar_peticion(db, usuario.id, texto, "consulta_dia", canal=canal, respuesta=resumen_natural)
+                        resumen = consultar_dia(session.driver, session.wait, fecha, canal=canal)
+                    registrar_peticion(db, usuario.id, texto, "consulta_dia", canal=canal, respuesta=resumen)
                     session.update_activity()
-                    return resumen_natural
+                    return resumen
                     
                 elif consulta_info.get("tipo") == "semana":
-                    # 🔒 LOCK SOLO PARA LA OPERACIÓN DEL NAVEGADOR
                     with session.lock:
-                        info_bruta = consultar_semana(session.driver, session.wait, fecha)
-                    
-                    # Generar respuesta SIN lock
-                    resumen_natural = generar_resumen_natural(info_bruta, texto)
-                    registrar_peticion(db, usuario.id, texto, "consulta_semana", canal=canal, respuesta=resumen_natural)
+                        resumen = consultar_semana(session.driver, session.wait, fecha, canal=canal)
+                    registrar_peticion(db, usuario.id, texto, "consulta_semana", canal=canal, respuesta=resumen)
                     session.update_activity()
-                    return resumen_natural
+                    return resumen
                 else:
                     respuesta = "🤔 No he entendido si preguntas por un día o una semana."
                     registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)

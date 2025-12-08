@@ -131,56 +131,19 @@ Si te pregunta sobre algo externo (noticias, clima, información general), respo
         return "Disculpa, he tenido un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?"
 
 
-def generar_resumen_natural(info_semana, consulta_usuario):
+def generar_resumen_natural(info_horas, consulta_usuario):
     """
-    Usa GPT para generar un resumen natural de la información de la semana.
+    Mejora el formato de la información de horas para hacerla más legible en web.
+    NO modifica los datos, solo mejora la presentación con formato HTML/Markdown.
     
     Args:
-        info_semana: Resumen estructurado de horas de la semana
+        info_horas: Resumen estructurado de horas (ya formateado con emojis)
         consulta_usuario: Pregunta original del usuario
         
     Returns:
-        str: Resumen natural y formateado
+        str: El mismo contenido con mejor formato para web
     """
-    prompt = f"""Eres un asistente de imputación de horas. El usuario preguntó: "{consulta_usuario}"
-
-Información de la semana:
-{info_semana}
-
-Genera una respuesta natural, amigable y bien formateada con emojis. 
-Destaca lo más importante y presenta la información de forma clara.
-
-⚠️ IMPORTANTE: 
-- NO incluyas saludos ni presentaciones. Ve directo a la información solicitada.
-- USA SIEMPRE FORMATO MARKDOWN para listas, negritas y estructura.
-- Formato ejemplo:
-  **Resumen de la semana (DD/MM/YYYY - DD/MM/YYYY)**
-  
-  🔹 **Actividad:** **XX.X horas**
-     - Lunes: X.Xh
-     - Martes: X.Xh
-     - Miércoles: X.Xh
-     - Jueves: X.Xh
-     - Viernes: X.Xh
-  
-  📋 **Total de horas trabajadas:** **XX.X horas**
-
-Respuesta:"""
-    
-    try:
-        client = settings.get_openai_client()
-        response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL_MINI,
-            messages=[
-                {"role": "system", "content": "Eres un asistente que resume información de horas laborales de forma amigable."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=300
-        )
-        
-        return response.choices[0].message.content.strip()
-    
-    except Exception as e:
-        # Si falla GPT, devolver el resumen tal cual
-        return info_semana
+    # Si ya tiene emojis y formato, simplemente añadir saltos de línea HTML para mejor visualización en web
+    # Convertir saltos de línea en <br> para HTML
+    info_con_html = info_horas.replace("\n", "<br>")
+    return info_con_html

@@ -34,6 +34,15 @@ def clasificar_mensaje(texto):
     
     texto_lower = texto.lower()
     
+    # 🆕 COMANDO DE AYUDA - Prioridad máxima
+    keywords_ayuda = [
+        "ayuda", "help", "comandos", "qué puedes hacer", "que puedes hacer",
+        "cómo funciona", "como funciona", "instrucciones", "guía", "guia"
+    ]
+    
+    if any(keyword in texto_lower for keyword in keywords_ayuda):
+        return "ayuda"
+    
     # Si contiene keywords de jornada, es comando directo
     if any(keyword in texto_lower for keyword in keywords_jornada):
         return "comando"

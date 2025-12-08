@@ -12,7 +12,7 @@ import os
 # 🔧 CONFIGURACIÓN BASE DE DATOS
 # ==============================================================
 
-DATABASE_URL = "mysql+pymysql://agente:1234@localhost:3306/agente_bot"
+DATABASE_URL = "mysql+pymysql://root:1234@localhost:3306/agente_bot"
 
 
 engine = create_engine(
