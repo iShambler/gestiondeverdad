@@ -36,13 +36,21 @@ class ConversationStateManager:
         
         estado = self.estados[user_id]
         
+        # 🆕 Usar .get() para evitar KeyError si no hay timestamp
+        timestamp = estado.get("timestamp")
+        if not timestamp:
+            # Si no hay timestamp, el estado es inválido, limpiar
+            print(f"[CONVERSACION] ⚠️ Estado sin timestamp para usuario: {user_id}, limpiando...")
+            self.limpiar_estado(user_id)
+            return False
+        
         # Verificar si ha expirado
-        if datetime.now() - estado["timestamp"] > timedelta(minutes=self.timeout_minutes):
+        if datetime.now() - timestamp > timedelta(minutes=self.timeout_minutes):
             print(f"[CONVERSACION] ⏰ Estado expirado para usuario: {user_id}")
             self.limpiar_estado(user_id)
             return False
         
-        return estado.get("tipo") == "desambiguacion_proyecto"
+        return estado.get("tipo") in ["desambiguacion_proyecto", "info_incompleta"]
     
     def guardar_desambiguacion(self, user_id, nombre_proyecto, coincidencias, comando_original):
         """
@@ -81,6 +89,97 @@ class ConversationStateManager:
         
         return self.estados[user_id]
     
+    def guardar_info_incompleta(self, user_id, info_parcial, que_falta):
+        """
+        Guarda información parcial cuando el usuario proporciona datos incompletos.
+        
+        Args:
+            user_id: ID del usuario
+            info_parcial: Dict con la información que el usuario YA proporcionó
+                         Ejemplo: {'proyecto': 'Desarrollo'} o {'horas': 3, 'dia': 'hoy'}
+            que_falta: Qué información falta ('proyecto', 'horas', 'dia', etc.)
+        """
+        self.estados[user_id] = {
+            "tipo": "info_incompleta",
+            "info_parcial": info_parcial,
+            "que_falta": que_falta,
+            "timestamp": datetime.now()
+        }
+        
+        print(f"[CONVERSACION] 💾 Guardada info incompleta para: {user_id}")
+        print(f"[CONVERSACION]    Info parcial: {info_parcial}")
+        print(f"[CONVERSACION]    Falta: {que_falta}")
+    
+    def obtener_info_incompleta(self, user_id):
+        """
+        Obtiene la información parcial guardada de un usuario.
+        
+        Args:
+            user_id: ID del usuario
+            
+        Returns:
+            dict: Info parcial guardada o None si no existe
+        """
+        if user_id not in self.estados:
+            return None
+        
+        estado = self.estados[user_id]
+        if estado.get("tipo") != "info_incompleta":
+            return None
+        
+        return estado
+    
+    def guardar_ultimo_proyecto(self, user_id, nombre_proyecto, nodo_padre=None):
+        """
+        Guarda el último proyecto usado por el usuario para referencia futura.
+        
+        Args:
+            user_id: ID del usuario
+            nombre_proyecto: Nombre del proyecto
+            nodo_padre: Nodo padre del proyecto (opcional)
+        """
+        if user_id not in self.estados:
+            self.estados[user_id] = {}
+        
+        # Actualizar solo el campo de último proyecto sin borrar otros estados
+        self.estados[user_id]["ultimo_proyecto"] = {
+            "nombre": nombre_proyecto,
+            "nodo_padre": nodo_padre,
+            "timestamp": datetime.now()
+        }
+        
+        print(f"[CONVERSACION] 💾 Guardado último proyecto para {user_id}: {nombre_proyecto}")
+    
+    def obtener_ultimo_proyecto(self, user_id):
+        """
+        Obtiene el último proyecto usado por el usuario.
+        
+        Args:
+            user_id: ID del usuario
+            
+        Returns:
+            dict: {'nombre': str, 'nodo_padre': str} o None
+        """
+        if user_id not in self.estados:
+            return None
+        
+        ultimo = self.estados[user_id].get("ultimo_proyecto")
+        if not ultimo:
+            return None
+        
+        # 🆕 Verificar que tenga timestamp antes de comparar
+        timestamp = ultimo.get("timestamp")
+        if not timestamp:
+            print(f"[CONVERSACION] ⚠️ Último proyecto sin timestamp para {user_id}")
+            return None
+        
+        # Verificar si no ha expirado (15 minutos)
+        if datetime.now() - timestamp > timedelta(minutes=15):
+            print(f"[CONVERSACION] ⏰ Último proyecto expirado para {user_id}")
+            return None
+        
+        return ultimo
+    
     def limpiar_estado(self, user_id):
         """
         Limpia el estado pendiente de un usuario.
@@ -99,7 +198,7 @@ class ConversationStateManager:
         ahora = datetime.now()
         usuarios_expirados = [
             user_id for user_id, estado in self.estados.items()
-            if ahora - estado["timestamp"] > timedelta(minutes=self.timeout_minutes)
+            if estado.get("timestamp") and ahora - estado["timestamp"] > timedelta(minutes=self.timeout_minutes)
         ]
         
         for user_id in usuarios_expirados:

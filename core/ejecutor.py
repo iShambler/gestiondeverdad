@@ -70,6 +70,14 @@ def ejecutar_accion(driver, wait, orden, contexto):
             # 🆕 Desempaquetar 4 valores en lugar de 2
             fila, mensaje, necesita_desambiguacion, coincidencias = seleccionar_proyecto(driver, wait, nombre, nodo_padre)
             
+            # 🆕 Si necesita confirmar proyecto existente
+            if necesita_desambiguacion == "confirmar_existente":
+                return {
+                    "tipo": "confirmar_existente",
+                    "proyecto": nombre,
+                    "coincidencias": coincidencias  # ✅ Devolver coincidencias (lista con info_existente)
+                }
+            
             # 🆕 Si necesita desambiguación, devolver info especial
             if necesita_desambiguacion:
                 return {
@@ -83,6 +91,13 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
                 contexto["nodo_padre_actual"] = nodo_padre  # 🆕 Guardar nodo padre
+                
+                # 🆕 Guardar último proyecto usado
+                user_id = contexto.get("user_id")
+                if user_id:
+                    from conversation_state import conversation_state_manager
+                    conversation_state_manager.guardar_ultimo_proyecto(user_id, nombre, nodo_padre)
+                
                 return mensaje
             else:
                 # ❌ Proyecto NO encontrado - DETENER ejecución

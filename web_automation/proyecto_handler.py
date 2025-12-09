@@ -61,6 +61,9 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         
         print(f"[DEBUG] 🔍 Buscando proyecto '{nombre_proyecto}' en {len(selects)} líneas totales...")
         
+        # 🆕 Recolectar TODAS las coincidencias
+        coincidencias_encontradas = []
+        
         for idx, sel in enumerate(selects):
             # Verificar si el select está disabled (guardado)
             is_disabled = sel.get_attribute("disabled")
@@ -96,158 +99,69 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
             # 1. Son exactamente iguales, O
             # 2. El nombre buscado está contenido en el nombre real
             if nombre_buscado_norm == nombre_real_norm or nombre_buscado_norm in nombre_real_norm:
-                # ⚠️ ANTES DE REUTILIZAR: Verificar si hay duplicados en el sistema
-                # Si hay duplicados y no especificó nodo_padre, debemos preguntar
-                if not nodo_padre:
-                    print(f"[DEBUG] 🔍 Encontrado '{nombre_proyecto}' en línea existente, verificando si hay duplicados en el sistema...")
-                    
-                    # Buscar cuántos proyectos con este nombre existen en total
-                    try:
-                        # Abrir temporalmente el buscador para contar coincidencias
-                        btn_nueva_linea_temp = driver.find_element(By.CSS_SELECTOR, Selectors.BTN_NUEVA_LINEA)
-                        driver.execute_script("arguments[0].click();", btn_nueva_linea_temp)
-                        time.sleep(0.8)
-                        
-                        selects_temp = driver.find_elements(By.CSS_SELECTOR, "select[id^='listaEmpleadoHoras'][id$='.subproyecto']")
-                        if selects_temp:
-                            nuevo_select_temp = selects_temp[-1]
-                            fila_temp = nuevo_select_temp.find_element(By.XPATH, "./ancestor::tr")
-                            
+                # 🆕 ENCONTRADO - Añadir a la lista de coincidencias
+                print(f"[DEBUG] ✅ Encontrado '{nombre_proyecto}' en línea {idx+1}")
+                
+                # Extraer nodo padre del proyecto en tabla
+                nodo_padre_encontrado = partes[-2].strip() if len(partes) >= 2 else ""
+                
+                # Leer las horas de la fila para mostrarlas
+                fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                horas_dias = {}
+                total_horas = 0.0
+                
+                try:
+                    for dia_nombre, dia_key in Constants.DIAS_KEYS.items():
+                        try:
+                            campo = fila.find_element(By.CSS_SELECTOR, Selectors.campo_horas_dia(dia_key))
+                            valor = campo.get_attribute("value") or "0"
                             try:
-                                btn_cambiar_temp = fila_temp.find_element(By.CSS_SELECTOR, "input[id^='btCambiarSubproyecto']")
-                            except:
-                                botones_temp = driver.find_elements(By.CSS_SELECTOR, "input[id^='btCambiarSubproyecto']")
-                                btn_cambiar_temp = botones_temp[-1] if botones_temp else None
-                            
-                            if btn_cambiar_temp:
-                                driver.execute_script("arguments[0].click();", btn_cambiar_temp)
-                                time.sleep(0.5)
-                                
-                                campo_buscar_temp = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, Selectors.BUSCADOR_INPUT)))
-                                campo_buscar_temp.clear()
-                                campo_buscar_temp.send_keys(nombre_proyecto)
-                                
-                                btn_buscar_temp = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BUSCADOR_BOTON)))
-                                btn_buscar_temp.click()
-                                time.sleep(1.2)
-                                
-                                driver.execute_script("""
-                                    var tree = $('#treeTipologia');
-                                    if (tree && tree.jstree) { tree.jstree('open_all'); }
-                                """)
-                                time.sleep(0.8)
-                                
-                                xpath_check = (
-                                    f"//li[@rel='subproyectos']//a[contains(translate(normalize-space(.), "
-                                    f"'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "
-                                    f"'{nombre_proyecto.lower()}')]"
-                                )
-                                elementos_duplicados = driver.find_elements(By.XPATH, xpath_check)
-                                num_duplicados = len(elementos_duplicados)
-                                
-                                print(f"[DEBUG] 📊 Verificación: {num_duplicados} proyectos con nombre '{nombre_proyecto}' en el sistema")
-                                
-                                # Cerrar el buscador
-                                driver.execute_script("""
-                                    document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
-                                    document.getElementById('textoBusqueda').style.color='gray';
-                                    buscadorJTree();
-                                    var tree = $('#treeTipologia');
-                                    tree.jstree('deselect_all');
-                                    tree.jstree('close_all');
-                                    hideOverlay();
-                                """)
-                                time.sleep(0.3)
-                                
-                                # Eliminar la línea temporal
-                                try:
-                                    btn_eliminar_temp = fila_temp.find_element(By.CSS_SELECTOR, "button.botonEliminar, button#botonEliminar, input[id*='btEliminar']")
-                                    btn_eliminar_temp.click()
-                                    time.sleep(0.3)
-                                except:
-                                    pass
-                                
-                                # 🤔 Si hay múltiples coincidencias, PREGUNTAR
-                                if num_duplicados > 1:
-                                    print(f"[DEBUG] ⚠️ Hay {num_duplicados} proyectos duplicados, activando desambiguación...")
-                                    from web_automation.desambiguacion import buscar_proyectos_duplicados
-                                    
-                                    # Volver a abrir el buscador para obtener las coincidencias
-                                    btn_nueva_linea_temp2 = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BTN_NUEVA_LINEA)))
-                                    btn_nueva_linea_temp2.click()
-                                    time.sleep(0.8)
-                                    
-                                    selects_temp2 = driver.find_elements(By.CSS_SELECTOR, "select[id^='listaEmpleadoHoras'][id$='.subproyecto']")
-                                    nuevo_select_temp2 = selects_temp2[-1]
-                                    fila_temp2 = nuevo_select_temp2.find_element(By.XPATH, "./ancestor::tr")
-                                    
-                                    try:
-                                        btn_cambiar_temp2 = fila_temp2.find_element(By.CSS_SELECTOR, "input[id^='btCambiarSubproyecto']")
-                                    except:
-                                        botones_temp2 = driver.find_elements(By.CSS_SELECTOR, "input[id^='btCambiarSubproyecto']")
-                                        btn_cambiar_temp2 = botones_temp2[-1] if botones_temp2 else None
-                                    
-                                    if btn_cambiar_temp2:
-                                        driver.execute_script("arguments[0].click();", btn_cambiar_temp2)
-                                        time.sleep(0.5)
-                                        
-                                        campo_buscar_temp2 = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, Selectors.BUSCADOR_INPUT)))
-                                        campo_buscar_temp2.clear()
-                                        campo_buscar_temp2.send_keys(nombre_proyecto)
-                                        
-                                        btn_buscar_temp2 = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BUSCADOR_BOTON)))
-                                        btn_buscar_temp2.click()
-                                        time.sleep(1.2)
-                                        
-                                        driver.execute_script("""
-                                            var tree = $('#treeTipologia');
-                                            if (tree && tree.jstree) { tree.jstree('open_all'); }
-                                        """)
-                                        time.sleep(0.8)
-                                        
-                                        coincidencias = buscar_proyectos_duplicados(driver, wait, nombre_proyecto)
-                                        
-                                        # Cerrar buscador
-                                        driver.execute_script("""
-                                            document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
-                                            document.getElementById('textoBusqueda').style.color='gray';
-                                            buscadorJTree();
-                                            var tree = $('#treeTipologia');
-                                            tree.jstree('deselect_all');
-                                            tree.jstree('close_all');
-                                            hideOverlay();
-                                        """)
-                                        time.sleep(0.3)
-                                        
-                                        # Eliminar línea temporal
-                                        try:
-                                            btn_eliminar_temp2 = fila_temp2.find_element(By.CSS_SELECTOR, "button.botonEliminar, button#botonEliminar, input[id*='btEliminar']")
-                                            btn_eliminar_temp2.click()
-                                            time.sleep(0.3)
-                                        except:
-                                            pass
-                                        
-                                        return (None, "", True, coincidencias)
-                    except Exception as e:
-                        print(f"[DEBUG] ⚠️ Error verificando duplicados: {e}")
-                        # Si falla la verificación, continuar con comportamiento normal
-                        pass
+                                valor_float = float(valor.replace(",", "."))
+                            except ValueError:
+                                valor_float = 0.0
+                            horas_dias[dia_nombre] = valor_float
+                            total_horas += valor_float
+                        except:
+                            horas_dias[dia_nombre] = 0.0
+                except Exception as e:
+                    print(f"[DEBUG] ⚠️ Error leyendo horas: {e}")
                 
-                # Si el proyecto YA está guardado (disabled), reutilizamos esa fila
-                if is_disabled:
-                    print(f"[DEBUG] ✅ ¡Proyecto '{nombre_proyecto}' encontrado en línea {idx+1} (GUARDADA)! Reutilizando...")
-                    fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                coincidencias_encontradas.append({
+                    "proyecto": nombre_proyecto_real,
+                    "nodo_padre": nodo_padre_encontrado,
+                    "texto_completo": texto_completo,
+                    "path_completo": texto_completo,  # Alias
+                    "total_horas": total_horas,
+                    "horas_dias": horas_dias,
+                    "fila_idx": idx
+                })
+        
+        # 🆕 Si encontramos coincidencias Y no hay nodo_padre especificado
+        if coincidencias_encontradas and not nodo_padre:
+            print(f"[DEBUG] 📊 Encontradas {len(coincidencias_encontradas)} coincidencias en tabla")
+            
+            # Si solo hay UNA coincidencia, devolverla directamente como "confirmar_existente"
+            if len(coincidencias_encontradas) == 1:
+                print(f"[DEBUG] 💬 Solicitando confirmación del proyecto existente")
+                return (None, "", "confirmar_existente", coincidencias_encontradas)
+            
+            # Si hay MÚLTIPLES coincidencias, devolver tipo "desambiguacion"
+            # El usuario debe elegir entre las que ya tiene
+            else:
+                print(f"[DEBUG] 💬 Múltiples proyectos encontrados, solicitando selección")
+                return (None, "", "desambiguacion", coincidencias_encontradas)
+        
+        # 🆕 Si YA especificó nodo_padre (está confirmando)
+        if coincidencias_encontradas and nodo_padre:
+            # Buscar la coincidencia que match con el nodo_padre
+            for coincidencia in coincidencias_encontradas:
+                if normalizar(nodo_padre) in normalizar(coincidencia["nodo_padre"]):
+                    # ✅ Coincide - usar este
+                    print(f"[DEBUG] ✅ Nodo padre coincide, reutilizando línea existente")
+                    fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
                     time.sleep(0.3)
-                    return (fila, f"He encontrado el proyecto '{nombre_proyecto}' ya guardado, añadiendo horas", False, [])
-                
-                # Si el proyecto está en una línea editable (no guardada), también la reutilizamos
-                else:
-                    print(f"[DEBUG] ✅ ¡Proyecto '{nombre_proyecto}' encontrado en línea {idx+1} (EDITABLE)! Reutilizando...")
-                    fila = sel.find_element(By.XPATH, "./ancestor::tr")
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
-                    time.sleep(0.3)
-                    return (fila, f"Ya tenías el proyecto '{nombre_proyecto}' abierto, lo estoy usando", False, [])
+                    return (fila, f"Usando '{coincidencia['proyecto']}' de '{coincidencia['nodo_padre']}'", False, [])
 
         # Si no existe → añadimos nueva línea
         print(f"[DEBUG] ➕ Proyecto '{nombre_proyecto}' NO encontrado, añadiendo nueva línea...")
@@ -312,20 +226,30 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         # Buscar y seleccionar el proyecto
         # IMPORTANTE: NO normalizar (quitar tildes) porque el sistema es sensible a tildes
         
-        if nodo_padre:
+        if nodo_padre and nodo_padre != "__buscar__":
             # 🎯 Búsqueda con jerarquía: buscar el proyecto bajo su nodo padre específico
             print(f"[DEBUG] 🔍 Buscando '{nombre_proyecto}' bajo nodo padre '{nodo_padre}'...")
             
-            # Primero buscar el nodo padre (puede ser departamento, área, etc.)
-            xpath_padre = (
-                f"//li//a[contains(translate(normalize-space(.), "
-                f"'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "
-                f"'{nodo_padre.lower()}')]"
-            )
-            
             try:
-                nodo_padre_elemento = wait.until(EC.presence_of_element_located((By.XPATH, xpath_padre)))
-                print(f"[DEBUG] ✅ Nodo padre encontrado: {nodo_padre}")
+                # 🆕 BUSCAR TODOS los nodos y comparar normalizados en Python (más confiable que XPath)
+                todos_nodos = driver.find_elements(By.XPATH, "//li//a")
+                nodo_padre_norm = normalizar(nodo_padre)
+                nodo_padre_elemento = None
+                
+                print(f"[DEBUG] 🔍 Buscando entre {len(todos_nodos)} nodos...")
+                
+                for nodo in todos_nodos:
+                    try:
+                        texto_nodo = nodo.text.strip()
+                        if texto_nodo and nodo_padre_norm in normalizar(texto_nodo):
+                            nodo_padre_elemento = nodo
+                            print(f"[DEBUG] ✅ Nodo padre encontrado: '{texto_nodo}'")
+                            break
+                    except:
+                        continue
+                
+                if not nodo_padre_elemento:
+                    raise Exception(f"No se encontró el nodo padre '{nodo_padre}'")
                 
                 # Obtener el ID del nodo padre para limitar la búsqueda
                 nodo_padre_li = nodo_padre_elemento.find_element(By.XPATH, "./ancestor::li[1]")
@@ -339,7 +263,52 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     f"'{nombre_proyecto.lower()}')]"
                 )
                 
-                elemento = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_proyecto)))
+                # 🆕 Buscar TODOS los elementos que coinciden
+                elementos_en_nodo = driver.find_elements(By.XPATH, xpath_proyecto)
+                print(f"[DEBUG] 📊 Encontrados {len(elementos_en_nodo)} proyectos en '{nodo_padre}'")
+                
+                # 🆕 Si hay MÚLTIPLES en el mismo nodo padre → DESAMBIGUAR
+                if len(elementos_en_nodo) > 1 and not elemento_preseleccionado:
+                    print(f"[DEBUG] 🤔 Múltiples '{nombre_proyecto}' en '{nodo_padre}', necesita desambiguación")
+                    
+                    from web_automation.desambiguacion import buscar_proyectos_duplicados
+                    coincidencias = buscar_proyectos_duplicados(driver, wait, nombre_proyecto)
+                    
+                    # Filtrar solo las del nodo_padre especificado
+                    coincidencias_filtradas = [
+                        c for c in coincidencias 
+                        if nodo_padre_norm in normalizar(c.get("nodo_padre", ""))
+                    ]
+                    
+                    print(f"[DEBUG] 📋 {len(coincidencias_filtradas)} coincidencias en '{nodo_padre}'")
+                    
+                    # Cerrar buscador
+                    try:
+                        driver.execute_script("""
+                            document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
+                            document.getElementById('textoBusqueda').style.color='gray';
+                            buscadorJTree();
+                            var tree = $('#treeTipologia');
+                            tree.jstree('deselect_all');
+                            tree.jstree('close_all');
+                            hideOverlay();
+                        """)
+                        time.sleep(0.5)
+                    except:
+                        pass
+                    
+                    # Eliminar línea temporal
+                    try:
+                        btn_eliminar = fila.find_element(By.CSS_SELECTOR, "button.botonEliminar, button#botonEliminar, input[id*='btEliminar']")
+                        btn_eliminar.click()
+                        time.sleep(0.3)
+                    except:
+                        pass
+                    
+                    return (None, "", True, coincidencias_filtradas if coincidencias_filtradas else coincidencias)
+                
+                # Si solo hay UNO o hay elemento_preseleccionado → usarlo
+                elemento = elemento_preseleccionado if elemento_preseleccionado else elementos_en_nodo[0]
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
                 elemento.click()
                 time.sleep(1)
@@ -369,7 +338,8 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 raise Exception(f"No se encontró ninguna coincidencia para '{nombre_proyecto}'")
             
             # 🆕 DESAMBIGUACIÓN INTERACTIVA: Si hay múltiples coincidencias SIN nodo padre
-            if len(elementos) > 1 and not nodo_padre and not elemento_preseleccionado:
+            # O si el nodo_padre es "__buscar__" (usuario rechazó proyecto existente)
+            if len(elementos) > 1 and (not nodo_padre or nodo_padre == "__buscar__") and not elemento_preseleccionado:
                 print(f"[DEBUG] 🤔 Encontradas {len(elementos)} coincidencias para '{nombre_proyecto}'")
                 print(f"[DEBUG] 💬 Necesita desambiguación - devolviendo coincidencias...")
                 

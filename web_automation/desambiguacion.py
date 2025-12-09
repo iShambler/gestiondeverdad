@@ -191,24 +191,48 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     if len(coincidencias) == 1:
         return None  # No hay ambigüedad
     
+    # 🆕 Detectar si son proyectos existentes (tienen horas) o del sistema
+    son_existentes = all(coin.get('total_horas') is not None for coin in coincidencias)
+    
     # Formato según el canal
     if canal == "slack":
-        mensaje = f"🤔 He encontrado *{len(coincidencias)}* proyectos llamados *'{nombre_proyecto}'*:\n\n"
-        for idx, coin in enumerate(coincidencias, 1):
-            mensaje += f"{idx}. `{coin['path_completo']}`\n"
-        mensaje += f"\n💬 *¿En cuál quieres imputar?* Responde con el nombre del departamento/área o el número."
+        if son_existentes:
+            mensaje = f"✅ *Ya tienes {len(coincidencias)} proyectos con horas:*\n\n"
+            for idx, coin in enumerate(coincidencias, 1):
+                horas = coin.get('total_horas', 0)
+                mensaje += f"{idx}. `{coin['path_completo']}` - *{horas}h*\n"
+            mensaje += f"\n💬 *¿En cuál quieres añadir horas?* Responde con el número o nombre del departamento."
+        else:
+            mensaje = f"🤔 He encontrado *{len(coincidencias)}* proyectos llamados *'{nombre_proyecto}'*:\n\n"
+            for idx, coin in enumerate(coincidencias, 1):
+                mensaje += f"{idx}. `{coin['path_completo']}`\n"
+            mensaje += f"\n💬 *¿En cuál quieres imputar?* Responde con el nombre del departamento/área o el número."
     
     elif canal == "whatsapp":
-        mensaje = f"🤔 *He encontrado {len(coincidencias)} proyectos llamados '{nombre_proyecto}'*:\n\n"
-        for idx, coin in enumerate(coincidencias, 1):
-            mensaje += f"{idx}. {coin['path_completo']}\n"
-        mensaje += f"\n💬 *¿En cuál quieres imputar?*\nResponde con el nombre del departamento/área o el número."
+        if son_existentes:
+            mensaje = f"✅ *Ya tienes {len(coincidencias)} proyectos con horas:*\n\n"
+            for idx, coin in enumerate(coincidencias, 1):
+                horas = coin.get('total_horas', 0)
+                mensaje += f"{idx}. {coin['path_completo']} - *{horas}h*\n"
+            mensaje += f"\n💬 *¿En cuál quieres añadir horas?*"
+        else:
+            mensaje = f"🤔 *He encontrado {len(coincidencias)} proyectos llamados '{nombre_proyecto}'*:\n\n"
+            for idx, coin in enumerate(coincidencias, 1):
+                mensaje += f"{idx}. {coin['path_completo']}\n"
+            mensaje += f"\n💬 *¿En cuál quieres imputar?*\nResponde con el nombre del departamento/área o el número."
     
     else:  # webapp
-        mensaje = f"🤔 He encontrado **{len(coincidencias)}** proyectos llamados **'{nombre_proyecto}'**:\n\n"
-        for idx, coin in enumerate(coincidencias, 1):
-            mensaje += f"**{idx}.** {coin['path_completo']}\n"
-        mensaje += f"\n💬 **¿En cuál quieres imputar?** Responde con el nombre del departamento/área o el número."
+        if son_existentes:
+            mensaje = f"✅ **Ya tienes {len(coincidencias)} proyectos con horas:**\n\n"
+            for idx, coin in enumerate(coincidencias, 1):
+                horas = coin.get('total_horas', 0)
+                mensaje += f"**{idx}.** {coin['path_completo']} - **{horas}h**\n"
+            mensaje += f"\n💬 **¿En cuál quieres añadir horas?** Responde con el número o el nombre del departamento."
+        else:
+            mensaje = f"🤔 He encontrado **{len(coincidencias)}** proyectos llamados **'{nombre_proyecto}'**:\n\n"
+            for idx, coin in enumerate(coincidencias, 1):
+                mensaje += f"**{idx}.** {coin['path_completo']}\n"
+            mensaje += f"\n💬 **¿En cuál quieres imputar?** Responde con el nombre del departamento/área o el número."
     
     return mensaje
 

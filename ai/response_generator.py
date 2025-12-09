@@ -29,12 +29,14 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
     # Crear resumen de acciones
     resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_ejecutadas])
     
-    # 🆕 Si hay nodo_padre en el contexto, añadirlo a la información
+    # 🆕 Si hay nodo_padre en el contexto (Y NO es __buscar__), añadirlo a la información
     info_adicional = ""
     if contexto and contexto.get("nodo_padre_actual"):
-        proyecto = contexto.get("proyecto_actual", "proyecto")
         nodo_padre = contexto.get("nodo_padre_actual")
-        info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Debes mencionar esto en tu respuesta."
+        # 🚫 Ignorar si es la señal interna __buscar__
+        if nodo_padre != "__buscar__":
+            proyecto = contexto.get("proyecto_actual", "proyecto")
+            info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Debes mencionar esto en tu respuesta."
     
     prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
 

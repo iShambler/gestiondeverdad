@@ -1,4 +1,5 @@
 import os
+import re  # 🆕 Para expresiones regulares
 from dotenv import load_dotenv  
 import requests
 from fastapi import FastAPI, Request, Depends, BackgroundTasks
@@ -167,15 +168,256 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
         
         # Obtener contexto de la sesión (necesario para ejecutar acciones)
         contexto = session.contexto
+        contexto["user_id"] = user_id  # 🆕 Añadir user_id para guardar último proyecto
         
         if conversation_state_manager.tiene_pregunta_pendiente(user_id):
             print(f"[DEBUG] 💬 Usuario {user_id} tiene pregunta pendiente")
             estado = conversation_state_manager.obtener_desambiguacion(user_id)
             
+            # 🆕 VERIFICAR TIPO DE ESTADO
+            if estado and estado.get("tipo") == "info_incompleta":
+                # 🛡️ Detectar si el usuario quiere cancelar
+                texto_lower = texto.lower().strip()
+                palabras_cancelar = ['cancelar', 'cancel', 'nada', 'olvida', 'olvídalo', 'equivocado', 'equivocada', 'me equivoqué', 'error', 'no quiero']
+                
+                if any(palabra in texto_lower for palabra in palabras_cancelar):
+                    # Limpiar estado
+                    conversation_state_manager.limpiar_estado(user_id)
+                    respuesta = "👍 Vale, no pasa nada. ¿En qué puedo ayudarte?"
+                    registrar_peticion(db, usuario.id, texto, "info_incompleta_cancelada", canal=canal, respuesta=respuesta)
+                    session.update_activity()
+                    return respuesta
+                
+                # 💾 Usuario tiene información incompleta guardada
+                print(f"[DEBUG] 💾 Info incompleta detectada")
+                print(f"[DEBUG]    Info parcial: {estado['info_parcial']}")
+                print(f"[DEBUG]    Falta: {estado['que_falta']}")
+                
+                info_parcial = estado['info_parcial']
+                que_falta = estado['que_falta']
+                
+                # Construir comando completo combinando info guardada + mensaje actual
+                comando_completo = None
+                
+                if que_falta == "proyecto":
+                    # Usuario dijo "3 horas", ahora dice "en desarrollo" o "desarrollo"
+                    horas = info_parcial.get('horas')
+                    dia = info_parcial.get('dia', 'hoy')
+                    
+                    # Limpiar el texto para extraer solo el nombre del proyecto
+                    texto_limpio = texto.lower().replace('en ', '').replace('el ', '').replace('la ', '').strip()
+                    
+                    if dia == "semana":
+                        comando_completo = f"pon toda la semana en {texto_limpio}"
+                    elif dia == "toda_la_semana":
+                        comando_completo = f"pon toda la semana en {texto_limpio}"
+                    else:
+                        comando_completo = f"pon {horas} horas en {texto_limpio} {dia}"
+                    
+                    print(f"[DEBUG] ✅ Comando completo generado: '{comando_completo}'")
+                
+                elif que_falta == "horas_y_dia":
+                    # Usuario dijo "ponme en desarrollo", ahora dice "3 horas" o "toda la semana"
+                    proyecto = info_parcial.get('proyecto')
+                    comando_completo = f"{texto} en {proyecto}"
+                    
+                    print(f"[DEBUG] ✅ Comando completo generado: '{comando_completo}'")
+                
+                # Limpiar estado
+                conversation_state_manager.limpiar_estado(user_id)
+                
+                if comando_completo:
+                    # Re-procesar el comando completo
+                    print(f"[DEBUG] 🔄 Re-procesando comando completo...")
+                    
+                    # Leer tabla actual
+                    tabla_actual = None
+                    try:
+                        from web_automation import leer_tabla_imputacion
+                        with session.lock:
+                            tabla_actual = leer_tabla_imputacion(session.driver)
+                    except Exception as e:
+                        print(f"[DEBUG] ⚠️ No se pudo leer la tabla: {e}")
+                    
+                    ordenes_completas = interpretar_con_gpt(comando_completo, contexto, tabla_actual)
+                    
+                    if not ordenes_completas:
+                        respuesta = "🤔 No he entendido qué quieres que haga."
+                        registrar_peticion(db, usuario.id, texto, "comando", canal=canal, respuesta=respuesta)
+                        session.update_activity()
+                        return respuesta
+                    
+                    # Verificar si son órdenes válidas
+                    if len(ordenes_completas) == 1 and ordenes_completas[0].get('accion') in ['error_validacion', 'info_incompleta']:
+                        mensaje_error = ordenes_completas[0].get('mensaje', '🤔 No he entendido qué quieres que haga.')
+                        registrar_peticion(db, usuario.id, texto, "comando_invalido", canal=canal, respuesta=mensaje_error)
+                        session.update_activity()
+                        return mensaje_error
+                    
+                    # Ejecutar órdenes
+                    respuestas = []
+                    for orden in ordenes_completas:
+                        with session.lock:
+                            mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
+                        
+                        # 🆕 VERIFICAR SI NECESITA DESAMBIGUACIÓN O CONFIRMACIÓN
+                        if isinstance(mensaje, dict):
+                            tipo = mensaje.get("tipo")
+                            
+                            # CASO 1: Desambiguación
+                            if tipo == "desambiguacion":
+                                from web_automation.desambiguacion import generar_mensaje_desambiguacion
+                                
+                                mensaje_pregunta = generar_mensaje_desambiguacion(
+                                    mensaje["proyecto"],
+                                    mensaje["coincidencias"],
+                                    canal=canal
+                                )
+                                
+                                conversation_state_manager.guardar_desambiguacion(
+                                    user_id,
+                                    mensaje["proyecto"],
+                                    mensaje["coincidencias"],
+                                    ordenes_completas
+                                )
+                                
+                                registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", canal=canal, respuesta=mensaje_pregunta)
+                                session.update_activity()
+                                return mensaje_pregunta  # 🛑 DETENER EJECUCIÓN
+                            
+                            # CASO 2: Confirmar proyecto existente
+                            elif tipo == "confirmar_existente":
+                                print(f"[DEBUG] 💬 Proyecto existente encontrado (info_incompleta), solicitando confirmación")
+                                
+                                info_existente = mensaje["coincidencias"][0] if mensaje.get("coincidencias") else {}
+                                proyecto_nombre = info_existente.get("proyecto", "")
+                                nodo_padre = info_existente.get("nodo_padre", "")
+                                texto_completo = info_existente.get("texto_completo", "")
+                                
+                                if canal == "webapp":
+                                    mensaje_confirmacion = (
+                                        f"✅ He encontrado **{texto_completo}** ya imputado.\n\n"
+                                        f"¿Quieres añadir horas a este proyecto?\n\n"
+                                        f"💡 Responde:\n"
+                                        f"- **'sí'** para usar este proyecto\n"
+                                        f"- **'no'** para buscar otro"
+                                    )
+                                else:
+                                    mensaje_confirmacion = (
+                                        f"✅ He encontrado *{texto_completo}* ya imputado.\n\n"
+                                        f"¿Quieres añadir horas a este proyecto?\n\n"
+                                        f"Responde 'sí' o 'no'"
+                                    )
+                                
+                                conversation_state_manager.guardar_desambiguacion(
+                                    user_id,
+                                    proyecto_nombre,
+                                    [{"proyecto": proyecto_nombre, "nodo_padre": nodo_padre, 
+                                      "path_completo": texto_completo}],
+                                    ordenes_completas
+                                )
+                                
+                                registrar_peticion(db, usuario.id, texto, "confirmacion_pendiente", 
+                                                 canal=canal, respuesta=mensaje_confirmacion)
+                                session.update_activity()
+                                return mensaje_confirmacion  # 🛑 DETENER EJECUCIÓN
+                        
+                        if mensaje:
+                            respuestas.append(mensaje)
+                    
+                    # Generar respuesta
+                    if respuestas:
+                        respuesta_natural = generar_respuesta_natural(respuestas, comando_completo, contexto)
+                    else:
+                        respuesta_natural = "He procesado la instrucción, pero no hubo mensajes de salida."
+                    
+                    registrar_peticion(db, usuario.id, texto, "comando_completado", canal=canal, respuesta=respuesta_natural, acciones=ordenes_completas)
+                    session.update_activity()
+                    return respuesta_natural
+                else:
+                    # No se pudo construir comando completo
+                    respuesta = "🤔 No he entendido. Por favor, inténtalo de nuevo con toda la información."
+                    registrar_peticion(db, usuario.id, texto, "error", canal=canal, respuesta=respuesta)
+                    session.update_activity()
+                    return respuesta
+            
+            # Si no es info_incompleta, es desambiguación o confirmación
             from web_automation.desambiguacion import resolver_respuesta_desambiguacion
             
-            # Resolver respuesta del usuario
-            coincidencia = resolver_respuesta_desambiguacion(texto, estado["coincidencias"])
+            # 🆕 Si solo hay UNA coincidencia, es confirmación (sí/no)
+            if len(estado["coincidencias"]) == 1:
+                texto_lower = texto.lower().strip()
+                
+                # Detectar "sí"
+                if texto_lower in ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep']:
+                    print(f"[DEBUG] ✅ Usuario confirmó usar el proyecto existente")
+                    coincidencia = estado["coincidencias"][0]
+                
+                # Detectar "no" o palabras que indican rechazo
+                elif any(palabra in texto_lower for palabra in ['no', 'nop', 'nope', 'n', 'nel', 'negativo', 'ninguno', 'otro', 'busca', 'diferente']):
+                    print(f"[DEBUG] ❌ Usuario rechazó el proyecto existente, buscando en sistema...")
+                    # Modificar la orden para buscar en sistema con nodo_padre="__buscar__"
+                    ordenes_originales = estado["comando_original"]
+                    nombre_proyecto = estado["nombre_proyecto"]
+                    
+                    for orden in ordenes_originales:
+                        if orden.get("accion") == "seleccionar_proyecto":
+                            orden["parametros"]["nodo_padre"] = "__buscar__"  # Señal especial para buscar en sistema
+                            break
+                    
+                    # Re-ejecutar buscando en sistema
+                    respuestas = []
+                    for orden in ordenes_originales:
+                        with session.lock:
+                            mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
+                            
+                            if isinstance(mensaje, dict):
+                                # Si devuelve desambiguación, manejarla
+                                if mensaje.get("tipo") == "desambiguacion":
+                                    from web_automation.desambiguacion import generar_mensaje_desambiguacion
+                                    
+                                    mensaje_pregunta = generar_mensaje_desambiguacion(
+                                        mensaje["proyecto"],
+                                        mensaje["coincidencias"],
+                                        canal=canal
+                                    )
+                                    
+                                    # 🆕 Limpiar estado anterior y guardar nueva desambiguación
+                                    conversation_state_manager.limpiar_estado(user_id)
+                                    conversation_state_manager.guardar_desambiguacion(
+                                        user_id,
+                                        mensaje["proyecto"],
+                                        mensaje["coincidencias"],
+                                        ordenes_originales
+                                    )
+                                    
+                                    registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", canal=canal, respuesta=mensaje_pregunta)
+                                    session.update_activity()
+                                    return mensaje_pregunta
+                            
+                            if mensaje:
+                                respuestas.append(mensaje)
+                    
+                    # Limpiar estado
+                    conversation_state_manager.limpiar_estado(user_id)
+                    
+                    if respuestas:
+                        respuesta_natural = generar_respuesta_natural(respuestas, f"Pon horas en {nombre_proyecto}", contexto)
+                    else:
+                        respuesta_natural = "✅ Listo"
+                    
+                    registrar_peticion(db, usuario.id, texto, "comando_confirmado", canal=canal, respuesta=respuesta_natural)
+                    session.update_activity()
+                    return respuesta_natural
+                
+                else:
+                    # No entendió sí/no
+                    return "❌ No he entendido. Responde 'sí' para usar este proyecto o 'no' para buscar otro."
+            
+            # Si hay MÚLTIPLES coincidencias, usar resolución normal
+            else:
+                # Resolver respuesta del usuario
+                coincidencia = resolver_respuesta_desambiguacion(texto, estado["coincidencias"])
             
             if coincidencia:
                 print(f"[DEBUG] ✅ Coincidencia encontrada: {coincidencia['nodo_padre']}")
@@ -187,8 +429,15 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                 # Modificar la orden para incluir el elemento preseleccionado
                 for orden in ordenes_originales:
                     if orden.get("accion") == "seleccionar_proyecto":
-                        # Usar el nodo_padre de la coincidencia seleccionada
-                        orden["parametros"]["nodo_padre"] = coincidencia["nodo_padre"]
+                        # 🆕 IMPORTANTE: Usar el nombre ESPECÍFICO del proyecto, no solo el nodo padre
+                        # Extraer el nombre del proyecto del path completo
+                        proyecto_especifico = coincidencia["proyecto"]  # "Permiso Retribuido Festivo"
+                        
+                        # Actualizar AMBOS parámetros
+                        orden["parametros"]["nombre"] = proyecto_especifico  # ✅ Nombre específico
+                        orden["parametros"]["nodo_padre"] = coincidencia["nodo_padre"]  # ✅ Nodo padre
+                        
+                        print(f"[DEBUG] ✅ Proyecto actualizado: '{proyecto_especifico}' bajo '{coincidencia['nodo_padre']}'")
                         break
                 
                 # Ejecutar las órdenes con el nodo padre especificado
@@ -235,7 +484,6 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
             # Palabras clave que indican un nodo específico
             if "departamento" in texto_lower:
                 # Extraer el texto después de "departamento"
-                import re
                 match = re.search(r'departamento\s+(\w+(?:\s+\w+)*)', texto_lower, re.IGNORECASE)
                 if match:
                     filtro_nodo = match.group(0).strip()  # Incluir "departamento" completo
@@ -323,33 +571,97 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                 session.update_activity()
                 return respuesta
 
+            # 🆕 VERIFICAR SI ES UN ERROR DE VALIDACIÓN
+            if len(ordenes) == 1 and ordenes[0].get('accion') == 'error_validacion':
+                mensaje_error = ordenes[0].get('mensaje', '🤔 No he entendido qué quieres que haga.')
+                registrar_peticion(db, usuario.id, texto, "comando_invalido", canal=canal, respuesta=mensaje_error)
+                session.update_activity()
+                return mensaje_error
+            
+            # 🆕 VERIFICAR SI ES INFORMACIÓN INCOMPLETA (GUARDAR ESTADO)
+            if len(ordenes) == 1 and ordenes[0].get('accion') == 'info_incompleta':
+                info_parcial = ordenes[0].get('info_parcial', {})
+                que_falta = ordenes[0].get('que_falta', '')
+                mensaje = ordenes[0].get('mensaje', '🤔 Falta información.')
+                
+                # Guardar estado para el próximo mensaje
+                conversation_state_manager.guardar_info_incompleta(user_id, info_parcial, que_falta)
+                
+                registrar_peticion(db, usuario.id, texto, "info_incompleta", canal=canal, respuesta=mensaje)
+                session.update_activity()
+                return mensaje
+
             respuestas = []
             for orden in ordenes:
                 # 🔒 LOCK SOLO PARA CADA ACCIÓN INDIVIDUAL
                 with session.lock:
                     mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
                 
-                # 🆕 VERIFICAR SI NECESITA DESAMBIGUACIÓN
-                if isinstance(mensaje, dict) and mensaje.get("tipo") == "desambiguacion":
-                    from web_automation.desambiguacion import generar_mensaje_desambiguacion
+                # 🆕 VERIFICAR SI NECESITA DESAMBIGUACIÓN O CONFIRMACIÓN
+                if isinstance(mensaje, dict):
+                    tipo = mensaje.get("tipo")
                     
-                    mensaje_pregunta = generar_mensaje_desambiguacion(
-                        mensaje["proyecto"],
-                        mensaje["coincidencias"],
-                        canal=canal
-                    )
+                    # CASO 1: Desambiguación (múltiples proyectos con mismo nombre)
+                    if tipo == "desambiguacion":
+                        from web_automation.desambiguacion import generar_mensaje_desambiguacion
+                        
+                        mensaje_pregunta = generar_mensaje_desambiguacion(
+                            mensaje["proyecto"],
+                            mensaje["coincidencias"],
+                            canal=canal
+                        )
+                        
+                        # Guardar estado para la próxima respuesta
+                        conversation_state_manager.guardar_desambiguacion(
+                            user_id,
+                            mensaje["proyecto"],
+                            mensaje["coincidencias"],
+                            ordenes  # Comando original
+                        )
+                        
+                        registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", canal=canal, respuesta=mensaje_pregunta)
+                        session.update_activity()
+                        return mensaje_pregunta  # 🛑 DETENER EJECUCIÓN
                     
-                    # Guardar estado para la próxima respuesta
-                    conversation_state_manager.guardar_desambiguacion(
-                        user_id,
-                        mensaje["proyecto"],
-                        mensaje["coincidencias"],
-                        ordenes  # Comando original
-                    )
-                    
-                    registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", canal=canal, respuesta=mensaje_pregunta)
-                    session.update_activity()
-                    return mensaje_pregunta
+                    # CASO 2: Confirmar proyecto existente (encontrado en tabla)
+                    elif tipo == "confirmar_existente":
+                        print(f"[DEBUG] 💬 Proyecto existente encontrado, solicitando confirmación")
+                        
+                        info_existente = mensaje["coincidencias"][0] if mensaje.get("coincidencias") else {}
+                        proyecto_nombre = info_existente.get("proyecto", "")
+                        nodo_padre = info_existente.get("nodo_padre", "")
+                        texto_completo = info_existente.get("texto_completo", "")
+                        
+                        # Generar mensaje de confirmación según el canal
+                        if canal == "webapp":
+                            mensaje_confirmacion = (
+                                f"✅ He encontrado **{texto_completo}** ya imputado.\n\n"
+                                f"¿Quieres añadir horas a este proyecto?\n\n"
+                                f"💡 Responde:\n"
+                                f"- **'sí'** para usar este proyecto\n"
+                                f"- **'no'** para buscar otro"
+                            )
+                        else:
+                            mensaje_confirmacion = (
+                                f"✅ He encontrado *{texto_completo}* ya imputado.\n\n"
+                                f"¿Quieres añadir horas a este proyecto?\n\n"
+                                f"Responde 'sí' o 'no'"
+                            )
+                        
+                        # Guardar estado (similar a desambiguación)
+                        conversation_state_manager.guardar_desambiguacion(
+                            user_id,
+                            proyecto_nombre,
+                            [{"proyecto": proyecto_nombre, "nodo_padre": nodo_padre, 
+                              "path_completo": texto_completo}],
+                            ordenes  # Comando original
+                        )
+                        
+                        print(f"[DEBUG] 💾 Estado guardado - Esperando confirmación del usuario")
+                        registrar_peticion(db, usuario.id, texto, "confirmacion_pendiente", 
+                                         canal=canal, respuesta=mensaje_confirmacion)
+                        session.update_activity()
+                        return mensaje_confirmacion  # 🛑 DETENER EJECUCIÓN
                 
                 if mensaje:
                     respuestas.append(mensaje)

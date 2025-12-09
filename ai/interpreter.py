@@ -8,6 +8,157 @@ from datetime import datetime
 from config import settings
 
 
+def validar_ordenes(ordenes, texto, contexto=None):
+    """
+    Valida que las órdenes generadas tengan sentido y contengan información crítica.
+    
+    Args:
+        ordenes: Lista de órdenes JSON generadas por GPT
+        texto: Texto original del usuario
+    
+    Returns:
+        (bool, str): (es_valido, mensaje_error)
+    """
+    # Normalizar texto para comparación
+    texto_lower = texto.lower()
+    
+    # 💾 Obtener proyecto actual del contexto (si existe)
+    proyecto_actual = contexto.get('proyecto_actual') if contexto else None
+    nodo_padre_actual = contexto.get('nodo_padre_actual') if contexto else None
+    
+    # 🚨 Detectar si selecciona proyecto pero NO imputa horas (COMANDO INCOMPLETO)
+    tiene_proyecto = any(
+        orden.get('accion') == 'seleccionar_proyecto' 
+        for orden in ordenes
+    )
+    
+    tiene_imputacion = any(
+        orden.get('accion') in ['imputar_horas_dia', 'imputar_horas_semana']
+        for orden in ordenes
+    )
+    
+    # 🆕 CRÍTICO: Detectar si GPT está INVENTANDO el nombre del proyecto
+    if tiene_proyecto and tiene_imputacion:
+        for orden in ordenes:
+            if orden.get('accion') == 'seleccionar_proyecto':
+                nombre_proyecto = orden.get('parametros', {}).get('nombre', '')
+                nombre_lower = nombre_proyecto.lower()
+                
+                # ✅ NUEVO: Si el proyecto coincide con el proyecto_actual del contexto, PERMITIRLO
+                # PERO SOLO si el usuario NO mencionó otro proyecto diferente en el texto
+                if proyecto_actual and nombre_proyecto.lower() == proyecto_actual.lower():
+                    # Verificar si el usuario mencionó algún otro proyecto en el texto
+                    # Si dijo "ponme en eventos" pero GPT usa "Permiso", es un error
+                    palabras_sospechosas = texto_lower.split()
+                    
+                    # 🆕 Filtrar palabras comunes Y palabras de acción
+                    palabras_accion = ['ponme', 'pon', 'añade', 'quita', 'quitale', 'resta', 'suma', 
+                                       'agrega', 'cambia', 'establece', 'borra', 'elimina', 'dame', 
+                                       'para', 'esta', 'este', 'toda', 'todo', 'horas', 'hora', 
+                                       'media', 'cuarto', 'minutos', 'del', 'la', 'el', 'en', 'de', 'a']
+                    
+                    palabras_relevantes = [
+                        p for p in palabras_sospechosas 
+                        if len(p) > 3 and p not in palabras_accion
+                    ]
+                    
+                    # Si alguna palabra relevante NO aparece en el proyecto_actual, es sospechoso
+                    proyecto_actual_lower = proyecto_actual.lower()
+                    menciona_otro_proyecto = any(
+                        palabra not in proyecto_actual_lower and 
+                        palabra not in ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'semana', 'ayer', 'hoy', 'mañana']
+                        for palabra in palabras_relevantes
+                    )
+                    
+                    if not menciona_otro_proyecto:
+                        print(f"[DEBUG] ✅ Proyecto del contexto detectado: '{proyecto_actual}'")
+                        return None  # ✅ Válido, está usando el contexto
+                    else:
+                        print(f"[DEBUG] ⚠️ Usuario mencionó otro proyecto ('{palabras_relevantes}') pero GPT usó contexto ('{proyecto_actual}')")
+                        # Continuar con las validaciones normales
+                
+                # Lista de nombres genéricos que GPT suele inventar cuando NO SABE
+                nombres_genericos = ['general', 'proyecto', 'trabajo', 'horas', 'tarea', 'actividad', 'defecto', 'default']
+                
+                # CASO 1: GPT usó un nombre genérico porque NO SABE cuál es
+                if nombre_lower in nombres_genericos:
+                    return [{"accion": "error_validacion", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 3 horas en Desarrollo\"*"}]
+                
+                # CASO 2: El nombre NO aparece en el texto original (GPT lo inventó)
+                # Verificar si alguna palabra del proyecto aparece en el texto
+                palabras_proyecto = nombre_proyecto.split()
+                alguna_coincide = any(
+                    palabra.lower() in texto_lower 
+                    for palabra in palabras_proyecto 
+                    if len(palabra) > 2  # Ignorar palabras muy cortas
+                )
+                
+                if not alguna_coincide:
+                    return [{"accion": "error_validacion", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 3 horas en Desarrollo\"*"}]
+                
+                break
+    
+    # 🆕 CASO 1: Menciona proyecto pero NO dice cuántas horas ni qué día
+    if tiene_proyecto and not tiene_imputacion:
+        # Extraer nombre del proyecto
+        nombre_proyecto = None
+        for orden in ordenes:
+            if orden.get('accion') == 'seleccionar_proyecto':
+                nombre_proyecto = orden.get('parametros', {}).get('nombre')
+                break
+        
+        if nombre_proyecto:
+            # Devolver info para que server.py guarde el contexto
+            return [{"accion": "info_incompleta", "info_parcial": {"proyecto": nombre_proyecto}, "que_falta": "horas_y_dia", "mensaje": f"📝 Vale, **{nombre_proyecto}**. ¿Cuántas horas quieres imputar y para qué día?\n\n💡 Ejemplos:\n- *\"Pon 8 horas hoy\"*\n- *\"5 horas el lunes\"*\n- *\"Toda la semana\"*"}]
+        else:
+            return [{"accion": "error_validacion", "mensaje": "📝 ¿Cuántas horas quieres imputar y para qué día?\n\n💡 Ejemplo: *\"Pon 8 horas hoy\"*"}]
+    
+    # 🆕 CASO 2: Tiene imputación pero NO tiene proyecto
+    if tiene_imputacion and not tiene_proyecto:
+        # Extraer horas y día
+        horas = None
+        dia = None
+        for orden in ordenes:
+            if orden.get('accion') == 'imputar_horas_dia':
+                horas = orden.get('parametros', {}).get('horas')
+                dia = orden.get('parametros', {}).get('dia')
+                break
+            elif orden.get('accion') == 'imputar_horas_semana':
+                horas = "toda_la_semana"
+                dia = "semana"
+                break
+        
+        if horas:
+            # Devolver info para que server.py guarde el contexto
+            info_parcial = {"horas": horas}
+            if dia:
+                info_parcial["dia"] = dia
+            return [{"accion": "info_incompleta", "info_parcial": info_parcial, "que_falta": "proyecto", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 8 horas en Desarrollo\"*"}]
+        else:
+            return [{"accion": "error_validacion", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 8 horas en Desarrollo\"*"}]
+    
+    # 🚨 Detectar comandos vacíos (solo fecha + guardar)
+    if len(ordenes) == 2:
+        if (ordenes[0].get('accion') == 'seleccionar_fecha' and 
+            ordenes[1].get('accion') in ['guardar_linea', 'emitir_linea']):
+            return [{"accion": "error_validacion", "mensaje": "🤔 **No he entendido qué quieres que haga.**\n\nNecesito más información:\n- ¿Qué proyecto?\n- ¿Cuántas horas?\n- ¿Qué acción realizar?\n\n💡 Ejemplos:\n- *\"Pon 8 horas en Desarrollo\"*\n- *\"Borra las horas del martes\"*\n- *\"Lista los proyectos\"*"}]
+    
+    # 🚨 Detectar comandos sin sentido (solo guardar)
+    if len(ordenes) == 1 and ordenes[0].get('accion') in ['guardar_linea', 'emitir_linea']:
+        return [{"accion": "error_validacion", "mensaje": "🤔 **¿Qué quieres que haga exactamente?**\n\nPuedo ayudarte con:\n- Imputar horas: *\"Pon 8h en Desarrollo\"*\n- Consultar horas: *\"¿Cuántas horas tengo hoy?\"*\n- Borrar horas: *\"Borra las del martes\"*\n- Listar proyectos: *\"Lista los proyectos\"*"}]
+    
+    # 🚨 Detectar: seleccionar_proyecto + guardar (sin imputación real)
+    if len(ordenes) == 3:
+        if (ordenes[0].get('accion') == 'seleccionar_fecha' and
+            ordenes[1].get('accion') == 'seleccionar_proyecto' and
+            ordenes[2].get('accion') in ['guardar_linea', 'emitir_linea']):
+            nombre_proyecto = ordenes[1].get('parametros', {}).get('nombre')
+            if nombre_proyecto:
+                return [{"accion": "info_incompleta", "info_parcial": {"proyecto": nombre_proyecto}, "que_falta": "horas_y_dia", "mensaje": f"📝 Vale, **{nombre_proyecto}**. ¿Cuántas horas quieres imputar y para qué día?\n\n💡 Ejemplos:\n- *\"Pon 8 horas hoy\"*\n- *\"5 horas el lunes\"*\n- *\"Toda la semana\"*"}]
+    
+    return None  # ✅ Comando válido
+
+
 def interpretar_con_gpt(texto, contexto=None, tabla_actual=None):
 
     hoy = datetime.now().strftime("%Y-%m-%d")
@@ -90,16 +241,43 @@ Hoy es {hoy} ({dia_semana}).{info_contexto}{info_tabla}
    - "Imputa 3 horas en Departamento Desarrollo en Desarrollo"
    - "3 horas en Desarrollo del departamento de Desarrollo"
    - "Añade 5h en Dirección de Departamento Desarrollo"
+   - "Ponme 3 horas en staff en el proyecto permiso" → {{"nombre": "Permiso", "nodo_padre": "Staff"}}
+   - "Pon 5h en administracion en permiso" → {{"nombre": "Permiso", "nodo_padre": "Administración"}}
+   - "3h en comercial en desarrollo" → {{"nombre": "Desarrollo", "nodo_padre": "Comercial"}}
    
    → Debes generar:
    {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo", "nodo_padre": "Departamento Desarrollo"}}}}
    
-   🔍 Cómo detectar:
-   - Preposiciones: "en [nodo_padre] en [proyecto]", "de [nodo_padre]", "del departamento [nodo_padre]"
-   - Patrones: "[nodo_padre] / [proyecto]", "[nodo_padre] - [proyecto]"
-   - El nodo_padre suele contener: "Departamento", "Área", "División", nombres de empresas, etc.
+   🔍 REGLAS DE DETECCIÓN - ⚠️ EXTREMADAMENTE IMPORTANTE:
    
-   ⚠️ IMPORTANTE: Si NO se especifica nodo_padre explícitamente, NO lo inventes. Deja solo el nombre.
+   **REGLA #1 - DOBLE "EN" (LA MÁS IMPORTANTE):**
+   Si la frase contiene DOS menciones de "en", la PRIMERA indica nodo_padre:
+   - "en [X] en [Y]" → nodo_padre: X, nombre: Y
+   - "en [X] en el proyecto [Y]" → nodo_padre: X, nombre: Y
+   - "en [X] en la tarea [Y]" → nodo_padre: X, nombre: Y
+   
+   Ejemplos aplicando REGLA #1:
+   - "ponme 3h en staff en permiso" → {{"nombre": "Permiso", "nodo_padre": "Staff"}}
+   - "pon 5h en administracion en desarrollo" → {{"nombre": "Desarrollo", "nodo_padre": "Administración"}}
+   - "añade 2h en comercial en estudio" → {{"nombre": "Estudio", "nodo_padre": "Comercial"}}
+   
+   **REGLA #2 - PALABRAS CLAVE:**
+   - "Departamento [X]" → nodo_padre: "Departamento X"
+   - "Área [X]" → nodo_padre: "Área X"
+   - "Staff", "Administración", "Comercial" → nodo_padre cuando están solas
+   
+   **REGLA #3 - PREPOSICIONES:**
+   - "del departamento [X]" → nodo_padre: X
+   - "de [X]" (cuando X es organización/área) → nodo_padre: X
+   
+   **REGLA #4 - SEPARADORES:**
+   - "[X] / [Y]" → nodo_padre: X, nombre: Y
+   - "[X] - [Y]" → nodo_padre: X, nombre: Y
+   
+   🚨 IMPORTANTE: 
+   - Si NO hay ningún indicador claro de nodo_padre, NO lo inventes
+   - Si hay DUDA, aplicar REGLA #1 (doble "en") - es la más confiable
+   - Capitalizar: "staff" → "Staff", "administracion" → "Administración".
    
    PROYECTOS MÚLTIPLES EN UNA FRASE:
    Si el usuario menciona varios proyectos:
@@ -329,6 +507,13 @@ Frase del usuario: "{texto}"
         # Si devuelve un solo objeto, lo convertimos a lista
         if isinstance(data, dict):
             data = [data]
+
+        # 🆕 VALIDAR que las órdenes tengan sentido
+        resultado_validacion = validar_ordenes(data, texto, contexto)
+        if resultado_validacion:
+            # Si devuelve algo, es porque hay error o info incompleta
+            print(f"[DEBUG] ⚠️ Comando requiere atención: {texto}")
+            return resultado_validacion
 
         return data
 
