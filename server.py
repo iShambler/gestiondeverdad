@@ -162,11 +162,100 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                 return error_msg
 
     try:
+        # 🆕 PASO 1: Verificar si hay pregunta pendiente de desambiguación
+        from conversation_state import conversation_state_manager
+        
+        # Obtener contexto de la sesión (necesario para ejecutar acciones)
+        contexto = session.contexto
+        
+        if conversation_state_manager.tiene_pregunta_pendiente(user_id):
+            print(f"[DEBUG] 💬 Usuario {user_id} tiene pregunta pendiente")
+            estado = conversation_state_manager.obtener_desambiguacion(user_id)
+            
+            from web_automation.desambiguacion import resolver_respuesta_desambiguacion
+            
+            # Resolver respuesta del usuario
+            coincidencia = resolver_respuesta_desambiguacion(texto, estado["coincidencias"])
+            
+            if coincidencia:
+                print(f"[DEBUG] ✅ Coincidencia encontrada: {coincidencia['nodo_padre']}")
+                
+                # Re-ejecutar el comando original con el elemento preseleccionado
+                ordenes_originales = estado["comando_original"]
+                nombre_proyecto = estado["nombre_proyecto"]
+                
+                # Modificar la orden para incluir el elemento preseleccionado
+                for orden in ordenes_originales:
+                    if orden.get("accion") == "seleccionar_proyecto":
+                        # Usar el nodo_padre de la coincidencia seleccionada
+                        orden["parametros"]["nodo_padre"] = coincidencia["nodo_padre"]
+                        break
+                
+                # Ejecutar las órdenes con el nodo padre especificado
+                respuestas = []
+                for orden in ordenes_originales:
+                    with session.lock:
+                        mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
+                        
+                        # Si devuelve dict (desambiguación), algo salió mal
+                        if isinstance(mensaje, dict):
+                            conversation_state_manager.limpiar_estado(user_id)
+                            return "❌ Algo salió mal al seleccionar el proyecto. Inténtalo de nuevo."
+                        
+                        if mensaje:
+                            respuestas.append(mensaje)
+                
+                # Limpiar estado
+                conversation_state_manager.limpiar_estado(user_id)
+                
+                # Generar respuesta
+                if respuestas:
+                    respuesta_natural = generar_respuesta_natural(respuestas, f"Pon horas en {nombre_proyecto}", contexto)
+                else:
+                    respuesta_natural = "✅ Listo"
+                
+                registrar_peticion(db, usuario.id, texto, "comando_desambiguado", canal=canal, respuesta=respuesta_natural)
+                session.update_activity()
+                return respuesta_natural
+            else:
+                # No se entendió la respuesta
+                return "❌ No he entendido tu respuesta. Por favor, indica el número (1, 2, 3...) o el nombre del departamento/área."
+        
         # 🔥 SIN LOCK AQUÍ - cada operación maneja su propio lock si es necesario
         tipo_mensaje = clasificar_mensaje(texto)
-        contexto = session.contexto  # Usar el contexto de la sesión del usuario
 
-        # 🆘 Comando de ayuda - Mostrar lista de comandos
+        # 🆕 LISTAR PROYECTOS - Mostrar todos los proyectos disponibles
+        if tipo_mensaje == "listar_proyectos":
+            from web_automation.listado_proyectos import listar_todos_proyectos, formatear_lista_proyectos
+            
+            # 🆕 Detectar si menciona un nodo específico
+            filtro_nodo = None
+            texto_lower = texto.lower()
+            
+            # Palabras clave que indican un nodo específico
+            if "departamento" in texto_lower:
+                # Extraer el texto después de "departamento"
+                import re
+                match = re.search(r'departamento\s+(\w+(?:\s+\w+)*)', texto_lower, re.IGNORECASE)
+                if match:
+                    filtro_nodo = match.group(0).strip()  # Incluir "departamento" completo
+                    print(f"[DEBUG] 🎯 Filtro detectado: '{filtro_nodo}'")
+            elif "en " in texto_lower and any(keyword in texto_lower for keyword in ["admin", "administración", "desarrollo", "staff"]):
+                # Detectar patrones como "en admin-staff", "en administración"
+                match = re.search(r'en\s+([\w-]+(?:\s+[\w-]+)*)', texto_lower, re.IGNORECASE)
+                if match:
+                    filtro_nodo = match.group(1).strip()
+                    print(f"[DEBUG] 🎯 Filtro detectado: '{filtro_nodo}'")
+            
+            with session.lock:
+                proyectos_por_nodo = listar_todos_proyectos(session.driver, session.wait, filtro_nodo)
+            
+            respuesta = formatear_lista_proyectos(proyectos_por_nodo, canal=canal)
+            registrar_peticion(db, usuario.id, texto, "listar_proyectos", canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
+
+        # 🖊️ Comando de ayuda - Mostrar lista de comandos
         if tipo_mensaje == "ayuda":
             respuesta = mostrar_comandos()
             registrar_peticion(db, usuario.id, texto, "ayuda", canal=canal, respuesta=respuesta)
@@ -216,7 +305,18 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
 
         # ⚙️ Comandos de imputación
         elif tipo_mensaje == "comando":
-            ordenes = interpretar_con_gpt(texto)
+            # 🆕 LEER LA TABLA ACTUAL para dar contexto a GPT
+            tabla_actual = None
+            try:
+                from web_automation import leer_tabla_imputacion
+                with session.lock:
+                    tabla_actual = leer_tabla_imputacion(session.driver)
+                print(f"[DEBUG] 📊 Tabla leída: {len(tabla_actual)} proyectos")
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ No se pudo leer la tabla: {e}")
+                # Continuar sin tabla, GPT funcionará sin ese contexto
+            
+            ordenes = interpretar_con_gpt(texto, contexto, tabla_actual)  # 🆕 Pasar tabla
             if not ordenes:
                 respuesta = "🤔 No he entendido qué quieres que haga."
                 registrar_peticion(db, usuario.id, texto, "comando", canal=canal, respuesta=respuesta)
@@ -228,12 +328,35 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                 # 🔒 LOCK SOLO PARA CADA ACCIÓN INDIVIDUAL
                 with session.lock:
                     mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
+                
+                # 🆕 VERIFICAR SI NECESITA DESAMBIGUACIÓN
+                if isinstance(mensaje, dict) and mensaje.get("tipo") == "desambiguacion":
+                    from web_automation.desambiguacion import generar_mensaje_desambiguacion
+                    
+                    mensaje_pregunta = generar_mensaje_desambiguacion(
+                        mensaje["proyecto"],
+                        mensaje["coincidencias"],
+                        canal=canal
+                    )
+                    
+                    # Guardar estado para la próxima respuesta
+                    conversation_state_manager.guardar_desambiguacion(
+                        user_id,
+                        mensaje["proyecto"],
+                        mensaje["coincidencias"],
+                        ordenes  # Comando original
+                    )
+                    
+                    registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", canal=canal, respuesta=mensaje_pregunta)
+                    session.update_activity()
+                    return mensaje_pregunta
+                
                 if mensaje:
                     respuestas.append(mensaje)
 
             # Generar respuesta SIN lock
             if respuestas:
-                respuesta_natural = generar_respuesta_natural(respuestas, texto)
+                respuesta_natural = generar_respuesta_natural(respuestas, texto, contexto)
             else:
                 respuesta_natural = "He procesado la instrucción, pero no hubo mensajes de salida."
 

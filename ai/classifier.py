@@ -33,6 +33,7 @@ def clasificar_mensaje(texto):
     ]
     
     texto_lower = texto.lower()
+    print(f"[DEBUG] 🔍 Texto normalizado: '{texto_lower}'")
     
     # 🆕 COMANDO DE AYUDA - Prioridad máxima
     keywords_ayuda = [
@@ -42,6 +43,23 @@ def clasificar_mensaje(texto):
     
     if any(keyword in texto_lower for keyword in keywords_ayuda):
         return "ayuda"
+    
+    # 🆕 LISTAR PROYECTOS - Nueva categoría
+    keywords_listar_proyectos = [
+        "qué proyectos", "que proyectos", "q proyectos",  # Variante abreviada
+        "lista de proyectos", "listar proyectos",
+        "dime los proyectos", "muéstrame los proyectos", "muestrame los proyectos",
+        "proyectos disponibles", "ver proyectos", "mostrar proyectos",
+        "qué proyectos tengo", "que proyectos tengo", "q proyectos tengo",
+        "cuales proyectos", "cuáles proyectos",
+        "proyectos hay", "cuántos proyectos", "cuantos proyectos",
+        "dame proyectos", "dame los proyectos",
+        "listar los proyectos", "ver los proyectos"
+    ]
+    
+    if any(keyword in texto_lower for keyword in keywords_listar_proyectos):
+        print(f"[DEBUG] ✅ Detectado 'listar_proyectos' por keywords")
+        return "listar_proyectos"
     
     # Si contiene keywords de jornada, es comando directo
     if any(keyword in texto_lower for keyword in keywords_jornada):

@@ -8,10 +8,46 @@ from datetime import datetime
 from config import settings
 
 
-def interpretar_con_gpt(texto):
+def interpretar_con_gpt(texto, contexto=None, tabla_actual=None):
 
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
+    
+    # 🆕 Extraer información del contexto
+    proyecto_actual = contexto.get("proyecto_actual") if contexto else None
+    nodo_padre_actual = contexto.get("nodo_padre_actual") if contexto else None
+    
+    # Construir información de contexto para GPT
+    info_contexto = ""
+    if proyecto_actual:
+        info_contexto = f"\n\n📦 CONTEXTO ACTUAL:\n"
+        info_contexto += f"- Último proyecto usado: '{proyecto_actual}'"
+        if nodo_padre_actual:
+            info_contexto += f" (del área/departamento: '{nodo_padre_actual}')"
+        info_contexto += "\n- Si el usuario dice 'ponme X horas más', 'añade X', 'suma X' SIN mencionar proyecto, usa este proyecto.\n"
+    
+    # 🆕 Añadir información de la tabla actual si está disponible
+    info_tabla = ""
+    if tabla_actual and len(tabla_actual) > 0:
+        info_tabla = "\n\n📊 ESTADO ACTUAL DE LA TABLA DE IMPUTACIÓN:\n"
+        for proyecto_info in tabla_actual:
+            nombre_proyecto = proyecto_info['proyecto'].split(' - ')[-1]  # Solo último nombre
+            horas = proyecto_info['horas']
+            
+            # Mostrar solo días con horas > 0
+            dias_con_horas = []
+            for dia, valor in horas.items():
+                if valor > 0:
+                    dias_con_horas.append(f"{dia.capitalize()}: {valor}h")
+            
+            if dias_con_horas:
+                info_tabla += f"  • {nombre_proyecto}: {', '.join(dias_con_horas)}\n"
+        
+        info_tabla += "\n⚠️ IMPORTANTE: Puedes usar esta información para:\n"
+        info_tabla += "  - Copiar horas de un proyecto a otro\n"
+        info_tabla += "  - Duplicar/triplicar horas\n"
+        info_tabla += "  - Sumar o restar basándote en datos existentes\n"
+        info_tabla += "  - Distribuir horas proporcionalmente\n"
 
     # Usar f-string pero con llaves cuádruples {{{{ para que se escapen correctamente
     prompt = f"""
@@ -19,12 +55,12 @@ Eres un asistente avanzado que traduce frases en lenguaje natural a una lista de
 para automatizar una web de imputación de horas laborales. 
 
 📅 CONTEXTO TEMPORAL:
-Hoy es {hoy} ({dia_semana}).
+Hoy es {hoy} ({dia_semana}).{info_contexto}{info_tabla}
 
 🎯 ACCIONES VÁLIDAS:
 - seleccionar_fecha (requiere "fecha" en formato YYYY-MM-DD)
 - volver
-- seleccionar_proyecto (requiere "nombre")
+- seleccionar_proyecto (requiere "nombre", opcionalmente "nodo_padre" para proyectos con nombres duplicados)
 - imputar_horas_dia (requiere "dia" y "horas", acepta "modo": "sumar" o "establecer")
 - imputar_horas_semana
 - borrar_todas_horas_dia (requiere "dia") - Pone a 0 TODOS los proyectos en ese día
@@ -47,8 +83,26 @@ Hoy es {hoy} ({dia_semana}).
    - Ejemplo CRÍTICO: "borra la línea de Formación de la próxima semana" → PRIMERO seleccionar_fecha(lunes próxima semana), LUEGO eliminar_linea(Formación)
    - CRÍTICO: SIEMPRE genera {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}} con el LUNES de la semana correspondiente cuando hay referencias temporales
 
-2️⃣ PROYECTOS MÚLTIPLES:
-   Si el usuario menciona varios proyectos en una frase:
+2️⃣ PROYECTOS CON JERARQUÍA Y NODOS PADRE:
+   ⚠️ NUEVO: Cuando el usuario especifica un NODO PADRE (departamento/área) junto al proyecto:
+   
+   Ejemplos de referencia:
+   - "Imputa 3 horas en Departamento Desarrollo en Desarrollo"
+   - "3 horas en Desarrollo del departamento de Desarrollo"
+   - "Añade 5h en Dirección de Departamento Desarrollo"
+   
+   → Debes generar:
+   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo", "nodo_padre": "Departamento Desarrollo"}}}}
+   
+   🔍 Cómo detectar:
+   - Preposiciones: "en [nodo_padre] en [proyecto]", "de [nodo_padre]", "del departamento [nodo_padre]"
+   - Patrones: "[nodo_padre] / [proyecto]", "[nodo_padre] - [proyecto]"
+   - El nodo_padre suele contener: "Departamento", "Área", "División", nombres de empresas, etc.
+   
+   ⚠️ IMPORTANTE: Si NO se especifica nodo_padre explícitamente, NO lo inventes. Deja solo el nombre.
+   
+   PROYECTOS MÚLTIPLES EN UNA FRASE:
+   Si el usuario menciona varios proyectos:
    "3.5 en Desarrollo y 2 en Dirección el lunes"
    
    Genera acciones INTERCALADAS:
@@ -100,15 +154,15 @@ Hoy es {hoy} ({dia_semana}).
 
 7️⃣ ORDEN DE EJECUCIÓN:
    Ordena las acciones SIEMPRE así:
-   a) seleccionar_fecha (si aplica - SIEMPRE si menciona una semana/día específico diferente de HOY)
+   a) seleccionar_fecha (OBLIGATORIO si hay cualquier imputación de horas - NUNCA lo omitas)
    b) iniciar_jornada (si se mencionó)
    c) seleccionar_proyecto (si aplica)
    d) imputar_horas_dia, imputar_horas_semana, eliminar_linea, borrar_todas_horas_dia, etc.
    e) finalizar_jornada (si se mencionó)
    f) guardar_linea o emitir_linea (SIEMPRE al final, OBLIGATORIO)
    
-   ⚠️ CRÍTICO: NUNCA omitas guardar_linea/emitir_linea. Es OBLIGATORIO al final de cualquier imputación/modificación.
-   ⚠️ IMPORTANTE: Si el usuario menciona "próxima semana", "esa semana", "el martes", etc., seleccionar_fecha es el PRIMER paso obligatorio.
+   ⚠️ CRÍTICO: Si hay CUALQUIER acción de imputar_horas_dia, DEBES incluir seleccionar_fecha PRIMERO.
+   ⚠️ NUNCA omitas guardar_linea/emitir_linea. Es OBLIGATORIO al final de cualquier imputación/modificación.
 
 8️⃣ FORMATO DE SALIDA:
    - Devuelve SOLO un array JSON válido
@@ -122,7 +176,7 @@ Ejemplo 1 - Simple (con fecha implícita "hoy"):
 Entrada: "Pon 8 horas en Desarrollo hoy"
 Salida:
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana de hoy)"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 8}}}},
   {{"accion": "guardar_linea"}}
@@ -132,7 +186,7 @@ Ejemplo 1b - Sin especificar fecha (asumir HOY):
 Entrada: "Pon 3 horas en Estudio"
 Salida:
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana de hoy)"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Estudio"}}}},
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 3}}}},
   {{"accion": "guardar_linea"}}

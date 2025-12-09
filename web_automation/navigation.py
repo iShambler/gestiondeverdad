@@ -24,12 +24,13 @@ def lunes_de_semana(fecha):
     return fecha - timedelta(days=fecha.weekday())
 
 
-def seleccionar_fecha(driver, fecha_obj):
+def seleccionar_fecha(driver, fecha_obj, contexto=None):
     """Abre el calendario, navega hasta el mes correcto y selecciona el día.
     
     Args:
         driver: WebDriver de Selenium
         fecha_obj: objeto datetime con la fecha a seleccionar
+        contexto: (Opcional) Diccionario de contexto para limpiar si se vuelve atrás
         
     Returns:
         str: Mensaje de confirmación o error
@@ -41,6 +42,13 @@ def seleccionar_fecha(driver, fecha_obj):
             print("[DEBUG] 🔙 Detectada pantalla de imputación, volviendo para cambiar fecha...")
             btn_volver.click()
             time.sleep(2)
+            
+            # 🆕 CRÍTICO: Limpiar el contexto porque todos los elementos quedan obsoletos
+            if contexto:
+                print("[DEBUG] 🧹 Limpiando contexto tras volver atrás...")
+                contexto["fila_actual"] = None
+                contexto["proyecto_actual"] = None
+                contexto["nodo_padre_actual"] = None
     except:
         # No hay botón volver, ya estamos donde debemos
         pass

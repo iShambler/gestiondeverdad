@@ -35,7 +35,7 @@ Extrae la fecha sobre la que pregunta y devuelve SOLO un JSON válido con este f
 
 Reglas CRÍTICAS:
 - Siempre usa el año 2025 (estamos en 2025)
-- Si pregunta por "esta semana", "semana actual", "la semana" → tipo: "semana", fecha: lunes de la semana
+- Si pregunta por "esta semana", "semana actual", "la semana", "resumen de la semana" (SIN decir "pasada") → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL QUE CONTIENE {hoy}
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
 - Si pregunta por "MAÑANA" → tipo: "dia", fecha: calcular día siguiente a {hoy}
 - Si pregunta por "AYER" → tipo: "dia", fecha: calcular día anterior a {hoy}
@@ -44,8 +44,10 @@ Reglas CRÍTICAS:
 - Si dice "próxima semana", calcula el lunes de la siguiente semana
 
 Ejemplos:
-- "esta semana" → {{"fecha": "(lunes de la semana actual)", "tipo": "semana"}}
-- "semana pasada" → {{"fecha": "(lunes de la semana anterior)", "tipo": "semana"}}
+- "esta semana" → {{"fecha": "(LUNES de la semana que contiene {hoy})", "tipo": "semana"}}
+- "resumen de la semana" → {{"fecha": "(LUNES de la semana que contiene {hoy})", "tipo": "semana"}}
+- "la semana" → {{"fecha": "(LUNES de la semana que contiene {hoy})", "tipo": "semana"}}
+- "semana pasada" → {{"fecha": "(LUNES de la semana anterior a {hoy})", "tipo": "semana"}}
 - "la semana del 26 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}} (lunes de esa semana)
 - "cuántas horas tengo hoy" → {{"fecha": "{hoy}", "tipo": "dia"}}
 - "qué tengo imputado el miércoles 15" → {{"fecha": "2025-10-15", "tipo": "dia"}} (ese día exacto)

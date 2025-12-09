@@ -69,8 +69,8 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
         
         # 🌐 Si es webapp, generar tabla HTML
         if canal == "webapp":
-            resumen = f"<h3>📅 {dia_nombre_capitalize} {fecha_str}</h3>\n"
-            resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; margin-top: 10px;'>\n"
+            resumen = f"<h3 style='margin: 0 0 5px 0;'>📅 {dia_nombre_capitalize} {fecha_str}</h3>\n"
+            resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
             resumen += "<thead><tr style='background-color: #f0f0f0;'><th>Proyecto</th><th>Horas</th></tr></thead>\n"
             resumen += "<tbody>\n"
             
@@ -188,8 +188,8 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         
         # 🌐 Generar encabezado según canal
         if canal == "webapp":
-            resumen = f"<h3>📅 Semana del {fecha_inicio} al {fecha_fin}</h3>\n"
-            resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; margin-top: 10px;'>\n"
+            resumen = f"<h3 style='margin: 0 0 5px 0;'>📅 Semana del {fecha_inicio} al {fecha_fin}</h3>\n"
+            resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
             resumen += "<thead><tr style='background-color: #f0f0f0;'><th>Proyecto</th><th>Total</th><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th></tr></thead>\n"
             resumen += "<tbody>\n"
         else:
@@ -213,28 +213,19 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
             
             # 🌐 Mostrar proyecto según canal
             if canal == "webapp":
-                # Tabla HTML con todas las celdas coloreadas según validación
+                # Tabla HTML - NO colorear celdas individuales de proyectos
                 resumen += f"<tr><td>{nombre_corto}</td><td style='text-align: center; font-weight: bold;'>{total_proyecto}h</td>"
                 
-                # Colorear cada celda según el día
+                # Mostrar valores SIN color en las celdas de proyectos individuales
                 for dia_key in ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']:
                     valor = horas.get(dia_key, 0)
-                    limite = 6.5 if dia_key == 'viernes' else 8.5
                     
                     if valor == 0:
-                        color = '#f0f0f0'  # Gris - Sin imputar
                         texto = '-'
-                    elif valor > limite:
-                        color = '#ffcccc'  # Rojo claro - Exceso
-                        texto = str(valor)
-                    elif valor < limite:
-                        color = '#fff8dc'  # Amarillo claro - Faltan horas
-                        texto = str(valor)
                     else:
-                        color = '#d4edda'  # Verde claro - Correcto
                         texto = str(valor)
                     
-                    resumen += f"<td style='text-align: center; background-color: {color};'>{texto}</td>"
+                    resumen += f"<td style='text-align: center;'>{texto}</td>"
                 
                 resumen += "</tr>\n"
             else:

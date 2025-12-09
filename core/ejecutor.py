@@ -53,7 +53,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
     elif accion == "seleccionar_fecha":
         try:
             fecha = datetime.fromisoformat(orden["parametros"]["fecha"])
-            return seleccionar_fecha(driver, fecha)
+            return seleccionar_fecha(driver, fecha, contexto)  # 🆕 Pasar contexto
         except Exception as e:
             return f"No he podido procesar la fecha: {e}"
 
@@ -61,12 +61,28 @@ def ejecutar_accion(driver, wait, orden, contexto):
     elif accion == "seleccionar_proyecto":
         try:
             nombre = orden["parametros"].get("nombre")
-            fila, mensaje = seleccionar_proyecto(driver, wait, nombre)
+            nodo_padre = orden["parametros"].get("nodo_padre")  # 🆕 Nuevo parámetro
+            
+            # 🔍 Debug: mostrar si hay nodo padre
+            if nodo_padre:
+                print(f"[DEBUG] 🎯 Seleccionando proyecto con jerarquía: '{nombre}' bajo '{nodo_padre}'")
+            
+            # 🆕 Desempaquetar 4 valores en lugar de 2
+            fila, mensaje, necesita_desambiguacion, coincidencias = seleccionar_proyecto(driver, wait, nombre, nodo_padre)
+            
+            # 🆕 Si necesita desambiguación, devolver info especial
+            if necesita_desambiguacion:
+                return {
+                    "tipo": "desambiguacion",
+                    "proyecto": nombre,
+                    "coincidencias": coincidencias
+                }
             
             if fila:
                 # ✅ Proyecto encontrado o creado correctamente
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
+                contexto["nodo_padre_actual"] = nodo_padre  # 🆕 Guardar nodo padre
                 return mensaje
             else:
                 # ❌ Proyecto NO encontrado - DETENER ejecución
@@ -130,6 +146,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
             modo = orden["parametros"].get("modo", "sumar")
             fila = contexto.get("fila_actual")
             proyecto = contexto.get("proyecto_actual", "Desconocido")
+            nodo_padre = contexto.get("nodo_padre_actual")
 
             if not fila:
                 return "Necesito que primero selecciones un proyecto antes de imputar horas"
@@ -148,8 +165,31 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 dia = dias_map.get(dia, dia)
             except Exception:
                 dia = dia_param.lower()
-
-            return imputar_horas_dia(driver, wait, dia, horas, fila, proyecto, modo)
+            
+            # 🆕 Intentar imputar, si falla por StaleElement, re-buscar proyecto
+            try:
+                return imputar_horas_dia(driver, wait, dia, horas, fila, proyecto, modo)
+            except Exception as e:
+                if "stale element" in str(e).lower():
+                    print(f"[DEBUG] 🔄 Elemento obsoleto detectado, re-buscando proyecto '{proyecto}'...")
+                    # Re-buscar el proyecto
+                    fila_nueva, mensaje, necesita_desamb, coincidencias = seleccionar_proyecto(driver, wait, proyecto, nodo_padre)
+                    
+                    if necesita_desamb:
+                        return {
+                            "tipo": "desambiguacion",
+                            "proyecto": proyecto,
+                            "coincidencias": coincidencias
+                        }
+                    
+                    if fila_nueva:
+                        contexto["fila_actual"] = fila_nueva
+                        print(f"[DEBUG] ✅ Proyecto re-encontrado, reintentando imputación...")
+                        return imputar_horas_dia(driver, wait, dia, horas, fila_nueva, proyecto, modo)
+                    else:
+                        return f"❌ No he podido re-encontrar el proyecto '{proyecto}': {mensaje}"
+                else:
+                    raise
 
         except Exception as e:
             return f"Error al imputar horas: {e}"

@@ -30,6 +30,11 @@ from .jornada import (
     finalizar_jornada
 )
 
+from .listado_proyectos import (
+    listar_todos_proyectos,
+    formatear_lista_proyectos
+)
+
 __all__ = [
     # Interactions
     'hacer_login',
@@ -52,5 +57,9 @@ __all__ = [
     
     # Jornada
     'iniciar_jornada',
-    'finalizar_jornada'
+    'finalizar_jornada',
+    
+    # Listado Proyectos
+    'listar_todos_proyectos',
+    'formatear_lista_proyectos'
 ]

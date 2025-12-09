@@ -11,13 +11,14 @@ from config import settings
 historial_conversacion = []
 
 
-def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario):
+def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=None):
     """
     Usa GPT para generar una respuesta natural basada en las acciones ejecutadas.
     
     Args:
         acciones_ejecutadas: Lista de mensajes de acciones completadas
         entrada_usuario: Mensaje original del usuario
+        contexto: Diccionario con contexto de la sesión (opcional)
         
     Returns:
         str: Respuesta natural y amigable
@@ -28,12 +29,19 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario):
     # Crear resumen de acciones
     resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_ejecutadas])
     
+    # 🆕 Si hay nodo_padre en el contexto, añadirlo a la información
+    info_adicional = ""
+    if contexto and contexto.get("nodo_padre_actual"):
+        proyecto = contexto.get("proyecto_actual", "proyecto")
+        nodo_padre = contexto.get("nodo_padre_actual")
+        info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Debes mencionar esto en tu respuesta."
+    
     prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
 
 El usuario te dijo: "{entrada_usuario}"
 
 Has ejecutado las siguientes acciones:
-{resumen_acciones}
+{resumen_acciones}{info_adicional}
 
 Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando lo que has hecho.
 Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.

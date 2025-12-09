@@ -3,12 +3,33 @@
 Gestor de pool de navegadores para múltiples usuarios concurrentes.
 Cada usuario obtiene su propio navegador Chrome.
 """
+
+import platform
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime, timedelta
 import threading
 import time
+
+
+def get_chrome_service():
+    """
+    Devuelve un ChromeService adecuado según el sistema operativo.
+    - En Linux usa /usr/bin/chromedriver (como en tu servidor)
+    - En Windows usa Selenium Manager automáticamente (sin ruta)
+    """
+    system = platform.system()
+
+    if system == "Linux":
+        return ChromeService(executable_path="/usr/bin/chromedriver")
+
+    elif system == "Windows":
+        # Selenium Manager resolverá el driver automáticamente
+        return ChromeService()
+
+    else:
+        raise Exception(f"Sistema operativo no soportado: {system}")
 
 
 class BrowserSession:
@@ -26,20 +47,24 @@ class BrowserSession:
     def initialize(self):
         """Inicializa el navegador Chrome."""
         try:
-            service = ChromeService('/usr/bin/chromedriver')
+            service = get_chrome_service()
             options = webdriver.ChromeOptions()
-            # 🆕 MODO HEADLESS ACTIVADO
-            options.add_argument('--headless')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-gpu')  # Recomendado para headless
-            options.add_argument('--window-size=1920,1080')  # Tamaño de ventana fijo
-            
+
+            # MODO HEADLESS
+            options.add_argument('--disable-gpu')
+            options.add_argument('--window-size=1920,1080')
+
+            # Solo Linux
+            if platform.system() == "Linux":
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+
             self.driver = webdriver.Chrome(service=service, options=options)
             self.wait = WebDriverWait(self.driver, 15)
             self.last_activity = datetime.now()
             print(f"[BROWSER POOL] ✅ Navegador iniciado para usuario: {self.user_id}")
             return True
+
         except Exception as e:
             print(f"[BROWSER POOL] ❌ Error iniciando navegador para {self.user_id}: {e}")
             return False
@@ -83,32 +108,23 @@ class BrowserPool:
         print(f"[BROWSER POOL] 🚀 Pool inicializado (max: {max_sessions}, timeout: {session_timeout_minutes}min)")
     
     def get_session(self, user_id: str) -> BrowserSession:
-        """
-        Obtiene o crea una sesión de navegador para un usuario.
-        
-        Returns:
-            BrowserSession: Sesión del usuario
-        """
+        """Obtiene o crea una sesión de navegador para un usuario."""
         with self.lock:
-            # Si ya existe la sesión, devolverla
             if user_id in self.sessions:
                 session = self.sessions[user_id]
                 session.update_activity()
                 return session
             
-            # Si llegamos al límite, limpiar sesiones expiradas
+            # Limpiar si se alcanzó el límite
             if len(self.sessions) >= self.max_sessions:
                 self._force_cleanup()
                 
-                # Si aún estamos al límite, rechazar
                 if len(self.sessions) >= self.max_sessions:
                     print(f"[BROWSER POOL] ⚠️ Límite de sesiones alcanzado ({self.max_sessions})")
-                    # Cerrar la sesión más antigua
                     oldest_user = min(self.sessions.keys(), 
                                     key=lambda k: self.sessions[k].last_activity)
                     self.close_session(oldest_user)
             
-            # Crear nueva sesión
             session = BrowserSession(user_id)
             if session.initialize():
                 self.sessions[user_id] = session
@@ -126,7 +142,7 @@ class BrowserPool:
                 print(f"[BROWSER POOL] 📊 Sesiones activas: {len(self.sessions)}/{self.max_sessions}")
     
     def _force_cleanup(self):
-        """Limpia forzosamente sesiones expiradas (sin lock, llamada desde contexto con lock)."""
+        """Limpia forzosamente sesiones expiradas."""
         expired = [
             user_id for user_id, session in self.sessions.items()
             if session.is_expired(self.session_timeout_minutes)
@@ -140,8 +156,7 @@ class BrowserPool:
     def _cleanup_expired_sessions(self):
         """Thread que limpia sesiones expiradas periódicamente."""
         while True:
-            time.sleep(30)  # Revisar cada 30 segundos (más frecuente para timeout de 3 min)
-            
+            time.sleep(30)
             with self.lock:
                 expired = [
                     user_id for user_id, session in self.sessions.items()
@@ -175,5 +190,4 @@ class BrowserPool:
 
 
 # Instancia global del pool
-# ⚠️ Timeout aumentado a 10 minutos para evitar re-logins frecuentes
 browser_pool = BrowserPool(max_sessions=50, session_timeout_minutes=10)
