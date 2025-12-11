@@ -51,7 +51,7 @@ class BrowserSession:
             options = webdriver.ChromeOptions()
 
             # MODO HEADLESS
-            options.add_argument('--headless=new')
+
             options.add_argument('--disable-gpu')
             options.add_argument('--window-size=1920,1080')
 

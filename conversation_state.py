@@ -129,7 +129,7 @@ class ConversationStateManager:
         
         return estado
     
-    def guardar_ultimo_proyecto(self, user_id, nombre_proyecto, nodo_padre=None):
+    def guardar_ultimo_proyecto(self, user_id, nombre_proyecto, nodo_padre=None, dia=None):
         """
         Guarda el último proyecto usado por el usuario para referencia futura.
         
@@ -137,6 +137,7 @@ class ConversationStateManager:
             user_id: ID del usuario
             nombre_proyecto: Nombre del proyecto
             nodo_padre: Nodo padre del proyecto (opcional)
+            dia: Día imputado (opcional, ej: "viernes", "lunes")
         """
         if user_id not in self.estados:
             self.estados[user_id] = {}
@@ -145,10 +146,13 @@ class ConversationStateManager:
         self.estados[user_id]["ultimo_proyecto"] = {
             "nombre": nombre_proyecto,
             "nodo_padre": nodo_padre,
+            "dia": dia,  # 🆕 NUEVO
             "timestamp": datetime.now()
         }
         
         print(f"[CONVERSACION] 💾 Guardado último proyecto para {user_id}: {nombre_proyecto}")
+        if dia:
+            print(f"[CONVERSACION]    Día: {dia}")
     
     def obtener_ultimo_proyecto(self, user_id):
         """

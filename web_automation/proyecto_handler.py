@@ -26,7 +26,7 @@ def normalizar(texto):
     )
 
 
-def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None):
+def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None, contexto=None):
     """
     Selecciona el proyecto en la tabla de imputación.
     Si ya existe una línea con ese proyecto, la reutiliza.
@@ -140,8 +140,21 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         if coincidencias_encontradas and not nodo_padre:
             print(f"[DEBUG] 📊 Encontradas {len(coincidencias_encontradas)} coincidencias en tabla")
             
-            # Si solo hay UNA coincidencia, devolverla directamente como "confirmar_existente"
+            # 🔥 NUEVO: Si solo hay UNA coincidencia Y viene del contexto → USAR DIRECTAMENTE
             if len(coincidencias_encontradas) == 1:
+                coincidencia = coincidencias_encontradas[0]
+                proyecto_contexto = (contexto or {}).get("proyecto_actual", "").lower() if contexto else ""
+                proyecto_encontrado = normalizar(coincidencia["proyecto"])
+                
+                # Si el proyecto del contexto coincide con el encontrado → usar sin preguntar
+                if proyecto_contexto and normalizar(proyecto_contexto) in proyecto_encontrado:
+                    print(f"[DEBUG] ✅ Proyecto del contexto '{proyecto_contexto}' coincide, usando directamente sin preguntar")
+                    fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
+                    time.sleep(0.3)
+                    return (fila, f"Usando '{coincidencia['proyecto']}' existente", False, [])
+                
+                # Si NO viene del contexto → preguntar para confirmar
                 print(f"[DEBUG] 💬 Solicitando confirmación del proyecto existente")
                 return (None, "", "confirmar_existente", coincidencias_encontradas)
             
@@ -333,9 +346,114 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
             # Si hay múltiples coincidencias, verificar si necesitamos desambiguación
             elementos = driver.find_elements(By.XPATH, xpath)
             print(f"[DEBUG] 📊 Elementos encontrados: {len(elementos)}")
-            
             if not elementos:
-                raise Exception(f"No se encontró ninguna coincidencia para '{nombre_proyecto}'")
+                # 🆕 Buscar en NODOS PADRE (departamentos/áreas)
+                print(f"[DEBUG] 🔍 No se encontraron proyectos, buscando nodos padre...")
+                
+                # 🆕 BUSCAR TODOS LOS ENLACES Y FILTRAR EN PYTHON (más confiable)
+                todos_los_nodos = driver.find_elements(By.XPATH, "//li//a")
+                nombre_normalizado = normalizar(nombre_proyecto)
+                
+                print(f"[DEBUG] 🔍 Buscando '{nombre_proyecto}' entre {len(todos_los_nodos)} nodos...")
+                
+                nodos_padre = []
+                
+                for nodo in todos_los_nodos:
+                    try:
+                        texto_nodo = nodo.text.strip()
+                        if not texto_nodo:
+                            continue
+                        
+                        # Comparar normalizando tildes
+                        if nombre_normalizado in normalizar(texto_nodo):
+                            # Verificar que NO sea un subproyecto
+                            li_padre = nodo.find_element(By.XPATH, "./ancestor::li[1]")
+                            rel_attr = li_padre.get_attribute("rel")
+                            
+                            # Si NO es subproyecto, es un nodo padre
+                            if rel_attr != "subproyectos":
+                                nodos_padre.append(nodo)
+                                print(f"[DEBUG] 📁 Nodo padre encontrado: '{texto_nodo}' (rel={rel_attr})")
+                    except:
+                        continue
+                
+                if nodos_padre:
+                    print(f"[DEBUG] 📁 Encontrados {len(nodos_padre)} nodos padre")
+                    
+                    # Obtener proyectos dentro de los nodos
+                    proyectos_en_nodos = []
+                    
+                    for nodo in nodos_padre:
+                        nodo_nombre = nodo.text.strip()
+                        print(f"[DEBUG] 📂 Explorando nodo: {nodo_nombre}")
+                        
+                        try:
+                            li_nodo = nodo.find_element(By.XPATH, "./ancestor::li[1]")
+                            nodo_id = li_nodo.get_attribute("id")
+                            
+                            xpath_hijos = f"//li[@id='{nodo_id}']//li[@rel='subproyectos']//a"
+                            proyectos_hijos = driver.find_elements(By.XPATH, xpath_hijos)
+                            
+                            for proyecto in proyectos_hijos:
+                                proyectos_en_nodos.append({
+                                    "proyecto": proyecto.text.strip(),
+                                    "nodo_padre": nodo_nombre,
+                                    "elemento": proyecto,
+                                    "path_completo": f"{nodo_nombre} → {proyecto.text.strip()}"
+                                })
+                        except Exception as e:
+                            print(f"[DEBUG] ⚠️ Error explorando nodo {nodo_nombre}: {e}")
+                            continue
+                    
+                    print(f"[DEBUG] 📊 Total proyectos en nodos: {len(proyectos_en_nodos)}")
+                    
+                    if len(proyectos_en_nodos) == 0:
+                        raise Exception(f"No encontré proyectos dentro de '{nombre_proyecto}'")
+                    
+                    elif len(proyectos_en_nodos) == 1:
+                        # ✅ SOLO 1 PROYECTO: Seleccionarlo automáticamente
+                        proyecto_unico = proyectos_en_nodos[0]
+                        print(f"[DEBUG] ✅ Solo 1 proyecto en '{nombre_proyecto}', seleccionando: {proyecto_unico['proyecto']}")
+                        
+                        elemento = proyecto_unico["elemento"]
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
+                        elemento.click()
+                        time.sleep(1)
+                        
+                        return (fila, f"He seleccionado '{proyecto_unico['proyecto']}' de '{proyecto_unico['nodo_padre']}'", False, [])
+                    
+                    else:
+                        # 🔀 MÚLTIPLES PROYECTOS: Desambiguar
+                        print(f"[DEBUG] 🤔 Múltiples proyectos en '{nombre_proyecto}', requiere desambiguación")
+                        
+                        # Cerrar buscador
+                        try:
+                            driver.execute_script("""
+                                document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
+                                document.getElementById('textoBusqueda').style.color='gray';
+                                buscadorJTree();
+                                var tree = $('#treeTipologia');
+                                tree.jstree('deselect_all');
+                                tree.jstree('close_all');
+                                hideOverlay();
+                            """)
+                            time.sleep(0.5)
+                        except:
+                            pass
+                        
+                        # Eliminar línea temporal
+                        try:
+                            btn_eliminar = fila.find_element(By.CSS_SELECTOR, "button.botonEliminar, button#botonEliminar, input[id*='btEliminar']")
+                            btn_eliminar.click()
+                            time.sleep(0.3)
+                        except:
+                            pass
+                        
+                        return (None, "", True, proyectos_en_nodos)
+                
+                else:
+                    # No encontró ni proyectos ni nodos padre
+                    raise Exception(f"No se encontró ninguna coincidencia para '{nombre_proyecto}'")
             
             # 🆕 DESAMBIGUACIÓN INTERACTIVA: Si hay múltiples coincidencias SIN nodo padre
             # O si el nodo_padre es "__buscar__" (usuario rechazó proyecto existente)

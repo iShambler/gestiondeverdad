@@ -5,6 +5,7 @@ Determina si un mensaje es un comando, una consulta o conversación general.
 
 from datetime import datetime
 from config import settings
+from config.constants import Constants
 
 
 def clasificar_mensaje(texto):
@@ -22,15 +23,8 @@ def clasificar_mensaje(texto):
     """
     print(f"[DEBUG] 🔍 Clasificando: '{texto}'")
     
-    # Keywords para detectar comandos de jornada sin ambigüedad
-    keywords_jornada = [
-        "iniciar jornada", "empezar jornada", "comenzar jornada", "inicia jornada",
-        "finalizar jornada", "terminar jornada", "acabar jornada", "finaliza jornada", 
-        "termina jornada", "acaba jornada",
-        "finaliza el dia", "termina el dia", "acaba el dia",
-        "finalizar el dia", "terminar el dia", "acabar el dia",
-        "fin de jornada", "cierra jornada"
-    ]
+    # Keywords importadas desde constants.py
+    keywords_jornada = Constants.KEYWORDS_JORNADA
     
     texto_lower = texto.lower()
     print(f"[DEBUG] 🔍 Texto normalizado: '{texto_lower}'")
@@ -65,23 +59,14 @@ def clasificar_mensaje(texto):
     if any(keyword in texto_lower for keyword in keywords_jornada):
         return "comando"
     
-    # Keywords para imputación
-    keywords_imputacion = [
-        "imput", "pon", "añade", "agrega", "quita", "resta", "borra",
-        "horas", "proyecto", "guardar", "emitir"
-    ]
+    # Keywords importadas desde constants.py
+    keywords_imputacion = Constants.KEYWORDS_IMPUTACION
     
     if any(keyword in texto_lower for keyword in keywords_imputacion):
         return "comando"
     
-    # Keywords para consultas - Detectar solicitudes de información
-    keywords_consulta = [
-        "qué tengo", "que tengo", "dime", "qué he imputado", "que he imputado",
-        "cuántas", "cuantas", "cuántas horas", "cuantas horas",
-        "ver", "mostrar", "dame", "info", "consulta", 
-        "resumen", "resume", "resumíme", "qué hice", "que hice",
-        "he hecho", "tengo hecho"
-    ]
+    # Keywords importadas desde constants.py
+    keywords_consulta = Constants.KEYWORDS_CONSULTA
     
     # Detectar consultas por keywords
     if any(keyword in texto_lower for keyword in keywords_consulta):

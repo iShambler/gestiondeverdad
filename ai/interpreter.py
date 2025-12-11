@@ -10,156 +10,121 @@ from config import settings
 
 def validar_ordenes(ordenes, texto, contexto=None):
     """
-    Valida que las órdenes generadas tengan sentido y contengan información crítica.
+    Valida las órdenes generadas por GPT, detectando:
+    - proyectos inventados
+    - comandos incompletos
+    - falta de horas o proyecto
+    - uso correcto del proyecto del contexto
     
-    Args:
-        ordenes: Lista de órdenes JSON generadas por GPT
-        texto: Texto original del usuario
-    
-    Returns:
-        (bool, str): (es_valido, mensaje_error)
+    Sin listas de palabras clave: validación 100% semántica.
     """
-    # Normalizar texto para comparación
+
     texto_lower = texto.lower()
     
-    # 💾 Obtener proyecto actual del contexto (si existe)
-    proyecto_actual = contexto.get('proyecto_actual') if contexto else None
-    nodo_padre_actual = contexto.get('nodo_padre_actual') if contexto else None
-    
-    # 🚨 Detectar si selecciona proyecto pero NO imputa horas (COMANDO INCOMPLETO)
-    tiene_proyecto = any(
-        orden.get('accion') == 'seleccionar_proyecto' 
-        for orden in ordenes
-    )
-    
-    tiene_imputacion = any(
-        orden.get('accion') in ['imputar_horas_dia', 'imputar_horas_semana']
-        for orden in ordenes
-    )
-    
-    # 🆕 CRÍTICO: Detectar si GPT está INVENTANDO el nombre del proyecto
-    if tiene_proyecto and tiene_imputacion:
-        for orden in ordenes:
-            if orden.get('accion') == 'seleccionar_proyecto':
-                nombre_proyecto = orden.get('parametros', {}).get('nombre', '')
-                nombre_lower = nombre_proyecto.lower()
-                
-                # ✅ NUEVO: Si el proyecto coincide con el proyecto_actual del contexto, PERMITIRLO
-                # PERO SOLO si el usuario NO mencionó otro proyecto diferente en el texto
-                if proyecto_actual and nombre_proyecto.lower() == proyecto_actual.lower():
-                    # Verificar si el usuario mencionó algún otro proyecto en el texto
-                    # Si dijo "ponme en eventos" pero GPT usa "Permiso", es un error
-                    palabras_sospechosas = texto_lower.split()
-                    
-                    # 🆕 Filtrar palabras comunes Y palabras de acción
-                    palabras_accion = ['ponme', 'pon', 'añade', 'quita', 'quitale', 'resta', 'suma', 
-                                       'agrega', 'cambia', 'establece', 'borra', 'elimina', 'dame', 
-                                       'para', 'esta', 'este', 'toda', 'todo', 'horas', 'hora', 
-                                       'media', 'cuarto', 'minutos', 'del', 'la', 'el', 'en', 'de', 'a']
-                    
-                    palabras_relevantes = [
-                        p for p in palabras_sospechosas 
-                        if len(p) > 3 and p not in palabras_accion
-                    ]
-                    
-                    # Si alguna palabra relevante NO aparece en el proyecto_actual, es sospechoso
-                    proyecto_actual_lower = proyecto_actual.lower()
-                    menciona_otro_proyecto = any(
-                        palabra not in proyecto_actual_lower and 
-                        palabra not in ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'semana', 'ayer', 'hoy', 'mañana']
-                        for palabra in palabras_relevantes
-                    )
-                    
-                    if not menciona_otro_proyecto:
-                        print(f"[DEBUG] ✅ Proyecto del contexto detectado: '{proyecto_actual}'")
-                        return None  # ✅ Válido, está usando el contexto
-                    else:
-                        print(f"[DEBUG] ⚠️ Usuario mencionó otro proyecto ('{palabras_relevantes}') pero GPT usó contexto ('{proyecto_actual}')")
-                        # Continuar con las validaciones normales
-                
-                # Lista de nombres genéricos que GPT suele inventar cuando NO SABE
-                nombres_genericos = ['general', 'proyecto', 'trabajo', 'horas', 'tarea', 'actividad', 'defecto', 'default']
-                
-                # CASO 1: GPT usó un nombre genérico porque NO SABE cuál es
-                if nombre_lower in nombres_genericos:
-                    return [{"accion": "error_validacion", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 3 horas en Desarrollo\"*"}]
-                
-                # CASO 2: El nombre NO aparece en el texto original (GPT lo inventó)
-                # Verificar si alguna palabra del proyecto aparece en el texto
-                palabras_proyecto = nombre_proyecto.split()
-                alguna_coincide = any(
-                    palabra.lower() in texto_lower 
-                    for palabra in palabras_proyecto 
-                    if len(palabra) > 2  # Ignorar palabras muy cortas
-                )
-                
-                if not alguna_coincide:
-                    return [{"accion": "error_validacion", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 3 horas en Desarrollo\"*"}]
-                
-                break
-    
-    # 🆕 CASO 1: Menciona proyecto pero NO dice cuántas horas ni qué día
+    # Contexto
+    proyecto_actual = (contexto or {}).get("proyecto_actual")
+    proyecto_actual_lower = proyecto_actual.lower() if proyecto_actual else None
+
+    # Identificar si hay proyecto y/o imputación
+    tiene_proyecto = any(o.get("accion") == "seleccionar_proyecto" for o in ordenes)
+    tiene_imputacion = any(o.get("accion") in ["imputar_horas_dia", "imputar_horas_semana"] for o in ordenes)
+    tiene_eliminacion = any(o.get("accion") == "eliminar_linea" for o in ordenes)
+    tiene_borrado_horas = any(o.get("accion") == "borrar_todas_horas_dia" for o in ordenes)
+
+    # 🔥 Si hay eliminación o borrado de horas → NO VALIDAR (son acciones válidas sin imputación)
+    if tiene_eliminacion or tiene_borrado_horas:
+        print(f"[DEBUG] ✅ Acción de eliminación/borrado detectada, omitiendo validación")
+        return None
+
+    # ----------------------------------------------------------------------
+    # 🔍 1. VALIDACIÓN INTELIGENTE DE PROYECTO (si proyecto + imputación)
+    # ----------------------------------------------------------------------
+    # 🔥 DESHABILITADA: Dejamos que el sistema web valide si el proyecto existe
+    # Si GPT genera un nombre, confiamos en él y dejamos que la web lo busque
+    # Si no existe, la web devolverá: "❌ No he encontrado el proyecto 'X'"
+    # ----------------------------------------------------------------------
+    # if tiene_proyecto and tiene_imputacion:
+    #     ... validación semántica comentada ...
+    # ----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
+    # 🧩 2. Proyecto sin imputación → Falta horas y día
+    # ----------------------------------------------------------------------
     if tiene_proyecto and not tiene_imputacion:
-        # Extraer nombre del proyecto
-        nombre_proyecto = None
         for orden in ordenes:
-            if orden.get('accion') == 'seleccionar_proyecto':
-                nombre_proyecto = orden.get('parametros', {}).get('nombre')
+            if orden.get("accion") == "seleccionar_proyecto":
+                nombre_proyecto = orden.get("parametros", {}).get("nombre")
                 break
-        
+        else:
+            nombre_proyecto = None
+
         if nombre_proyecto:
-            # Devolver info para que server.py guarde el contexto
-            return [{"accion": "info_incompleta", "info_parcial": {"proyecto": nombre_proyecto}, "que_falta": "horas_y_dia", "mensaje": f"📝 Vale, **{nombre_proyecto}**. ¿Cuántas horas quieres imputar y para qué día?\n\n💡 Ejemplos:\n- *\"Pon 8 horas hoy\"*\n- *\"5 horas el lunes\"*\n- *\"Toda la semana\"*"}]
-        else:
-            return [{"accion": "error_validacion", "mensaje": "📝 ¿Cuántas horas quieres imputar y para qué día?\n\n💡 Ejemplo: *\"Pon 8 horas hoy\"*"}]
-    
-    # 🆕 CASO 2: Tiene imputación pero NO tiene proyecto
-    if tiene_imputacion and not tiene_proyecto:
-        # Extraer horas y día
-        horas = None
-        dia = None
-        for orden in ordenes:
-            if orden.get('accion') == 'imputar_horas_dia':
-                horas = orden.get('parametros', {}).get('horas')
-                dia = orden.get('parametros', {}).get('dia')
-                break
-            elif orden.get('accion') == 'imputar_horas_semana':
-                horas = "toda_la_semana"
-                dia = "semana"
-                break
+            return [{
+                "accion": "info_incompleta",
+                "info_parcial": {"proyecto": nombre_proyecto},
+                "que_falta": "horas_y_dia",
+                "mensaje": (
+                    f"📝 Vale, **{nombre_proyecto}**. ¿Cuántas horas y para qué día?\n\n"
+                    "💡 Ejemplos:\n- \"Pon 8 horas hoy\"\n- \"5 horas el lunes\"\n- \"Toda la semana\""
+                )
+            }]
         
-        if horas:
-            # Devolver info para que server.py guarde el contexto
-            info_parcial = {"horas": horas}
-            if dia:
-                info_parcial["dia"] = dia
-            return [{"accion": "info_incompleta", "info_parcial": info_parcial, "que_falta": "proyecto", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 8 horas en Desarrollo\"*"}]
-        else:
-            return [{"accion": "error_validacion", "mensaje": "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n💡 Ejemplo: *\"Pon 8 horas en Desarrollo\"*"}]
-    
-    # 🚨 Detectar comandos vacíos (solo fecha + guardar)
-    if len(ordenes) == 2:
-        if (ordenes[0].get('accion') == 'seleccionar_fecha' and 
-            ordenes[1].get('accion') in ['guardar_linea', 'emitir_linea']):
-            return [{"accion": "error_validacion", "mensaje": "🤔 **No he entendido qué quieres que haga.**\n\nNecesito más información:\n- ¿Qué proyecto?\n- ¿Cuántas horas?\n- ¿Qué acción realizar?\n\n💡 Ejemplos:\n- *\"Pon 8 horas en Desarrollo\"*\n- *\"Borra las horas del martes\"*\n- *\"Lista los proyectos\"*"}]
-    
-    # 🚨 Detectar comandos sin sentido (solo guardar)
-    if len(ordenes) == 1 and ordenes[0].get('accion') in ['guardar_linea', 'emitir_linea']:
-        return [{"accion": "error_validacion", "mensaje": "🤔 **¿Qué quieres que haga exactamente?**\n\nPuedo ayudarte con:\n- Imputar horas: *\"Pon 8h en Desarrollo\"*\n- Consultar horas: *\"¿Cuántas horas tengo hoy?\"*\n- Borrar horas: *\"Borra las del martes\"*\n- Listar proyectos: *\"Lista los proyectos\"*"}]
-    
-    # 🚨 Detectar: seleccionar_proyecto + guardar (sin imputación real)
-    if len(ordenes) == 3:
-        if (ordenes[0].get('accion') == 'seleccionar_fecha' and
-            ordenes[1].get('accion') == 'seleccionar_proyecto' and
-            ordenes[2].get('accion') in ['guardar_linea', 'emitir_linea']):
-            nombre_proyecto = ordenes[1].get('parametros', {}).get('nombre')
-            if nombre_proyecto:
-                return [{"accion": "info_incompleta", "info_parcial": {"proyecto": nombre_proyecto}, "que_falta": "horas_y_dia", "mensaje": f"📝 Vale, **{nombre_proyecto}**. ¿Cuántas horas quieres imputar y para qué día?\n\n💡 Ejemplos:\n- *\"Pon 8 horas hoy\"*\n- *\"5 horas el lunes\"*\n- *\"Toda la semana\"*"}]
-    
-    return None  # ✅ Comando válido
+        return [{
+            "accion": "error_validacion",
+            "mensaje": "📝 ¿Cuántas horas quieres imputar y para qué día?"
+        }]
+
+    # ----------------------------------------------------------------------
+    # 🧩 3. Imputación sin proyecto → falta el proyecto
+    # ----------------------------------------------------------------------
+    if tiene_imputacion and not tiene_proyecto:
+        info = {}
+        for orden in ordenes:
+            if orden.get("accion") == "imputar_horas_dia":
+                info["horas"] = orden["parametros"]["horas"]
+                info["dia"] = orden["parametros"]["dia"]
+                break
+            if orden.get("accion") == "imputar_horas_semana":
+                info["horas"] = "toda_la_semana"
+                info["dia"] = "semana"
+                break
+
+        return [{
+            "accion": "info_incompleta",
+            "info_parcial": info,
+            "que_falta": "proyecto",
+            "mensaje": (
+                "🤔 **¿En qué proyecto quieres imputar las horas?**\n\n"
+                "💡 Ejemplo: \"Pon 8 horas en Desarrollo\""
+            )
+        }]
+
+    # ----------------------------------------------------------------------
+    # 🚫 4. Comandos vacíos o sin sentido
+    # ----------------------------------------------------------------------
+    if len(ordenes) == 2 and ordenes[0].get("accion") == "seleccionar_fecha":
+        if ordenes[1].get("accion") in ["guardar_linea", "emitir_linea"]:
+            return [{
+                "accion": "error_validacion",
+                "mensaje": (
+                    "🤔 **Necesito más información.**\n\n"
+                    "¿Qué proyecto? ¿Cuántas horas?\n"
+                )
+            }]
+
+    if len(ordenes) == 1 and ordenes[0].get("accion") in ["guardar_linea", "emitir_linea"]:
+        return [{
+            "accion": "error_validacion",
+            "mensaje": "🤔 ¿Qué quieres hacer exactamente?"
+        }]
+
+    # ----------------------------------------------------------------------
+    # TODO LO DEMÁS ES VÁLIDO
+    # ----------------------------------------------------------------------
+    return None
 
 
-def interpretar_con_gpt(texto, contexto=None, tabla_actual=None):
+def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None):
 
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
@@ -167,6 +132,7 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None):
     # 🆕 Extraer información del contexto
     proyecto_actual = contexto.get("proyecto_actual") if contexto else None
     nodo_padre_actual = contexto.get("nodo_padre_actual") if contexto else None
+    dia_actual = contexto.get("dia_actual") if contexto else None  # 🆕 NUEVO
     
     # Construir información de contexto para GPT
     info_contexto = ""
@@ -175,7 +141,9 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None):
         info_contexto += f"- Último proyecto usado: '{proyecto_actual}'"
         if nodo_padre_actual:
             info_contexto += f" (del área/departamento: '{nodo_padre_actual}')"
-        info_contexto += "\n- Si el usuario dice 'ponme X horas más', 'añade X', 'suma X' SIN mencionar proyecto, usa este proyecto.\n"
+        if dia_actual:  # 🆕 NUEVO
+            info_contexto += f"\n- Último día imputado: '{dia_actual}'"
+        info_contexto += "\n- Si el usuario dice 'ponme X horas más', 'añade X', 'suma X', 'quita X' SIN mencionar proyecto ni día, usa este proyecto y este día.\n"
     
     # 🆕 Añadir información de la tabla actual si está disponible
     info_tabla = ""
@@ -200,159 +168,91 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None):
         info_tabla += "  - Sumar o restar basándote en datos existentes\n"
         info_tabla += "  - Distribuir horas proporcionalmente\n"
 
+    # 🆕 HISTORIAL DE CONVERSACIÓN
+    info_historial = ""
+    if historial and len(historial) > 0:
+        info_historial = "\n\n💬 HISTORIAL DE CONVERSACIÓN (últimos mensajes):\n"
+        for msg in historial:
+            usuario_texto = msg.get('usuario', '').strip()
+            asistente_texto = msg.get('asistente', '').strip()
+            if usuario_texto:
+                info_historial += f"Usuario: {usuario_texto}\n"
+            if asistente_texto:
+                # Truncar respuestas muy largas (solo primeras 200 caracteres)
+                if len(asistente_texto) > 200:
+                    asistente_texto = asistente_texto[:200] + "..."
+                info_historial += f"Asistente: {asistente_texto}\n"
+            info_historial += "\n"
+        info_historial += "⚠️ Usa este historial para entender mejor el contexto y las intenciones del usuario.\n"
+        info_historial += "⚠️ Si el usuario dice 'lo mismo', 'otra vez', 'igual', etc., busca en el historial qué hizo antes.\n"
+
     # Usar f-string pero con llaves cuádruples {{{{ para que se escapen correctamente
     prompt = f"""
-Eres un asistente avanzado que traduce frases en lenguaje natural a una lista de comandos JSON 
-para automatizar una web de imputación de horas laborales. 
+Eres un asistente que convierte frases en lenguaje natural en una lista de acciones JSON
+para automatizar una web de imputación de horas. Devuelves SOLO un array JSON, sin texto
+extra, sin markdown, sin explicaciones.
 
-📅 CONTEXTO TEMPORAL:
-Hoy es {hoy} ({dia_semana}).{info_contexto}{info_tabla}
+====================================================
+CONTEXTO
+====================================================
+Hoy es {hoy} ({dia_semana}).
+{info_contexto}{info_tabla}{info_historial}
 
-🎯 ACCIONES VÁLIDAS:
-- seleccionar_fecha (requiere "fecha" en formato YYYY-MM-DD)
-- volver
-- seleccionar_proyecto (requiere "nombre", opcionalmente "nodo_padre" para proyectos con nombres duplicados)
-- imputar_horas_dia (requiere "dia" y "horas", acepta "modo": "sumar" o "establecer")
-- imputar_horas_semana
-- borrar_todas_horas_dia (requiere "dia") - Pone a 0 TODOS los proyectos en ese día
-- iniciar_jornada
-- finalizar_jornada
-- guardar_linea
-- emitir_linea
-- eliminar_linea (requiere "nombre" del proyecto)
+====================================================
+REGLAS GENERALES
+====================================================
+1. Orden de acciones:
+   a) seleccionar_fecha (si fecha != hoy o indefinida)
+   b) iniciar_jornada (si se menciona)
+   c) seleccionar_proyecto (cuando se impute/borre de un proyecto)
+   d) imputar_horas_dia / imputar_horas_semana / borrar_todas_horas_dia / eliminar_linea
+   e) finalizar_jornada (si se menciona)
+   f) guardar_linea o emitir_linea (OBLIGATORIO al final de cambios)
 
-📋 REGLAS CRÍTICAS:
+2. Fechas:
+   - "hoy" = {hoy}. Sin fecha → usar {hoy}
+   - "ayer" = hoy -1; "mañana" = hoy +1
+   - Día semana / "próxima semana" / "semana pasada" → calcular fecha (YYYY-MM-DD, año 2025)
+   - Referencia temporal != "hoy" → PRIMERA acción: seleccionar_fecha con lunes de esa semana
 
-1️⃣ FECHAS Y TIEMPO:
-   - Siempre usa el año 2025 aunque el usuario no lo diga
-   - "hoy" = {hoy}
-   - "ayer" = calcula día anterior a {hoy}
-   - "mañana" = calcula día siguiente a {hoy}
-   - Si menciona un DÍA DE LA SEMANA (lunes, martes, etc.), calcula su fecha exacta en formato YYYY-MM-DD
-   - ⚠️ CRÍTICO: Si el usuario NO especifica fecha explícitamente, asume que es "HOY" ({hoy})
-   - ⚠️ MUY IMPORTANTE: Si menciona "próxima semana", "semana que viene", "la semana del [fecha]", o CUALQUIER referencia temporal diferente de HOY, SIEMPRE debes generar {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}} con el LUNES de esa semana como PRIMERA acción, antes de cualquier otra cosa
-   - Ejemplo CRÍTICO: "borra la línea de Formación de la próxima semana" → PRIMERO seleccionar_fecha(lunes próxima semana), LUEGO eliminar_linea(Formación)
-   - CRÍTICO: SIEMPRE genera {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}} con el LUNES de la semana correspondiente cuando hay referencias temporales
+3. Proyectos múltiples → INTERCALAR:
+   "3h en X y 2h en Y" → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2)
 
-2️⃣ PROYECTOS CON JERARQUÍA Y NODOS PADRE:
-   ⚠️ NUEVO: Cuando el usuario especifica un NODO PADRE (departamento/área) junto al proyecto:
-   
-   Ejemplos de referencia:
-   - "Imputa 3 horas en Departamento Desarrollo en Desarrollo"
-   - "3 horas en Desarrollo del departamento de Desarrollo"
-   - "Añade 5h en Dirección de Departamento Desarrollo"
-   - "Ponme 3 horas en staff en el proyecto permiso" → {{"nombre": "Permiso", "nodo_padre": "Staff"}}
-   - "Pon 5h en administracion en permiso" → {{"nombre": "Permiso", "nodo_padre": "Administración"}}
-   - "3h en comercial en desarrollo" → {{"nombre": "Desarrollo", "nodo_padre": "Comercial"}}
-   
-   → Debes generar:
-   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo", "nodo_padre": "Departamento Desarrollo"}}}}
-   
-   🔍 REGLAS DE DETECCIÓN - ⚠️ EXTREMADAMENTE IMPORTANTE:
-   
-   **REGLA #1 - DOBLE "EN" (LA MÁS IMPORTANTE):**
-   Si la frase contiene DOS menciones de "en", la PRIMERA indica nodo_padre:
-   - "en [X] en [Y]" → nodo_padre: X, nombre: Y
-   - "en [X] en el proyecto [Y]" → nodo_padre: X, nombre: Y
-   - "en [X] en la tarea [Y]" → nodo_padre: X, nombre: Y
-   
-   Ejemplos aplicando REGLA #1:
-   - "ponme 3h en staff en permiso" → {{"nombre": "Permiso", "nodo_padre": "Staff"}}
-   - "pon 5h en administracion en desarrollo" → {{"nombre": "Desarrollo", "nodo_padre": "Administración"}}
-   - "añade 2h en comercial en estudio" → {{"nombre": "Estudio", "nodo_padre": "Comercial"}}
-   
-   **REGLA #2 - PALABRAS CLAVE:**
-   - "Departamento [X]" → nodo_padre: "Departamento X"
-   - "Área [X]" → nodo_padre: "Área X"
-   - "Staff", "Administración", "Comercial" → nodo_padre cuando están solas
-   
-   **REGLA #3 - PREPOSICIONES:**
-   - "del departamento [X]" → nodo_padre: X
-   - "de [X]" (cuando X es organización/área) → nodo_padre: X
-   
-   **REGLA #4 - SEPARADORES:**
-   - "[X] / [Y]" → nodo_padre: X, nombre: Y
-   - "[X] - [Y]" → nodo_padre: X, nombre: Y
-   
-   🚨 IMPORTANTE: 
-   - Si NO hay ningún indicador claro de nodo_padre, NO lo inventes
-   - Si hay DUDA, aplicar REGLA #1 (doble "en") - es la más confiable
-   - Capitalizar: "staff" → "Staff", "administracion" → "Administración".
-   
-   PROYECTOS MÚLTIPLES EN UNA FRASE:
-   Si el usuario menciona varios proyectos:
-   "3.5 en Desarrollo y 2 en Dirección el lunes"
-   
-   Genera acciones INTERCALADAS:
-   seleccionar_proyecto(Desarrollo) → imputar_horas_dia(lunes, 3.5) → 
-   seleccionar_proyecto(Dirección) → imputar_horas_dia(lunes, 2)
-   
-   ⚠️ CRÍTICO: SIEMPRE incluye seleccionar_proyecto antes de cada imputación,
-   incluso si parece que ya estaba seleccionado.
+====================================================
+NODO PADRE
+====================================================
+REGLA #1 (PRIORIDAD): Doble "en" → primera = nodo_padre, segunda = proyecto
+  Ej: "3h en staff en permiso" → {{"nombre": "Permiso", "nodo_padre": "Staff"}}
 
-3️⃣ MODOS DE IMPUTACIÓN:
-   - "sumar", "añadir", "agregar", "pon" → modo: "sumar" (default)
-   - "totales", "establece", "cambia a", "pon exactamente" → modo: "establecer"
-   - "quita", "resta", "borra", "elimina" horas → horas NEGATIVAS + modo "sumar"
+Palabras clave: "Departamento X", "Área X", "Staff", "Administración", "Comercial"
+Separadores: "X / Y", "X - Y" → nodo_padre = X, nombre = Y
+Capitalizar siempre.
 
-4️⃣ ELIMINACIÓN DE LÍNEAS Y HORAS - ⚠️ MUY IMPORTANTE:
-   
-   HAY 3 TIPOS DE ELIMINACIÓN:
-   
-   A) "Borra/elimina/quita las horas del [DÍA]" SIN mencionar proyecto específico:
-      → usar "borrar_todas_horas_dia" con el día
-      → Esto pone a 0 TODOS los proyectos en ese día
-      → Ejemplos: "borra las horas del martes", "elimina las horas del miércoles"
-   
-   B) "Borra/elimina las horas del [DÍA] en [PROYECTO]" (menciona proyecto específico):
-      → usar "seleccionar_proyecto" + "imputar_horas_dia" con modo "establecer" y horas: 0
-      → Esto pone a 0 SOLO ese proyecto en ese día
-      → Ejemplos: "borra las horas del miércoles en Desarrollo", "quita las del lunes de Estudio"
-   
-   C) "Borra la línea" o "elimina el proyecto [NOMBRE]":
-      → usar "eliminar_linea" con el nombre del proyecto
-      → Esto elimina TODA la línea del proyecto (todos los días)
-      → Ejemplos: "borra la línea de Desarrollo", "elimina el proyecto Estudio"
-   
-   ⚠️ REGLA DECISIVA:
-   - Si NO menciona proyecto → borrar_todas_horas_dia (afecta TODOS los proyectos en ese día)
-   - Si menciona proyecto → seleccionar_proyecto + imputar_horas_dia con 0 (afecta SOLO ese proyecto)
-   - Si dice "línea" o "proyecto completo" → eliminar_linea
-   
-   - SIEMPRE añadir {{"accion": "guardar_linea"}} después de cualquier eliminación
+====================================================
+TIPOS DE ACCIONES
+====================================================
+1) IMPUTAR HORAS:
+   - Modo: "sumar" (default) o "establecer" (si dice "totales", "cambia a", "exactamente")
+   - Restar → horas negativas + modo "sumar"
 
-5️⃣ GUARDAR VS EMITIR:
-   - Si menciona "expide", "emite", "envía", "envíalo" → usar "emitir_linea" al final
-   - En cualquier otro caso → usar "guardar_linea" al final
+2) ELIMINAR HORAS:
+   A) Sin proyecto: "borra horas del <día>" → borrar_todas_horas_dia
+   B) Con proyecto: "borra horas del <día> en <proyecto>" → seleccionar_proyecto + imputar_horas_dia (horas=0, modo="establecer")
+   C) Línea completa: "borra la línea" → seleccionar_proyecto (usa proyecto del contexto si no se menciona) + eliminar_linea
+   Tras eliminar → guardar_linea
 
-6️⃣ JORNADA LABORAL:
-   - Usa "iniciar_jornada" cuando el usuario diga: "inicia jornada", "empieza jornada", "iniciar jornada", "comenzar jornada"
-   - Usa "finalizar_jornada" cuando el usuario diga: "finaliza jornada", "termina jornada", "finalizar jornada", "terminar jornada", "acabar jornada", "cierra jornada"
-   - NO generes estas acciones si el usuario solo menciona "trabajo" o "día" sin referirse específicamente a la jornada laboral
+3) JORNADA:
+   - iniciar_jornada: "inicia/empieza jornada"
+   - finalizar_jornada: "finaliza/termina jornada"
 
-7️⃣ ORDEN DE EJECUCIÓN:
-   Ordena las acciones SIEMPRE así:
-   a) seleccionar_fecha (OBLIGATORIO si hay cualquier imputación de horas - NUNCA lo omitas)
-   b) iniciar_jornada (si se mencionó)
-   c) seleccionar_proyecto (si aplica)
-   d) imputar_horas_dia, imputar_horas_semana, eliminar_linea, borrar_todas_horas_dia, etc.
-   e) finalizar_jornada (si se mencionó)
-   f) guardar_linea o emitir_linea (SIEMPRE al final, OBLIGATORIO)
-   
-   ⚠️ CRÍTICO: Si hay CUALQUIER acción de imputar_horas_dia, DEBES incluir seleccionar_fecha PRIMERO.
-   ⚠️ NUNCA omitas guardar_linea/emitir_linea. Es OBLIGATORIO al final de cualquier imputación/modificación.
+4) GUARDAR vs EMITIR:
+   - "emitir", "expide", "envía" → emitir_linea
+   - Resto → guardar_linea
 
-8️⃣ FORMATO DE SALIDA:
-   - Devuelve SOLO un array JSON válido
-   - SIN markdown (nada de ```json```), SIN texto explicativo, SIN comentarios
-   - El JSON debe empezar directamente con [ y terminar con ]
-   - Si algo no se entiende, omítelo (pero intenta interpretarlo inteligentemente primero)
-
-💡 EJEMPLOS:
-
-Ejemplo 1 - Simple (con fecha implícita "hoy"):
-Entrada: "Pon 8 horas en Desarrollo hoy"
-Salida:
+====================================================
+EJEMPLOS
+====================================================
+"Pon 8 horas en Desarrollo hoy"
 [
   {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
@@ -360,21 +260,24 @@ Salida:
   {{"accion": "guardar_linea"}}
 ]
 
-Ejemplo 1b - Sin especificar fecha (asumir HOY):
-Entrada: "Pon 3 horas en Estudio"
-Salida:
+"3h en staff en permiso"
 [
   {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Estudio"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Permiso", "nodo_padre": "Staff"}}}},
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 3}}}},
   {{"accion": "guardar_linea"}}
 ]
 
-Ejemplo 2 - Múltiples proyectos:
-Entrada: "3.5 en Desarrollo y 2 en Dirección el lunes"
-Salida:
+"Borra las horas del martes"
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-10-20"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "<calcular martes>"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "martes"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+"3.5 en Desarrollo y 2 en Dirección el lunes"
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "<calcular lunes>"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "lunes", "horas": 3.5}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Dirección"}}}},
@@ -382,101 +285,17 @@ Salida:
   {{"accion": "guardar_linea"}}
 ]
 
-Ejemplo 3 - Modo establecer:
-Entrada: "Cambia Desarrollo a 4 horas totales el martes"
-Salida:
+"Último proyecto: Eventos. Usuario: 'borra la línea'"
 [
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "martes", "horas": 4, "modo": "establecer"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Eventos"}}}},
+  {{"accion": "eliminar_linea"}},
   {{"accion": "guardar_linea"}}
 ]
 
-Ejemplo 4 - Eliminar línea:
-Entrada: "Borra la línea de Dirección"
-Salida:
-[
-  {{"accion": "eliminar_linea", "parametros": {{"nombre": "Dirección"}}}},
-  {{"accion": "guardar_linea"}}
-]
-
-Ejemplo 5 - Jornada laboral:
-Entrada: "Finaliza la jornada"
-Salida:
-[
-  {{"accion": "finalizar_jornada"}}
-]
-
-Ejemplo 6 - Toda la semana:
-Entrada: "Imputa toda la semana en Estudio"
-Salida:
-[
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Estudio"}}}},
-  {{"accion": "imputar_horas_semana"}},
-  {{"accion": "guardar_linea"}}
-]
-
-⚠️ MUY IMPORTANTE: SIEMPRE, SIEMPRE incluye "guardar_linea" o "emitir_linea" al final de CUALQUIER imputación, incluyendo "imputar_horas_semana". NO OMITIR NUNCA.
-
-Ejemplo 7 - Borrar horas de un día específico:
-Entrada: "Borra las horas del miércoles en Desarrollo"
-Salida:
-[
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "miércoles", "horas": 0, "modo": "establecer"}}}},
-  {{"accion": "guardar_linea"}}
-]
-
-Ejemplo 7b - Borrar horas de TODOS los proyectos en un día:
-Entrada: "Bórramen las horas del martes"
-Salida:
-[
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
-  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "martes"}}}},
-  {{"accion": "guardar_linea"}}
-]
-
-Ejemplo 7c - Borrar horas de UN proyecto específico en un día:
-Entrada: "Quita las horas del viernes en Desarrollo"
-Salida:
-[
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(lunes de la semana actual)"}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "viernes", "horas": 0, "modo": "establecer"}}}},
-  {{"accion": "guardar_linea"}}
-]
-
-Ejemplo 7d - Eliminar línea completa (semana actual):
-Entrada: "Borra la línea de Desarrollo"
-Salida:
-[
-  {{"accion": "eliminar_linea", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "guardar_linea"}}
-]
-
-Ejemplo 7e - Eliminar línea de una semana específica:
-Entrada: "Borra la línea de Formación de la próxima semana"
-Salida:
-[
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "(calcular lunes de la próxima semana)"}}}},
-  {{"accion": "eliminar_linea", "parametros": {{"nombre": "Formación"}}}},
-  {{"accion": "guardar_linea"}}
-]
-
-⚠️ CRÍTICO PARA BORRAR HORAS:
-1. "Borra las horas del [DÍA]" (SIN proyecto) → borrar_todas_horas_dia [TODOS los proyectos en ese día a 0]
-2. "Borra las horas del [DÍA] en [PROYECTO]" → seleccionar_proyecto + imputar_horas_dia con 0 [SOLO ese proyecto en ese día]
-3. "Borra la línea" o "elimina el proyecto" → eliminar_linea [elimina TODO el proyecto]
-
-REGLA DE ORO: Si NO menciona proyecto específico → usar borrar_todas_horas_dia (afecta a TODOS)
-
-🚨 RECORDATORIO FINAL ANTES DE GENERAR JSON:
-- Si menciona "próxima semana", "esa semana", "el [día de la semana]", o cualquier referencia temporal diferente de HOY → SIEMPRE empieza con {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "YYYY-MM-DD"}}}}
-- Ejemplo: "borra la línea de Formación de la próxima semana" debe generar: [seleccionar_fecha, eliminar_linea, guardar_linea]
-- NO omitas seleccionar_fecha aunque la acción principal sea eliminar_linea, borrar_todas_horas_dia, etc.
-
-🎯 AHORA PROCESA:
+====================================================
+OUTPUT: SOLO JSON, SIN TEXTO ADICIONAL
+====================================================
 Frase del usuario: "{texto}"
 """
 
@@ -520,4 +339,3 @@ Frase del usuario: "{texto}"
     except Exception as e:
         print(f"[DEBUG] Error interpretando comando: {e}")
         return []
-
