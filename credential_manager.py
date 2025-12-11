@@ -62,8 +62,7 @@ class CredentialManager:
                 "⚠️ Necesito AMBAS credenciales para continuar.\n\n"
                 "📝 **Envíamelas así:**\n"
                 "```\n"
-                "Usuario: tu_usuario\n"
-                "Contraseña: tu_contraseña\n"
+                "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
                 "```"
             )
             return False, mensaje_incompleto

@@ -416,8 +416,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                         "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
                         "📝 Envíamelas así:\n"
                         "```\n"
-                        "Usuario: tu_usuario\n"
-                        "Contraseña: tu_contraseña\n"
+                        "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"   
                         "```"
                     )
                 })

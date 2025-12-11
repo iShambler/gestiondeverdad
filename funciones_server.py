@@ -441,10 +441,55 @@ def manejar_desambiguacion_multiple(texto: str, estado: dict, session, db: Sessi
     """
     Maneja desambiguación con múltiples opciones
     """
+    texto_lower = texto.lower().strip()
+    
+    # 🆕 Detectar CANCELACIÓN
+    palabras_cancelar = ['cancelar', 'cancel', 'nada', 'olvida', 'olvídalo', 'olvidalo',
+                        'equivocado', 'equivocada', 'me equivoqué', 'me equivoque',
+                        'error', 'no quiero', 'déjalo', 'dejalo', 'salir', 'sal']
+    
+    if any(palabra in texto_lower for palabra in palabras_cancelar):
+        print(f"[DEBUG] 🚫 Usuario canceló la desambiguación")
+        conversation_state_manager.limpiar_estado(user_id)
+        respuesta = "👍 Vale, no pasa nada. ¿En qué puedo ayudarte?"
+        registrar_peticion(db, usuario.id, texto, "cancelacion_desambiguacion", 
+                         canal=canal, respuesta=respuesta)
+        session.update_activity()
+        return respuesta
+    
+    # 🆕 Detectar BÚSQUEDA DE OTRO PROYECTO (ninguno/otro)
+    palabras_otro = ['ninguno', 'ninguna', 'otro', 'otra', 'diferente', 'busca', 
+                     'buscar', 'otro proyecto', 'uno diferente', 'distinto']
+    
+    if any(palabra in texto_lower for palabra in palabras_otro):
+        print(f"[DEBUG] 🔄 Usuario quiere buscar otro proyecto diferente")
+        
+        # Obtener información del estado
+        son_existentes = estado.get("coincidencias", [{}])[0].get('total_horas') is not None
+        
+        if son_existentes:
+            # Si son proyectos existentes, buscar en el sistema
+            print(f"[DEBUG] 📂 Proyectos existentes rechazados, buscando en sistema...")
+            return buscar_en_sistema(estado, session, db, usuario, user_id, canal, contexto, texto)
+        else:
+            # Si son del sistema, es ambiguo - no hay "otro"
+            conversation_state_manager.limpiar_estado(user_id)
+            nombre_proyecto = estado.get("nombre_proyecto", "ese proyecto")
+            respuesta = (
+                f"🤔 No hay más proyectos llamados '{nombre_proyecto}' en el sistema.\n\n"
+                f"Si ninguno de estos es el correcto, verifica el nombre exacto del proyecto "
+                f"que buscas."
+            )
+            registrar_peticion(db, usuario.id, texto, "desambiguacion_no_hay_otro", 
+                             canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
+    
+    # Intentar resolver normalmente
     coincidencia = resolver_respuesta_desambiguacion(texto, estado["coincidencias"])
     
     if coincidencia:
         return ejecutar_con_coincidencia(coincidencia, estado, session, db, usuario, 
                                         user_id, canal, contexto, texto)
     else:
-        return "❌ No he entendido tu respuesta. Por favor, indica el número (1, 2, 3...), el nombre del departamento/área o escribe cancela."
+        return "❌ No he entendido tu respuesta. Por favor:\n• Indica el **número** (1, 2, 3...)\n• El **nombre del departamento/área**\n• Escribe **'otro'** si ninguno es el correcto\n• Escribe **'cancelar'** para salir"

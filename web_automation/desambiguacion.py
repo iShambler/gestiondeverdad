@@ -201,12 +201,18 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"{idx}. `{coin['path_completo']}` - *{horas}h*\n"
-            mensaje += f"\n💬 *¿En cuál quieres añadir horas?* Responde con el número o nombre del departamento."
+            mensaje += f"\n💬 *¿En cuál quieres añadir horas?*\n"
+            mensaje += f"• Responde con el *número* o *nombre del departamento*\n"
+            mensaje += f"• Escribe *'ninguno'* o *'otro'* si quieres un proyecto diferente\n"
+            mensaje += f"• Escribe *'cancelar'* para abandonar"
         else:
             mensaje = f"🤔 He encontrado *{len(coincidencias)}* proyectos llamados *'{nombre_proyecto}'*:\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 mensaje += f"{idx}. `{coin['path_completo']}`\n"
-            mensaje += f"\n💬 *¿En cuál quieres imputar?* Responde con el nombre del departamento/área o el número."
+            mensaje += f"\n💬 *¿En cuál quieres imputar?*\n"
+            mensaje += f"• Responde con el *número* o *nombre del departamento*\n"
+            mensaje += f"• Escribe *'ninguno'* o *'otro'* si quieres un proyecto diferente\n"
+            mensaje += f"• Escribe *'cancelar'* para abandonar"
     
     elif canal == "whatsapp":
         if son_existentes:
@@ -214,12 +220,18 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"{idx}. {coin['path_completo']} - *{horas}h*\n"
-            mensaje += f"\n💬 *¿En cuál quieres añadir horas?*"
+            mensaje += f"\n💬 *¿En cuál quieres añadir horas?*\n"
+            mensaje += f"• Número o nombre del departamento\n"
+            mensaje += f"• 'ninguno' o 'otro' para buscar diferente\n"
+            mensaje += f"• 'cancelar' para salir"
         else:
             mensaje = f"🤔 *He encontrado {len(coincidencias)} proyectos llamados '{nombre_proyecto}'*:\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 mensaje += f"{idx}. {coin['path_completo']}\n"
-            mensaje += f"\n💬 *¿En cuál quieres imputar?*\nResponde con el nombre del departamento/área o el número."
+            mensaje += f"\n💬 *¿En cuál quieres imputar?*\n"
+            mensaje += f"• Número o nombre del departamento\n"
+            mensaje += f"• 'ninguno' o 'otro' para buscar diferente\n"
+            mensaje += f"• 'cancelar' para salir"
     
     else:  # webapp
         if son_existentes:
@@ -227,12 +239,18 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"**{idx}.** {coin['path_completo']} - **{horas}h**\n"
-            mensaje += f"\n💬 **¿En cuál quieres añadir horas?** Responde con el número o el nombre del departamento."
+            mensaje += f"\n💬 **¿En cuál quieres añadir horas?**\n"
+            mensaje += f"• Responde con el **número** o **nombre del departamento**\n"
+            mensaje += f"• Escribe **'ninguno'** o **'otro'** si quieres un proyecto diferente\n"
+            mensaje += f"• Escribe **'cancelar'** para abandonar"
         else:
             mensaje = f"🤔 He encontrado **{len(coincidencias)}** proyectos llamados **'{nombre_proyecto}'**:\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 mensaje += f"**{idx}.** {coin['path_completo']}\n"
-            mensaje += f"\n💬 **¿En cuál quieres imputar?** Responde con el nombre del departamento/área o el número."
+            mensaje += f"\n💬 **¿En cuál quieres imputar?**\n"
+            mensaje += f"• Responde con el **número** o **nombre del departamento**\n"
+            mensaje += f"• Escribe **'ninguno'** o **'otro'** si quieres un proyecto diferente\n"
+            mensaje += f"• Escribe **'cancelar'** para abandonar"
     
     return mensaje
 
