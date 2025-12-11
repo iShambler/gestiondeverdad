@@ -26,8 +26,24 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
     if not acciones_ejecutadas:
         return "No he entendido qué quieres que haga. ¿Podrías reformularlo?"
     
+    # 🔥 Extraer fecha si viene en el formato [FECHA:dd/mm/yyyy]
+    fecha_imputacion = None
+    acciones_limpias = []
+    for acc in acciones_ejecutadas:
+        if "[FECHA:" in acc:
+            # Extraer fecha
+            import re
+            match = re.search(r'\[FECHA:(\d{2}/\d{2}/\d{4})\]', acc)
+            if match:
+                fecha_imputacion = match.group(1)
+            # Limpiar el mensaje
+            acc_limpia = re.sub(r'\[FECHA:[^\]]+\]', '', acc).strip()
+            acciones_limpias.append(acc_limpia)
+        else:
+            acciones_limpias.append(acc)
+    
     # Crear resumen de acciones
-    resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_ejecutadas])
+    resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_limpias])
     
     # 🆕 Si hay nodo_padre en el contexto (Y NO es __buscar__), añadirlo a la información
     info_adicional = ""
@@ -37,6 +53,10 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
         if nodo_padre != "__buscar__":
             proyecto = contexto.get("proyecto_actual", "proyecto")
             info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Debes mencionar esto en tu respuesta."
+    
+    # 🔥 Si hay fecha de imputación, añadirla
+    if fecha_imputacion:
+        info_adicional += f"\n\n📅 FECHA IMPORTANTE: Las horas se imputaron para el día {fecha_imputacion}. Debes mencionar esta fecha EXACTA en tu respuesta, NO menciones 'el lunes de esa semana' ni ningún otro día."
     
     prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
 
@@ -72,8 +92,8 @@ Respuesta:"""
         return respuesta
     
     except Exception as e:
-        # Fallback: si falla GPT, unir las respuestas simples
-        return " · ".join(acciones_ejecutadas)
+        # Fallback: si falla GPT, unir las respuestas simples (ya limpias)
+        return " · ".join(acciones_limpias)
 
 
 def responder_conversacion(texto):

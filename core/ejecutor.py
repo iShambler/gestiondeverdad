@@ -53,6 +53,8 @@ def ejecutar_accion(driver, wait, orden, contexto):
     elif accion == "seleccionar_fecha":
         try:
             fecha = datetime.fromisoformat(orden["parametros"]["fecha"])
+            # 🔥 Guardar fecha en contexto para usarla después
+            contexto["fecha_seleccionada"] = fecha
             return seleccionar_fecha(driver, fecha, contexto)  # 🆕 Pasar contexto
         except Exception as e:
             return f"No he podido procesar la fecha: {e}"
@@ -178,12 +180,29 @@ def ejecutar_accion(driver, wait, orden, contexto):
                     "friday": "viernes"
                 }
                 dia = dias_map.get(dia, dia)
+                # 🔥 GUARDAR FECHA FORMATEADA PARA EL MENSAJE
+                fecha_formateada = fecha_obj.strftime("%d/%m/%Y")
             except Exception:
                 dia = dia_param.lower()
+                # 🔥 Usar fecha del contexto si existe
+                fecha_contexto = contexto.get("fecha_seleccionada")
+                if fecha_contexto:
+                    fecha_formateada = fecha_contexto.strftime("%d/%m/%Y")
+                else:
+                    # Fallback: usar hoy
+                    fecha_formateada = datetime.now().strftime("%d/%m/%Y")
+            
+            # 🆕 Guardar día en contexto
+            user_id = contexto.get("user_id")
+            if user_id:
+                from conversation_state import conversation_state_manager
+                conversation_state_manager.guardar_ultimo_proyecto(user_id, proyecto, nodo_padre, dia)
             
             # 🆕 Intentar imputar, si falla por StaleElement, re-buscar proyecto
             try:
-                return imputar_horas_dia(driver, wait, dia, horas, fila, proyecto, modo)
+                resultado = imputar_horas_dia(driver, wait, dia, horas, fila, proyecto, modo)
+                # 🔥 AÑADIR FECHA AL RESULTADO para que el response generator la use
+                return f"{resultado} [FECHA:{fecha_formateada}]"
             except Exception as e:
                 if "stale element" in str(e).lower():
                     print(f"[DEBUG] 🔄 Elemento obsoleto detectado, re-buscando proyecto '{proyecto}'...")
@@ -200,7 +219,8 @@ def ejecutar_accion(driver, wait, orden, contexto):
                     if fila_nueva:
                         contexto["fila_actual"] = fila_nueva
                         print(f"[DEBUG] ✅ Proyecto re-encontrado, reintentando imputación...")
-                        return imputar_horas_dia(driver, wait, dia, horas, fila_nueva, proyecto, modo)
+                        resultado = imputar_horas_dia(driver, wait, dia, horas, fila_nueva, proyecto, modo)
+                        return f"{resultado} [FECHA:{fecha_formateada}]"
                     else:
                         return f"❌ No he podido re-encontrar el proyecto '{proyecto}': {mensaje}"
                 else:

@@ -212,8 +212,9 @@ REGLAS GENERALES
 2. Fechas:
    - "hoy" = {hoy}. Sin fecha → usar {hoy}
    - "ayer" = hoy -1; "mañana" = hoy +1
-   - Día semana / "próxima semana" / "semana pasada" → calcular fecha (YYYY-MM-DD, año 2025)
-   - Referencia temporal != "hoy" → PRIMERA acción: seleccionar_fecha con lunes de esa semana
+   - Día semana / "próxima semana" / "semana pasada" → calcular fecha EXACTA del día (YYYY-MM-DD, año 2025)
+   - IMPORTANTE: Si dice "el martes", calcula la fecha del MARTES, NO del lunes de esa semana
+   - Referencia temporal != "hoy" → PRIMERA acción: seleccionar_fecha con la fecha EXACTA del día mencionado
 
 3. Proyectos múltiples → INTERCALAR:
    "3h en X y 2h en Y" → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2)
@@ -270,18 +271,18 @@ EJEMPLOS
 
 "Borra las horas del martes"
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "<calcular martes>"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-09"}}}},
   {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "martes"}}}},
   {{"accion": "guardar_linea"}}
 ]
 
 "3.5 en Desarrollo y 2 en Dirección el lunes"
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "<calcular lunes>"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-08"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "lunes", "horas": 3.5}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-08", "horas": 3.5}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Dirección"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "lunes", "horas": 2}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-08", "horas": 2}}}},
   {{"accion": "guardar_linea"}}
 ]
 
