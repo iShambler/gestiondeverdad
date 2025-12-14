@@ -656,7 +656,13 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
                 campo.send_keys(Keys.DELETE)
                 time.sleep(0.1)
                 campo.send_keys(str(total))
-                time.sleep(0.3)
+                
+                # 🆕 CRÍTICO: Hacer clic fuera del input para que refresque la tabla
+                # Esto evita que el botón guardar se desactualice
+                time.sleep(0.2)
+                campo.send_keys(Keys.TAB)  # Salir del campo con TAB
+                time.sleep(0.5)  # Dar tiempo a que la tabla se actualice
+                
                 proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
                 print(f"[DEBUG] ✅ Establecidas {total}h el {dia} {proyecto_texto}")
                 return f"He establecido {total}h el {dia} {proyecto_texto}"
@@ -667,7 +673,13 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
                 campo.send_keys(Keys.DELETE)
                 time.sleep(0.1)
                 campo.send_keys(str(total))
-                time.sleep(0.3)
+                
+                # 🆕 CRÍTICO: Hacer clic fuera del input para que refresque la tabla
+                # Esto evita que el botón guardar se desactualice
+                time.sleep(0.2)
+                campo.send_keys(Keys.TAB)  # Salir del campo con TAB
+                time.sleep(0.5)  # Dar tiempo a que la tabla se actualice
+                
                 proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
                 accion = "añadido" if nuevas_horas > 0 else "restado"
                 
@@ -720,8 +732,18 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
                     campo.send_keys(str(valor))
                     
                     dias_imputados.append(f"{dia_nombre} ({valor}h)")
-                    time.sleep(0.2)
+                    time.sleep(0.1)
             except Exception:
+                pass
+        
+        # 🆕 CRÍTICO: Después de modificar TODOS los días, salir del último input
+        # para que la tabla se actualice correctamente antes de guardar
+        if dias_imputados:
+            try:
+                # Enviar TAB para salir del último campo
+                driver.switch_to.active_element.send_keys(Keys.TAB)
+                time.sleep(0.5)  # Dar tiempo a que la tabla se actualice
+            except:
                 pass
 
         if dias_imputados:
@@ -795,13 +817,22 @@ def borrar_todas_horas_dia(driver, wait, dia):
                         campo.send_keys(Keys.CONTROL + "a")
                         campo.send_keys("0")
                         proyectos_modificados.append(f"{nombre_corto} ({valor_actual}h)")
-                        time.sleep(0.2)
+                        time.sleep(0.1)
             
             except Exception as e:
                 print(f"[DEBUG] ⚠️ Error procesando línea {idx+1}: {e}")
                 continue
         
+        # 🆕 CRÍTICO: Después de modificar todos los campos, salir del último input
+        # para que la tabla se actualice correctamente antes de guardar
         if proyectos_modificados:
+            try:
+                # Enviar TAB para salir del último campo
+                driver.switch_to.active_element.send_keys(Keys.TAB)
+                time.sleep(0.5)  # Dar tiempo a que la tabla se actualice
+            except:
+                pass
+            
             proyectos_texto = ", ".join(proyectos_modificados)
             return f"He borrado las horas del {dia} en: {proyectos_texto}"
         else:

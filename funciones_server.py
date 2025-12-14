@@ -80,8 +80,8 @@ def realizar_login_inicial(session, user_id: str, username: str, password: str,
                         "Necesito tus credenciales de GestiónITT.\n\n"
                         "📝 **Envíamelas así:**\n"
                         "```\n"
-                        "Usuario: tu_usuario\n"
-                        "Contraseña: tu_contraseña\n"
+                        "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
+                        
                         "```\n\n"
                         "🔒 **Tranquilo:** Tus credenciales se guardan cifradas.\n\n"
                         "⚠️ Si no quieres cambiarlas, escribe 'cancelar'."
