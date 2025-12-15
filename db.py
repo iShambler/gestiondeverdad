@@ -1,4 +1,6 @@
 # db.py
+from dotenv import load_dotenv
+load_dotenv() 
 from sqlalchemy import (
     create_engine, Column, String, Integer, Text, DateTime, 
     ForeignKey, JSON, Boolean, UniqueConstraint
@@ -34,11 +36,15 @@ Base = declarative_base()
 # ==============================================================
 
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+
 if not ENCRYPTION_KEY:
-    ENCRYPTION_KEY = Fernet.generate_key().decode()
-    print(f"[INFO] Se generó una nueva ENCRYPTION_KEY: {ENCRYPTION_KEY}")
+    raise RuntimeError(
+        "❌ ENCRYPTION_KEY no definida. "
+        "Nunca se debe generar automáticamente."
+    )
 
 fernet = Fernet(ENCRYPTION_KEY.encode())
+
 
 def cifrar(texto: str) -> str:
     """Cifra texto plano."""

@@ -1,6 +1,10 @@
 import os
+
+from dotenv import load_dotenv 
+
+load_dotenv()
+
 import re
-from dotenv import load_dotenv  
 import requests
 from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
