@@ -17,7 +17,7 @@ from core.ejecutor import ejecutar_lista_acciones
 from core.consultas import consultar_dia, consultar_semana
 
 
-def procesar_mensaje(driver, wait, texto, contexto=None):
+def procesar_mensaje(driver, wait, texto, contexto=None, user_id="local_user"):
     """
     Procesa un mensaje del usuario y ejecuta las acciones correspondientes.
     
@@ -32,6 +32,7 @@ def procesar_mensaje(driver, wait, texto, contexto=None):
         wait: WebDriverWait configurado
         texto: Mensaje del usuario
         contexto: Diccionario de contexto (opcional)
+        user_id: ID del usuario para mantener contexto de conversación (opcional)
         
     Returns:
         str: Respuesta generada para el usuario
@@ -44,7 +45,7 @@ def procesar_mensaje(driver, wait, texto, contexto=None):
     
     # 2️⃣ Conversación general
     if tipo_mensaje == "conversacion":
-        return responder_conversacion(texto)
+        return responder_conversacion(texto, user_id)  # 🆕 Pasar user_id
     
     # 3️⃣ Consulta de información
     if tipo_mensaje == "consulta":

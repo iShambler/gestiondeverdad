@@ -180,7 +180,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
 
         # CONVERSACIÓN
         if tipo_mensaje == "conversacion":
-            respuesta = responder_conversacion(texto)
+            respuesta = responder_conversacion(texto, user_id)  # 🆕 Pasar user_id
             registrar_peticion(db, usuario.id, texto, "conversacion", canal=canal, respuesta=respuesta)
             session.update_activity()
             return respuesta
@@ -469,8 +469,16 @@ async def slack_events(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/stats")
 async def stats():
-    """Estadísticas del pool de navegadores"""
-    return JSONResponse(browser_pool.get_stats())
+    """ Estadísticas del pool de navegadores y historiales conversacionales"""
+    from ai import obtener_stats_historiales
+    
+    browser_stats = browser_pool.get_stats()
+    conversation_stats = obtener_stats_historiales()
+    
+    return JSONResponse({
+        "browser_pool": browser_stats,
+        "conversaciones": conversation_stats
+    })
 
 
 @app.post("/close-session/{user_id}")

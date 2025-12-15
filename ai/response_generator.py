@@ -7,8 +7,8 @@ from datetime import datetime
 from config import settings
 
 
-# Historial conversacional para GPT (global para mantener contexto)
-historial_conversacion = []
+# 🆕 Historial conversacional POR USUARIO (antes era global)
+historiales_conversacion = {}  # user_id -> lista de mensajes
 
 
 def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=None):
@@ -96,33 +96,41 @@ Respuesta:"""
         return " · ".join(acciones_limpias)
 
 
-def responder_conversacion(texto):
+def responder_conversacion(texto, user_id="default"):
     """
     Usa GPT para responder a saludos, preguntas generales, etc.
-    Mantiene contexto de la conversación.
+    Mantiene contexto de la conversación POR USUARIO.
     
     Args:
         texto: Mensaje del usuario
+        user_id: ID del usuario (requerido para mantener contexto separado)
         
     Returns:
         str: Respuesta conversacional natural
     """
-    global historial_conversacion
+    global historiales_conversacion
+    
+    # 🆕 Crear historial para este usuario si no existe
+    if user_id not in historiales_conversacion:
+        historiales_conversacion[user_id] = []
+    
+    historial_usuario = historiales_conversacion[user_id]
     
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
     
     # Añadir mensaje del usuario al historial
-    historial_conversacion.append({"role": "user", "content": texto})
+    historial_usuario.append({"role": "user", "content": texto})
     
     # Limitar historial a últimos 20 mensajes para no consumir muchos tokens
-    if len(historial_conversacion) > 20:
-        historial_conversacion = historial_conversacion[-20:]
+    if len(historial_usuario) > 20:
+        historial_usuario = historial_usuario[-20:]
+        historiales_conversacion[user_id] = historial_usuario
     
     # System prompt solo la primera vez o si es un saludo explícito
     es_saludo_explicito = any(palabra in texto.lower() for palabra in ["hola", "buenos días", "buenas tardes", "buenas noches", "hey", "qué tal"])
     
-    if len(historial_conversacion) <= 1 or es_saludo_explicito:
+    if len(historial_usuario) <= 1 or es_saludo_explicito:
         system_content = f"""Eres un asistente virtual amigable especializado en gestión de imputación de horas laborales.
 
 Hoy es {hoy} ({dia_semana}).
@@ -145,15 +153,16 @@ Si te pregunta sobre algo externo (noticias, clima, información general), respo
             model=settings.OPENAI_MODEL_MINI,
             messages=[
                 {"role": "system", "content": system_content}
-            ] + historial_conversacion,
+            ] + historial_usuario,
             temperature=0.7,
             max_tokens=200
         )
         
         respuesta = response.choices[0].message.content.strip()
         
-        # Añadir respuesta al historial
-        historial_conversacion.append({"role": "assistant", "content": respuesta})
+        # Añadir respuesta al historial del usuario
+        historial_usuario.append({"role": "assistant", "content": respuesta})
+        historiales_conversacion[user_id] = historial_usuario
         
         return respuesta
     
@@ -177,3 +186,51 @@ def generar_resumen_natural(info_horas, consulta_usuario):
     # Convertir saltos de línea en <br> para HTML
     info_con_html = info_horas.replace("\n", "<br>")
     return info_con_html
+
+
+def limpiar_historiales_antiguos(minutos_inactividad=30):
+    """
+    Limpia historiales de usuarios que llevan mucho tiempo sin actividad.
+    Debe ser llamado periódicamente para evitar acumulación de memoria.
+    
+    Args:
+        minutos_inactividad: Minutos de inactividad antes de limpiar historial
+        
+    Returns:
+        int: Número de historiales limpiados
+    """
+    # Por ahora no implementamos timestamp, solo limpiamos si hay muchos usuarios
+    global historiales_conversacion
+    
+    # Si hay más de 100 usuarios, limpiar los más antiguos
+    if len(historiales_conversacion) > 100:
+        # Mantener solo los últimos 50
+        usuarios = list(historiales_conversacion.keys())
+        usuarios_a_eliminar = usuarios[:-50]
+        
+        for user_id in usuarios_a_eliminar:
+            del historiales_conversacion[user_id]
+        
+        print(f"[CONVERSACION] 🧹 Limpiados {len(usuarios_a_eliminar)} historiales antiguos")
+        return len(usuarios_a_eliminar)
+    
+    return 0
+
+
+def obtener_stats_historiales():
+    """
+    Obtiene estadísticas de los historiales conversacionales.
+    
+    Returns:
+        dict: Estadísticas
+    """
+    global historiales_conversacion
+    
+    total_usuarios = len(historiales_conversacion)
+    total_mensajes = sum(len(historial) for historial in historiales_conversacion.values())
+    
+    return {
+        "usuarios_con_historial": total_usuarios,
+        "total_mensajes": total_mensajes,
+        "promedio_mensajes_por_usuario": round(total_mensajes / total_usuarios, 2) if total_usuarios > 0 else 0
+    }

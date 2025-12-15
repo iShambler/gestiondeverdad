@@ -64,29 +64,8 @@ class Constants:
     TIPO_COMANDO = "comando"
     TIPO_CONSULTA = "consulta"
     TIPO_CONVERSACION = "conversacion"
-    
-    # Keywords para detección rápida
-    KEYWORDS_JORNADA = [
-        "iniciar jornada", "empezar jornada", "comenzar jornada", "inicia jornada",
-        "finalizar jornada", "terminar jornada", "acabar jornada", "finaliza jornada", 
-        "termina jornada", "acaba jornada",
-        "finaliza el dia", "termina el dia", "acaba el dia",
-        "finalizar el dia", "terminar el dia", "acabar el dia",
-        "fin de jornada", "cierra jornada"
-    ]
-    
-    KEYWORDS_IMPUTACION = [
-        "imput", "pon", "añade", "agrega", "quita", "resta", "borra",
-        "horas", "proyecto", "guardar", "emitir"
-    ]
-    
-    KEYWORDS_CONSULTA = [
-        "qué tengo", "que tengo", "dime", "qué he imputado", "que he imputado",
-        "cuántas", "cuantas", "cuántas horas", "cuantas horas",
-        "ver", "mostrar", "dame", "info", "consulta", 
-        "resumen", "resume", "resumíme", "qué hice", "que hice",
-        "he hecho", "tengo hecho"
-    ]
+    TIPO_AYUDA = "ayuda"
+    TIPO_LISTAR_PROYECTOS = "listar_proyectos"
     
     # ========================================
     # 📊 ESTADOS Y MODOS
