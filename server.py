@@ -10,6 +10,8 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from db import SessionLocal
+import traceback
 
 # Importaciones de módulos
 from ai import clasificar_mensaje, interpretar_con_gpt, responder_conversacion, interpretar_consulta
@@ -46,6 +48,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
+GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
 
 # ============================================================================
 # FUNCIÓN PRINCIPAL DE PROCESAMIENTO
@@ -303,6 +307,9 @@ async def chat(request: Request, db: Session = Depends(get_db)):
     password = data.get("password", "").strip()
     agente_co_user_id = data.get("agente_co_user_id", "").strip()
     
+    # ---------------------------------------------------------
+    # LOGIN DESDE AGENTE CO (WEBAPP)
+    # ---------------------------------------------------------
     if username and password and agente_co_user_id:
         user_id = agente_co_user_id
         loop = asyncio.get_event_loop()
@@ -350,8 +357,10 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 "success": False,
                 "error": f"Error al verificar credenciales: {str(e)}"
             }, status_code=500)
-    
-    # WhatsApp
+
+    # ---------------------------------------------------------
+    # WHATSAPP
+    # ---------------------------------------------------------
     if wa_id:
         if not texto:
             return JSONResponse({"reply": "No he recibido ningún mensaje."})
@@ -361,6 +370,9 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         if not usuario_wa:
             usuario_wa = crear_usuario(db, wa_id=wa_id, canal="whatsapp")
         
+        # -----------------------------------------------------
+        # REGISTRO DE CREDENCIALES SI NO EXISTEN
+        # -----------------------------------------------------
         if not usuario_wa.username_intranet or not usuario_wa.password_intranet:
             credenciales = extraer_credenciales_con_gpt(texto)
             
@@ -377,7 +389,11 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 try:
                     success, mensaje = await loop.run_in_executor(
                         executor,
-                        lambda: hacer_login_con_lock(session, credenciales["username"], credenciales["password"])
+                        lambda: hacer_login_con_lock(
+                            session,
+                            credenciales["username"],
+                            credenciales["password"]
+                        )
                     )
                     
                     if success:
@@ -388,8 +404,14 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                         )
                         db.commit()
                         
-                        registrar_peticion(db, usuario_wa.id, texto, "registro_whatsapp", 
-                                         canal="whatsapp", respuesta="Credenciales guardadas exitosamente")
+                        registrar_peticion(
+                            db,
+                            usuario_wa.id,
+                            texto,
+                            "registro_whatsapp",
+                            canal="whatsapp",
+                            respuesta="Credenciales guardadas exitosamente"
+                        )
                         
                         return JSONResponse({
                             "reply": (
@@ -416,55 +438,102 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                         "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
                         "📝 Envíamelas así:\n"
                         "```\n"
-                        "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"   
+                        "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
                         "```"
                     )
                 })
-        
-        respuesta = await procesar_mensaje_usuario(texto, wa_id, db, canal="whatsapp")
+        # 🔐 ASEGURAR LOGIN Y NAVEGACIÓN BASE
+        session = browser_pool.get_session(wa_id)
+        if not session or not session.driver:
+            return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador."})
+
+        username, password = obtener_credenciales(db, wa_id, canal="whatsapp")
+        if username and password:
+            success, mensaje, debe_continuar = realizar_login_inicial(
+                session,
+                wa_id,
+                username,
+                password,
+                usuario_wa,
+                texto,
+                db,
+                "whatsapp"
+            )
+
+            if not debe_continuar:
+                return JSONResponse({"reply": mensaje})
+
+        # -----------------------------------------------------
+        # ⏳ MENSAJE PREVIO + BACKGROUND TASK (WHATSAPP)
+        # -----------------------------------------------------
+        tipo_mensaje = clasificar_mensaje(texto)
+
+        if tipo_mensaje in ("consulta", "comando", "listar_proyectos"):
+            # 🔥 Lanzar procesamiento en background (SIN db)
+            asyncio.create_task(
+                procesar_whatsapp_en_background(texto, wa_id)
+            )
+
+            # 👇 RESPUESTA INMEDIATA (WhatsApp)
+            return JSONResponse({
+                "reply": "⏳ *Estoy trabajando en ello…*"
+            })
+
+        # -----------------------------------------------------
+        # MENSAJES NORMALES (CONVERSACIÓN, AYUDA, ETC.)
+        # -----------------------------------------------------
+        respuesta = await procesar_mensaje_usuario(
+            texto, wa_id, db, canal="whatsapp"
+        )
         return JSONResponse({"reply": respuesta})
+
     
-    # Procesamiento normal
-    if not texto:
-        return JSONResponse({"reply": "No he recibido ningún mensaje."})
-    
-    respuesta = await procesar_mensaje_usuario(texto, user_id, db, canal="webapp")
-    return JSONResponse({"reply": respuesta})
+async def procesar_whatsapp_en_background(texto: str, wa_id: str):
+    db = SessionLocal()
+    try:
+        respuesta = await procesar_mensaje_usuario(
+            texto, wa_id, db, canal="whatsapp"
+        )
+
+        enviar_whatsapp(wa_id, respuesta)
+
+    except Exception:
+        print("[BACKGROUND ERROR] ❌ Excepción en background:")
+        traceback.print_exc()  # 🔥 ESTO ES CLAVE
+
+        enviar_whatsapp(
+            wa_id,
+            "⚠️ Ha ocurrido un error procesando tu solicitud."
+        )
+
+    finally:
+        db.close()
 
 
-# Endpoint Slack Events
-eventos_procesados = deque(maxlen=1000)
+def enviar_whatsapp(wa_id: str, mensaje: str):
+    """
+    Envía un mensaje de WhatsApp usando Green API
+    """
+    try:
+        url = (
+            f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}"
+            f"/sendMessage/{GREEN_API_TOKEN}"
+        )
 
-@app.post("/slack/events")
-async def slack_events(request: Request, db: Session = Depends(get_db)):
-    data = await request.json()
+        payload = {
+            "chatId": f"{wa_id}@c.us",
+            "message": mensaje
+        }
 
-    if "challenge" in data:
-        return JSONResponse({"challenge": data["challenge"]})
+        response = requests.post(url, json=payload, timeout=15)
 
-    event_id = data.get("event_id")
-    if event_id in eventos_procesados:
-        return JSONResponse({"status": "duplicate_ignored"})
-    eventos_procesados.append(event_id)
+        if response.status_code != 200:
+            print(f"[GREEN API] ❌ Error {response.status_code}: {response.text}")
+        else:
+            print(f"[GREEN API] ✅ Mensaje enviado a {wa_id}")
 
-    event = data.get("event", {})
-    texto = event.get("text", "")
-    user = event.get("user", "")
-    bot_id = event.get("bot_id", None)
-    channel = event.get("channel", "")
-
-    if bot_id or not texto:
-        return JSONResponse({"status": "ignored"})
-    
-    respuesta = await procesar_mensaje_usuario(texto, user, db, canal="slack")
-    
-    requests.post(
-        SLACK_API_URL,
-        headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
-        json={"channel": channel, "text": respuesta}
-    )
-
-    return JSONResponse({"status": "ok"})
+    except Exception as e:
+        print(f"[GREEN API] ❌ Excepción enviando mensaje: {e}")
 
 
 @app.get("/stats")
