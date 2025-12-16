@@ -35,20 +35,41 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
     Returns:
         str: Mensaje de confirmación o error
     """
-    # Detectar si estamos en la pantalla de imputación
+    # 🆕 NUEVO: Solo volver atrás si cambiamos de SEMANA
+    fecha_anterior = contexto.get("fecha_seleccionada") if contexto else None
+    
+    print(f"[DEBUG] 📅 Seleccionando fecha: {fecha_obj.strftime('%d/%m/%Y')}")
+    print(f"[DEBUG] 📅 Fecha anterior en contexto: {fecha_anterior.strftime('%d/%m/%Y') if fecha_anterior else 'None'}")
+    
+    # Calcular lunes de cada semana
+    lunes_nuevo = lunes_de_semana(fecha_obj)
+    lunes_anterior = lunes_de_semana(fecha_anterior) if fecha_anterior else None
+    
+    print(f"[DEBUG] 📅 Lunes nuevo: {lunes_nuevo.strftime('%d/%m/%Y')}")
+    print(f"[DEBUG] 📅 Lunes anterior: {lunes_anterior.strftime('%d/%m/%Y') if lunes_anterior else 'None'}")
+    print(f"[DEBUG] 📅 ¿Son iguales? {lunes_nuevo == lunes_anterior if lunes_anterior else 'N/A'}")
+    
+    # 🔥 Solo volver si estamos en pantalla de imputación Y cambiamos de semana
+    debe_volver = False
+    
     try:
         btn_volver = driver.find_element(By.CSS_SELECTOR, Selectors.VOLVER)
         if btn_volver.is_displayed():
-            print("[DEBUG] 🔙 Detectada pantalla de imputación, volviendo para cambiar fecha...")
-            btn_volver.click()
-            time.sleep(2)
-            
-            # 🆕 CRÍTICO: Limpiar el contexto porque todos los elementos quedan obsoletos
-            if contexto:
-                print("[DEBUG] 🧹 Limpiando contexto tras volver atrás...")
-                contexto["fila_actual"] = None
-                contexto["proyecto_actual"] = None
-                contexto["nodo_padre_actual"] = None
+            # 🆕 Solo volver si cambiamos de semana (o es la primera vez)
+            if lunes_anterior is None or lunes_nuevo != lunes_anterior:
+                print(f"[DEBUG] 🔙 Cambiando de semana ({lunes_anterior.strftime('%d/%m') if lunes_anterior else 'inicio'} → {lunes_nuevo.strftime('%d/%m')}), volviendo atrás...")
+                btn_volver.click()
+                time.sleep(2)
+                debe_volver = True
+                
+                # 🆕 Limpiar el contexto porque todos los elementos quedan obsoletos
+                if contexto:
+                    print("[DEBUG] 🧹 Limpiando contexto tras volver atrás...")
+                    contexto["fila_actual"] = None
+                    contexto["proyecto_actual"] = None
+                    contexto["nodo_padre_actual"] = None
+            else:
+                print(f"[DEBUG] ✅ Misma semana ({lunes_nuevo.strftime('%d/%m')}), NO volver atrás, solo cambiar fecha")
     except:
         # No hay botón volver, ya estamos donde debemos
         pass

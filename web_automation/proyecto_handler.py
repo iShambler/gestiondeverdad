@@ -546,7 +546,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         return (None, f"No he podido seleccionar el proyecto '{nombre_proyecto}': {e}", False, [])
 
 
-def eliminar_linea_proyecto(driver, wait, nombre_proyecto):
+def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
     """
     Elimina una línea de proyecto completa.
     Busca el proyecto, encuentra su botón de eliminar y lo pulsa.
@@ -555,53 +555,98 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto):
         driver: WebDriver de Selenium
         wait: WebDriverWait configurado
         nombre_proyecto: Nombre del proyecto a eliminar
+        fila_contexto: (Opcional) Fila <tr> del proyecto ya seleccionado en el contexto
         
     Returns:
         str: Mensaje de confirmación o error
     """
     try:
-        # Buscar el proyecto en la tabla
-        selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
+        fila = None
         
-        if not selects:
-            selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
-        
-        print(f"[DEBUG] 🗑️ Buscando proyecto '{nombre_proyecto}' para eliminar...")
-        
-        for idx, sel in enumerate(selects):
-            # Leer el nombre del proyecto
-            title = sel.get_attribute("title") or ""
+        # 🆕 Si tenemos fila del contexto, usarla directamente
+        if fila_contexto is not None:
+            print(f"[DEBUG] 🗑️ Usando fila del contexto para eliminar '{nombre_proyecto}'")
+            fila = fila_contexto
+        else:
+            # Buscar el proyecto en la tabla
+            selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
             
-            try:
-                texto_selected = driver.execute_script("""
-                    var select = arguments[0];
-                    var selectedOption = select.options[select.selectedIndex];
-                    return selectedOption ? selectedOption.text : '';
-                """, sel)
-            except:
-                texto_selected = ""
+            if not selects:
+                selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
             
-            texto_completo = f"{title} {texto_selected}".lower()
+            print(f"[DEBUG] 🗑️ Buscando proyecto '{nombre_proyecto}' para eliminar...")
             
-            # Si encontramos el proyecto
-            if normalizar(nombre_proyecto) in normalizar(texto_completo):
-                # Buscar el botón de eliminar en la misma fila
-                fila = sel.find_element(By.XPATH, "./ancestor::tr")
+            for idx, sel in enumerate(selects):
+                # Leer el nombre del proyecto
+                title = sel.get_attribute("title") or ""
                 
                 try:
-                    btn_eliminar = fila.find_element(By.CSS_SELECTOR, "button.botonEliminar, button#botonEliminar")
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
-                    time.sleep(0.3)
-                    btn_eliminar.click()
-                    time.sleep(1)
-                    
-                    print(f"[DEBUG] ✅ Línea del proyecto '{nombre_proyecto}' eliminada")
-                    return f"He eliminado la línea del proyecto '{nombre_proyecto}'"
-                    
-                except Exception as e:
-                    return f"Encontré el proyecto pero no pude eliminar la línea: {e}"
+                    texto_selected = driver.execute_script("""
+                        var select = arguments[0];
+                        var selectedOption = select.options[select.selectedIndex];
+                        return selectedOption ? selectedOption.text : '';
+                    """, sel)
+                except:
+                    texto_selected = ""
+                
+                texto_completo = f"{title} {texto_selected}".lower()
+                
+                # Si encontramos el proyecto
+                if normalizar(nombre_proyecto) in normalizar(texto_completo):
+                    fila = sel.find_element(By.XPATH, "./ancestor::tr")
+                    print(f"[DEBUG] ✅ Encontrado '{nombre_proyecto}' en línea {idx+1}")
+                    break
         
-        return f"No encontré ninguna línea con el proyecto '{nombre_proyecto}'"
+        if not fila:
+            return f"No encontré ninguna línea con el proyecto '{nombre_proyecto}'"
+        
+        # Buscar el botón de eliminar en la fila
+        # 🔧 FIX: Añadir más selectores para el botón de eliminar
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
+            time.sleep(0.3)
+            
+            # Intentar varios selectores para el botón eliminar
+            btn_eliminar = None
+            selectores_eliminar = [
+                "button.botonEliminar",
+                "button#botonEliminar", 
+                "input[id*='btEliminar']",
+                ".botonEliminar",
+                "[onclick*='eliminar']",
+                "button[title*='liminar']"
+            ]
+            
+            for selector in selectores_eliminar:
+                try:
+                    btn_eliminar = fila.find_element(By.CSS_SELECTOR, selector)
+                    if btn_eliminar:
+                        print(f"[DEBUG] 🔘 Botón eliminar encontrado con selector: {selector}")
+                        break
+                except:
+                    continue
+            
+            if not btn_eliminar:
+                # Último intento: buscar cualquier botón/input en la fila
+                botones = fila.find_elements(By.CSS_SELECTOR, "button, input[type='button']")
+                for boton in botones:
+                    texto_boton = (boton.get_attribute("title") or boton.text or "").lower()
+                    if "elimin" in texto_boton or "borr" in texto_boton or "quitar" in texto_boton:
+                        btn_eliminar = boton
+                        print(f"[DEBUG] 🔘 Botón eliminar encontrado por texto: {texto_boton}")
+                        break
+            
+            if not btn_eliminar:
+                return f"Encontré el proyecto '{nombre_proyecto}' pero no encontré el botón para eliminarlo"
+            
+            btn_eliminar.click()
+            time.sleep(1)
+            
+            print(f"[DEBUG] ✅ Línea del proyecto '{nombre_proyecto}' eliminada")
+            return f"He eliminado la línea del proyecto '{nombre_proyecto}'"
+            
+        except Exception as e:
+            return f"Encontré el proyecto pero no pude eliminar la línea: {e}"
     
     except Exception as e:
         return f"Error al intentar eliminar la línea: {e}"

@@ -207,17 +207,33 @@ REGLAS GENERALES
    c) seleccionar_proyecto (cuando se impute/borre de un proyecto)
    d) imputar_horas_dia / imputar_horas_semana / borrar_todas_horas_dia / eliminar_linea
    e) finalizar_jornada (si se menciona)
-   f) guardar_linea o emitir_linea (OBLIGATORIO al final de cambios)
+   f) guardar_linea (solo cuando se CAMBIA DE SEMANA o al FINAL de todo)
 
 2. Fechas:
    - "hoy" = {hoy}. Sin fecha → usar {hoy}
    - "ayer" = hoy -1; "mañana" = hoy +1
-   - Día semana / "próxima semana" / "semana pasada" → calcular fecha EXACTA del día (YYYY-MM-DD, año 2025)
+   - 🚨 Día de la semana SIN "próximo/siguiente" → SIEMPRE el PRÓXIMO (hacia adelante)
+     Ejemplos con hoy={dia_semana} {hoy}:
+     - "el lunes" = PRÓXIMO lunes (si hoy es lunes, sería el siguiente lunes)
+     - "el martes" = PRÓXIMO martes
+     - "el viernes" = PRÓXIMO viernes
+   - "la semana pasada" / "el lunes pasado" → entonces sí ir hacia atrás
+   - "próxima semana" / "semana que viene" → día de la semana siguiente
    - IMPORTANTE: Si dice "el martes", calcula la fecha del MARTES, NO del lunes de esa semana
    - Referencia temporal != "hoy" → PRIMERA acción: seleccionar_fecha con la fecha EXACTA del día mencionado
 
-3. Proyectos múltiples → INTERCALAR:
-   "3h en X y 2h en Y" → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2)
+3. Proyectos múltiples del MISMO día → INTERCALAR sin guardar_linea entre ellos:
+   "3h en X y 2h en Y" (mismo día) → seleccionar_fecha → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2) → guardar_linea (UNA VEZ AL FINAL)
+
+4. Múltiples días de la MISMA SEMANA → NO guardar entre días, solo al FINAL:
+   Ejemplo: "3h en X el lunes, 5h en Y el miércoles" (ambos semana 16-20 dic) → fecha(lunes) → proyecto(X) → imputar(3) → fecha(miércoles) → proyecto(Y) → imputar(5) → guardar_linea (UNA VEZ AL FINAL)
+   
+5. Cambio de SEMANA → guardar antes de cambiar:
+   Ejemplo: "3h el lunes 16, 5h el lunes 23" (semanas diferentes) → fecha(16) → proyecto(X) → imputar(3) → guardar_linea → fecha(23) → proyecto(Y) → imputar(5) → guardar_linea
+   
+6. REGLA CLAVE: guardar_linea solo cuando:
+   - Vas a cambiar de semana (antes del cambio)
+   - Al final de TODAS las órdenes
 
 ====================================================
 NODO PADRE
@@ -238,8 +254,10 @@ TIPOS DE ACCIONES
 
 2) ELIMINAR HORAS:
    A) Sin proyecto: "borra horas del <día>" → borrar_todas_horas_dia
-   B) Con proyecto: "borra horas del <día> en <proyecto>" → seleccionar_proyecto + imputar_horas_dia (horas=0, modo="establecer")
-   C) Línea completa: "borra la línea" → seleccionar_proyecto (usa proyecto del contexto si no se menciona) + eliminar_linea
+   B) Con proyecto pero día específico: "borra horas del <día> en <proyecto>" → seleccionar_proyecto + imputar_horas_dia (horas=0, modo="establecer")
+   C) Línea completa: "borra la línea", "elimina <proyecto>", "borra todo de <proyecto>" → seleccionar_proyecto + eliminar_linea
+   D) Borrar múltiples días de la semana: "borra las horas de esta semana" → seleccionar_fecha (LUNES) + borrar_todas_horas_dia (lunes) + borrar_todas_horas_dia (martes) + ... + guardar_linea
+      IMPORTANTE: NO cambiar fecha entre cada día, hacer todos los borrados en la misma pantalla
    Tras eliminar → guardar_linea
 
 3) JORNADA:
@@ -271,18 +289,55 @@ EJEMPLOS
 
 "Borra las horas del martes"
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-09"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-17"}}}},
   {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "martes"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+"Borra todas las horas de esta semana"
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-16"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "lunes"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "martes"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "miércoles"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "jueves"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "viernes"}}}},
   {{"accion": "guardar_linea"}}
 ]
 
 "3.5 en Desarrollo y 2 en Dirección el lunes"
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-08"}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-16"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-08", "horas": 3.5}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-16", "horas": 3.5}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Dirección"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-08", "horas": 2}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-16", "horas": 2}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+"Ponme 3h en Eventos el lunes, 2h en Desarrollo el martes y 4h en Formación el jueves"
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-16"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Eventos"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-16", "horas": 3}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-17"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-17", "horas": 2}}}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-19"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Formación"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-19", "horas": 4}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+"3h el lunes 16 y 5h el lunes 23"
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-16"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-16", "horas": 3}}}},
+  {{"accion": "guardar_linea"}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-23"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-23", "horas": 5}}}},
   {{"accion": "guardar_linea"}}
 ]
 
@@ -290,6 +345,22 @@ EJEMPLOS
 [
   {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Eventos"}}}},
+  {{"accion": "eliminar_linea"}},
+  {{"accion": "guardar_linea"}}
+]
+
+"Borra todo de Desarrollo"
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "eliminar_linea"}},
+  {{"accion": "guardar_linea"}}
+]
+
+"Elimina el proyecto Comercial"
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Comercial"}}}},
   {{"accion": "eliminar_linea"}},
   {{"accion": "guardar_linea"}}
 ]

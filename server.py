@@ -155,30 +155,6 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
         # PROCESAR NUEVO MENSAJE
         tipo_mensaje = clasificar_mensaje(texto)
 
-        # LISTAR PROYECTOS
-        if tipo_mensaje == "listar_proyectos":
-            from web_automation.listado_proyectos import listar_todos_proyectos, formatear_lista_proyectos
-            
-            filtro_nodo = None
-            texto_lower = texto.lower()
-            
-            if "departamento" in texto_lower:
-                match = re.search(r'departamento\s+(\w+(?:\s+\w+)*)', texto_lower, re.IGNORECASE)
-                if match:
-                    filtro_nodo = match.group(0).strip()
-            elif "en " in texto_lower:
-                match = re.search(r'en\s+([\w-]+(?:\s+[\w-]+)*)', texto_lower, re.IGNORECASE)
-                if match:
-                    filtro_nodo = match.group(1).strip()
-            
-            with session.lock:
-                proyectos_por_nodo = listar_todos_proyectos(session.driver, session.wait, filtro_nodo)
-            
-            respuesta = formatear_lista_proyectos(proyectos_por_nodo, canal=canal)
-            registrar_peticion(db, usuario.id, texto, "listar_proyectos", canal=canal, respuesta=respuesta)
-            session.update_activity()
-            return respuesta
-
         # AYUDA
         if tipo_mensaje == "ayuda":
             respuesta = mostrar_comandos()
@@ -187,8 +163,8 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
             return respuesta
 
         # CONVERSACIÓN
-        if tipo_mensaje == "conversacion":
-            respuesta = responder_conversacion(texto, user_id)  # 🆕 Pasar user_id
+        elif tipo_mensaje == "conversacion":
+            respuesta = responder_conversacion(texto, user_id)
             registrar_peticion(db, usuario.id, texto, "conversacion", canal=canal, respuesta=respuesta)
             session.update_activity()
             return respuesta
@@ -197,6 +173,31 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
         elif tipo_mensaje == "consulta":
             consulta_info = interpretar_consulta(texto)
             
+            # 🆕 CASO 1: Listar proyectos
+            if not consulta_info or consulta_info.get("tipo") == "listar_proyectos":
+                from web_automation.listado_proyectos import listar_todos_proyectos, formatear_lista_proyectos
+                
+                filtro_nodo = None
+                texto_lower = texto.lower()
+                
+                if "departamento" in texto_lower:
+                    match = re.search(r'departamento\s+(\w+(?:\s+\w+)*)', texto_lower, re.IGNORECASE)
+                    if match:
+                        filtro_nodo = match.group(0).strip()
+                elif "en " in texto_lower:
+                    match = re.search(r'en\s+([\w-]+(?:\s+[\w-]+)*)', texto_lower, re.IGNORECASE)
+                    if match:
+                        filtro_nodo = match.group(1).strip()
+                
+                with session.lock:
+                    proyectos_por_nodo = listar_todos_proyectos(session.driver, session.wait, filtro_nodo)
+                
+                respuesta = formatear_lista_proyectos(proyectos_por_nodo, canal=canal)
+                registrar_peticion(db, usuario.id, texto, "listar_proyectos", canal=canal, respuesta=respuesta)
+                session.update_activity()
+                return respuesta
+            
+            # 🆕 CASO 2: Consulta de horas (día o semana)
             if consulta_info:
                 fecha = datetime.fromisoformat(consulta_info["fecha"])
                 
@@ -213,16 +214,12 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                     registrar_peticion(db, usuario.id, texto, "consulta_semana", canal=canal, respuesta=resumen)
                     session.update_activity()
                     return resumen
-                else:
-                    respuesta = "🤔 No he entendido si preguntas por un día o una semana."
-                    registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
-                    session.update_activity()
-                    return respuesta
-            else:
-                respuesta = "🤔 No he entendido qué quieres consultar."
-                registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
-                session.update_activity()
-                return respuesta
+            
+            # No se pudo interpretar qué tipo de consulta es
+            respuesta = "🤔 No he entendido qué quieres consultar."
+            registrar_peticion(db, usuario.id, texto, "consulta", canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
 
         # COMANDOS DE IMPUTACIÓN
         elif tipo_mensaje == "comando":
@@ -470,9 +467,17 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         # -----------------------------------------------------
         # ⏳ MENSAJE PREVIO + BACKGROUND TASK (WHATSAPP)
         # -----------------------------------------------------
-        tipo_mensaje = clasificar_mensaje(texto)
+        # 🔥 Si tiene pregunta pendiente, procesar respuesta directamente
+        if conversation_state_manager.tiene_pregunta_pendiente(wa_id):
+            respuesta = await procesar_mensaje_usuario(
+                texto, wa_id, db, canal="whatsapp"
+            )
+            return JSONResponse({"reply": respuesta})
+        
+        # 🔥 Si NO tiene pregunta pendiente, clasificar para decidir flujo
+        tipo_mensaje = clasificar_mensaje(texto)  # 🆕 UNA SOLA CLASIFICACIÓN
 
-        if tipo_mensaje in ("consulta", "comando", "listar_proyectos"):
+        if tipo_mensaje in ("consulta", "comando"):
             # 🔥 Lanzar procesamiento en background (SIN db)
             asyncio.create_task(
                 procesar_whatsapp_en_background(texto, wa_id)
@@ -482,14 +487,26 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             return JSONResponse({
                 "reply": "⏳ *Estoy trabajando en ello…*"
             })
-
-        # -----------------------------------------------------
-        # MENSAJES NORMALES (CONVERSACIÓN, AYUDA, ETC.)
-        # -----------------------------------------------------
-        respuesta = await procesar_mensaje_usuario(
-            texto, wa_id, db, canal="whatsapp"
-        )
-        return JSONResponse({"reply": respuesta})
+        
+        # 🆕 Para conversación/ayuda, procesar directamente SIN clasificar de nuevo
+        elif tipo_mensaje == "ayuda":
+            respuesta = mostrar_comandos()
+            registrar_peticion(db, usuario_wa.id, texto, "ayuda", canal="whatsapp", respuesta=respuesta)
+            session.update_activity()
+            return JSONResponse({"reply": respuesta})
+        
+        elif tipo_mensaje == "conversacion":
+            respuesta = responder_conversacion(texto, wa_id)
+            registrar_peticion(db, usuario_wa.id, texto, "conversacion", canal="whatsapp", respuesta=respuesta)
+            session.update_activity()
+            return JSONResponse({"reply": respuesta})
+        
+        # Fallback para otros tipos
+        else:
+            respuesta = await procesar_mensaje_usuario(
+                texto, wa_id, db, canal="whatsapp"
+            )
+            return JSONResponse({"reply": respuesta})
 
     
 async def procesar_whatsapp_en_background(texto: str, wa_id: str):

@@ -355,8 +355,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                     resumen += f"  • {dia_info}\n"
                 avisos_mostrados = True
             
-            if avisos_mostrados:
-                resumen += "\n¿Es correcto o necesitas modificar algo?"
+
         
         print(f"[DEBUG] ✅ consultar_semana - Resumen generado ({len(resumen)} caracteres)")
         print(f"[DEBUG] Total semana calculado: {total_semana}h")

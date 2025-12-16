@@ -10,57 +10,49 @@ from config import settings
 
 def interpretar_consulta(texto):
     """
-    Interpreta consultas sobre horas imputadas y extrae la fecha solicitada.
+    Interpreta consultas sobre horas imputadas o proyectos disponibles.
     
     Args:
         texto: Consulta del usuario
         
     Returns:
-        dict: {'fecha': 'YYYY-MM-DD', 'tipo': 'dia'|'semana'} o None si no se puede interpretar
+        dict: {'fecha': 'YYYY-MM-DD', 'tipo': 'dia'|'semana'|'listar_proyectos'} o None
     """
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
     
-    prompt = f"""Eres un asistente que interpreta consultas sobre horas laborales imputadas.
+    prompt = f"""Eres un asistente que interpreta consultas sobre horas laborales y proyectos disponibles.
 
 Hoy es {hoy} ({dia_semana}).
 
 El usuario pregunta: "{texto}"
 
-Extrae la fecha sobre la que pregunta y devuelve SOLO un JSON válido con este formato:
+🆕 IMPORTANTE: Primero identifica el TIPO de consulta:
+
+TIPO A: "listar_proyectos" - Pide lista de proyectos disponibles
+- Ejemplos: "qué proyectos hay", "lista de proyectos", "muéstrame los proyectos", "dime en qué proyectos puedo imputar"
+- Devuelve: {{"tipo": "listar_proyectos"}}
+
+TIPO B: "dia" o "semana" - Consulta sobre horas imputadas
+- Ejemplos: "qué tengo hoy", "resumen de la semana"
+- Devuelve: {{"fecha": "YYYY-MM-DD", "tipo": "dia" o "semana"}}
+
+Si es TIPO A (listar_proyectos):
+{{"tipo": "listar_proyectos"}}
+
+Si es TIPO B (consulta de horas), extrae la fecha y tipo:
 {{
   "fecha": "YYYY-MM-DD",
   "tipo": "semana" | "dia"  
 }}
 
-Reglas CRÍTICAS:
-- Siempre usa el año 2025 (estamos en 2025)
-- Si pregunta por "esta semana", "semana actual", "la semana", "resumen de la semana" (SIN decir "pasada") → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL QUE CONTIENE {hoy}
+Reglas para TIPO B:
+- Siempre usa el año 2025
+- Si pregunta por "esta semana" → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
-- Si pregunta por "MAÑANA" → tipo: "dia", fecha: calcular día siguiente a {hoy}
-- Si pregunta por "AYER" → tipo: "dia", fecha: calcular día anterior a {hoy}
-- Si pregunta por un DÍA ESPECÍFICO ("el miércoles 15", "el 22 de septiembre", "el 15 de octubre") → tipo: "dia", fecha: ese día exacto
-- Si dice "semana pasada", calcula el lunes de la semana anterior a {hoy}
-- Si dice "próxima semana", calcula el lunes de la siguiente semana
+- Si pregunta por un día específico → tipo: "dia", fecha: ese día exacto
 
-Ejemplos:
-- "esta semana" → {{"fecha": "(LUNES de la semana que contiene {hoy})", "tipo": "semana"}}
-- "resumen de la semana" → {{"fecha": "(LUNES de la semana que contiene {hoy})", "tipo": "semana"}}
-- "la semana" → {{"fecha": "(LUNES de la semana que contiene {hoy})", "tipo": "semana"}}
-- "semana pasada" → {{"fecha": "(LUNES de la semana anterior a {hoy})", "tipo": "semana"}}
-- "la semana del 26 de septiembre" → {{"fecha": "2025-09-22", "tipo": "semana"}} (lunes de esa semana)
-- "cuántas horas tengo hoy" → {{"fecha": "{hoy}", "tipo": "dia"}}
-- "qué tengo imputado el miércoles 15" → {{"fecha": "2025-10-15", "tipo": "dia"}} (ese día exacto)
-- "qué tengo el 22 de septiembre" → {{"fecha": "2025-09-22", "tipo": "dia"}} (ese día exacto)
-- "dime qué tengo hoy" → {{"fecha": "{hoy}", "tipo": "dia"}}
-- "cuántas horas he hecho hoy" → {{"fecha": "{hoy}", "tipo": "dia"}}
-- "cuantas horas tengo el 15 de octubre" → {{"fecha": "2025-10-15", "tipo": "dia"}}
-- "qué tengo el jueves" → {{"fecha": "(calcular próximo jueves)", "tipo": "dia"}}
-
-MUY IMPORTANTE: 
-- Devuelve SOLO el JSON, sin texto adicional, sin markdown, sin explicaciones
-- Si pregunta por un día específico → tipo: "dia" y la fecha EXACTA de ese día
-- Si pregunta por una semana → tipo: "semana" y el LUNES de esa semana
+Devuelve SOLO el JSON, sin texto adicional.
 
 Respuesta:"""
     

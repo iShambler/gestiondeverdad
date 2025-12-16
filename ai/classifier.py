@@ -14,16 +14,15 @@ def clasificar_mensaje(texto):
     
     Categorías posibles:
     - 'comando': requiere ejecutar acciones de imputación
-    - 'consulta': pide información sobre horas imputadas
+    - 'consulta': pide información sobre horas imputadas O proyectos disponibles
     - 'conversacion': saludo, pregunta general o tema fuera del ámbito laboral
     - 'ayuda': solicita ayuda o lista de comandos
-    - 'listar_proyectos': quiere ver lista de proyectos disponibles
     
     Args:
         texto: Mensaje del usuario
         
     Returns:
-        str: 'comando', 'consulta', 'conversacion', 'ayuda' o 'listar_proyectos'
+        str: 'comando', 'consulta', 'conversacion' o 'ayuda'
     """
     print(f"[DEBUG] 🔍 Clasificando con GPT: '{texto}'")
     
@@ -57,32 +56,37 @@ Clasifica el siguiente mensaje en UNA de estas categorías:
      * "cambia las horas del lunes a 6"
      * "borra las horas de hoy"
 
-2️⃣ "consulta" → El usuario quiere VER/CONSULTAR información sobre HORAS IMPUTADAS:
-   - Ver resúmenes de horas
-   - Preguntar qué tiene imputado
-   - Consultar cuántas horas tiene
-   - Ver información de días o semanas
-   - IMPORTANTE: Debe preguntar específicamente sobre HORAS o IMPUTACIONES
+2️⃣ "consulta" → El usuario quiere VER/CONSULTAR información:
+   A) Sobre HORAS IMPUTADAS:
+      - Ver resúmenes de horas
+      - Preguntar qué tiene imputado
+      - Consultar cuántas horas tiene
+      - Ver información de días o semanas
+   B) Sobre PROYECTOS DISPONIBLES:
+      - Lista de proyectos
+      - Qué proyectos hay
+      - Ver proyectos disponibles
+      - Proyectos en los que puede imputar
    - Ejemplos:
      * "resumen de esta semana" → consulta de horas
      * "qué tengo imputado hoy" → consulta de horas
      * "cuántas horas tengo el lunes" → consulta de horas
-     * "dame un resumen de mis imputaciones esta semana" → consulta de horas
-     * "muestra mis horas de hoy" → consulta de horas
-     * "info de la semana pasada" → consulta de horas
+     * "lista de proyectos" → consulta de proyectos
+     * "qué proyectos hay" → consulta de proyectos
+     * "muéstrame los proyectos" → consulta de proyectos
+     * "dime en qué proyectos puedo imputar" → consulta de proyectos
 
-3️⃣ "conversacion" → Saludos, preguntas generales, o preguntas sobre PROYECTOS/OTRAS COSAS (NO sobre horas):
+3️⃣ "conversacion" → Saludos, preguntas generales fuera del ámbito:
    - Saludos generales
    - Preguntas sobre temas externos
    - Conversación informal
-   - Preguntas sobre proyectos, sistemas, cosas que NO sean horas imputadas
+   - Preguntas sobre cosas que NO sean horas ni proyectos disponibles
    - Ejemplos:
      * "hola"
      * "buenos días"
      * "quién es Messi"
      * "cuál es la capital de Francia"
-     * "no veo el proyecto X" → pregunta sobre proyecto, NO sobre horas
-     * "dónde está el proyecto unisys" → pregunta sobre proyecto
+     * "no veo el proyecto X" → problema técnico
      * "no encuentro X" → pregunta general
 
 4️⃣ "ayuda" → Solicita ayuda o información sobre cómo usar el bot:
@@ -92,26 +96,18 @@ Clasifica el siguiente mensaje en UNA de estas categorías:
      * "cómo funciona esto"
      * "guía de uso"
 
-5️⃣ "listar_proyectos" → Quiere ver la lista de proyectos disponibles:
-   - Ejemplos:
-     * "qué proyectos hay"
-     * "lista de proyectos"
-     * "muéstrame los proyectos"
-     * "dame los proyectos disponibles"
-
 CONTEXTO:
 - Hoy es {hoy} ({dia_semana})
 
 CRÍTICO: 
-- Si el mensaje pregunta por información de HORAS/IMPUTACIONES → "consulta"
-- Si el mensaje pregunta por PROYECTOS o cosas NO relacionadas con horas → "conversacion"
-- Si el mensaje pide hacer/modificar/añadir/cambiar → "comando"
+- Si pregunta por LISTA/PROYECTOS DISPONIBLES → "consulta"
+- Si pregunta por información de HORAS/IMPUTACIONES → "consulta"
+- Si pide hacer/modificar/añadir/cambiar → "comando"
 - Si menciona "horas" en contexto de ver/mostrar → "consulta"
 - Si menciona "horas" en contexto de poner/añadir → "comando"
-- Si menciona "proyecto" en contexto de preguntar/buscar → "conversacion"
 - Si dice "no veo X", "dónde está X", "no encuentro X" → "conversacion"
 
-Responde SOLO una palabra: "comando", "consulta", "conversacion", "ayuda" o "listar_proyectos".
+Responde SOLO una palabra: "comando", "consulta", "conversacion" o "ayuda".
 
 Mensaje: "{texto}"
 Respuesta:"""
@@ -131,7 +127,7 @@ Respuesta:"""
         clasificacion = response.choices[0].message.content.strip().lower()
         
         # Validar que la respuesta sea una de las categorías esperadas
-        categorias_validas = ["comando", "consulta", "conversacion", "ayuda", "listar_proyectos"]
+        categorias_validas = ["comando", "consulta", "conversacion", "ayuda"]
         
         if clasificacion not in categorias_validas:
             print(f"[DEBUG] ⚠️ GPT devolvió clasificación inválida: '{clasificacion}', usando 'conversacion' por defecto")

@@ -1,6 +1,9 @@
 """
 Funciones para listar y explorar proyectos disponibles.
+VERSIÓN CON JERARQUÍA COMPLETA DE CARPETAS - v2.0
 """
+
+print("[IMPORT] 🔄 Cargando listado_proyectos.py v2.0 con jerarquía completa")
 
 import time
 from datetime import datetime
@@ -12,46 +15,43 @@ from config import Selectors
 
 def listar_todos_proyectos(driver, wait, filtro_nodo=None):
     """
-    Lista TODOS los proyectos disponibles en el árbol con sus nodos padre.
+    Lista TODOS los proyectos disponibles en el árbol con jerarquía completa de carpetas.
     
     Args:
         driver: WebDriver de Selenium
         wait: WebDriverWait configurado
-        filtro_nodo: (Opcional) Nombre del nodo padre para filtrar. Si se proporciona,
-                     solo devuelve los proyectos de ese nodo.
+        filtro_nodo: (Opcional) Nombre del nodo/carpeta para filtrar.
         
     Returns:
-        dict: Estructura de proyectos organizados por nodo padre:
+        dict: Estructura de proyectos con rutas completas:
               {
-                  "Departamento Desarrollo e IDI": ["Desarrollo", "Dirección", "Estudio"],
-                  "Departamento Comercial": ["Desarrollo", "Ventas"],
+                  "Arelance > Admin-Staff": ["Proyecto1", "Proyecto2"],
+                  "Departamento > Subdepartamento": ["Proyecto3"],
                   ...
               }
     """
     try:
-        print("[DEBUG] 📋 Listando todos los proyectos disponibles...")
+        print("[DEBUG] 📋 Listando todos los proyectos disponibles con jerarquía...")
         
         # 🗓️ PASO 1: Asegurarnos de estar en la página principal y seleccionar fecha de HOY
         from web_automation.navigation import seleccionar_fecha
         from web_automation.interactions import volver_inicio
         
-        # Volver a la página principal por si acaso
         try:
             volver_inicio(driver)
             time.sleep(1)
         except Exception as e:
-            print(f"[DEBUG] ⚠️ Error volviendo a inicio (tal vez ya estamos ahí): {e}")
+            print(f"[DEBUG] ⚠️ Error volviendo a inicio: {e}")
         
         fecha_hoy = datetime.now()
         print(f"[DEBUG] 📅 Seleccionando fecha: {fecha_hoy.strftime('%d/%m/%Y')}")
         
         try:
-            mensaje = seleccionar_fecha(driver, fecha_hoy)  # Solo 2 argumentos!
+            mensaje = seleccionar_fecha(driver, fecha_hoy)
             print(f"[DEBUG] ✅ {mensaje}")
             time.sleep(1)
         except Exception as e:
             print(f"[DEBUG] ⚠️ Error seleccionando fecha: {e}")
-            # Continuar de todas formas, tal vez ya está en la fecha correcta
         
         # 🆕 PASO 2: Crear nueva línea para abrir el buscador
         try:
@@ -60,17 +60,15 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
             print("[DEBUG] ✅ Click en 'Nueva línea'")
             time.sleep(1)
             
-            # Buscar el select de subproyecto
             selects = driver.find_elements(By.CSS_SELECTOR, "select[id^='listaEmpleadoHoras'][id$='.subproyecto']")
             if not selects:
                 print("[DEBUG] ❌ No se encontró el select de subproyecto")
                 return {}
             
-            # Obtener el último select (la nueva línea)
             nuevo_select = selects[-1]
             fila = nuevo_select.find_element(By.XPATH, "./ancestor::tr")
             
-            # 🔍 PASO 3: Abrir el buscador de proyectos (botón "»")
+            # 🔍 PASO 3: Abrir el buscador de proyectos
             btn_cambiar = fila.find_element(By.CSS_SELECTOR, "input[id^='btCambiarSubproyecto']")
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn_cambiar)
             btn_cambiar.click()
@@ -93,26 +91,67 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
         print("[DEBUG] 🌳 Expandiendo árbol completo...")
         time.sleep(2)
         
-        # 📊 PASO 5: Buscar todos los nodos del árbol
+        # 📊 PASO 5: Buscar todos los nodos con JERARQUÍA COMPLETA
         proyectos_por_nodo = {}
         
-        # Encontrar todos los elementos <li> que son nodos padre (contienen subproyectos)
         nodos_padre = driver.find_elements(By.XPATH, "//li[contains(@class, 'jstree')]//li[@rel='subproyectos']/parent::ul/parent::li")
         
         print(f"[DEBUG] 📊 Encontrados {len(nodos_padre)} nodos padre")
         
-        for nodo in nodos_padre:
+        if len(nodos_padre) == 0:
+            print(f"[DEBUG] ❌ No se encontraron nodos padre en el árbol")
+            print(f"[DEBUG] 🔍 HTML del árbol: {driver.find_element(By.ID, 'treeTipologia').get_attribute('outerHTML')[:500]}")
+        
+        for idx, nodo in enumerate(nodos_padre):
+            print(f"[DEBUG] 🔄 INICIO bucle - Procesando nodo {idx+1}/{len(nodos_padre)}")
             try:
-                # Obtener el nombre del nodo padre
+                print(f"[DEBUG] 🔄 DENTRO try - Procesando nodo {idx+1}/{len(nodos_padre)}")
+                
                 link_nodo = nodo.find_element(By.XPATH, "./a")
                 nombre_nodo = link_nodo.text.strip()
                 
+                print(f"[DEBUG]   📝 Nombre nodo: '{nombre_nodo}'")
+                
                 if not nombre_nodo:
+                    print(f"[DEBUG]   ⚠️ Nodo vacío, saltando...")
                     continue
                 
-                # 🆕 Si hay filtro, verificar si este nodo coincide
+                # 🌲 OBTENER JERARQUÍA COMPLETA
+                ruta_completa = [nombre_nodo]
+                nodo_actual = nodo
+                
+                print(f"[DEBUG]   🌲 Obteniendo jerarquía para '{nombre_nodo}'...")
+                
+                # Subir por los ancestros
+                intentos = 0
+                while True:
+                    intentos += 1
+                    if intentos > 10:
+                        print(f"[DEBUG]   ⚠️ Demasiados intentos subiendo jerarquía, cortando")
+                        break
+                        
+                    try:
+                        nodo_padre_superior = nodo_actual.find_element(By.XPATH, "./parent::ul/parent::li")
+                        link_padre = nodo_padre_superior.find_element(By.XPATH, "./a")
+                        nombre_padre = link_padre.text.strip()
+                        
+                        print(f"[DEBUG]   📂 Padre encontrado: '{nombre_padre}'")
+                        
+                        if nombre_padre and nombre_padre not in ruta_completa:
+                            ruta_completa.insert(0, nombre_padre)
+                            nodo_actual = nodo_padre_superior
+                        else:
+                            print(f"[DEBUG]   🛑 Padre vacío o duplicado, cortando")
+                            break
+                    except Exception as ex:
+                        print(f"[DEBUG]   ✅ No hay más padres (esto es normal): {ex}")
+                        break
+                
+                # Crear clave: "Arelance > Admin-Staff"
+                clave_nodo = " > ".join(ruta_completa)
+                
+                # Filtrar si es necesario
                 if filtro_nodo:
-                    # Normalizar para comparación flexible
                     import unicodedata
                     def normalizar(texto):
                         return ''.join(
@@ -121,14 +160,15 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
                         )
                     
                     filtro_norm = normalizar(filtro_nodo)
-                    nodo_norm = normalizar(nombre_nodo)
+                    ruta_norm = normalizar(clave_nodo)
                     
-                    # Si no coincide, saltar este nodo
-                    if filtro_norm not in nodo_norm:
+                    if filtro_norm not in ruta_norm:
                         continue
                 
-                # Encontrar todos los proyectos bajo este nodo
+                # Encontrar proyectos
                 proyectos = nodo.find_elements(By.XPATH, ".//li[@rel='subproyectos']//a")
+                
+                print(f"[DEBUG]   🔍 Encontrados {len(proyectos)} proyectos en este nodo")
                 
                 nombres_proyectos = []
                 for proyecto in proyectos:
@@ -136,36 +176,36 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
                     if nombre_proyecto and nombre_proyecto not in nombres_proyectos:
                         nombres_proyectos.append(nombre_proyecto)
                 
+                print(f"[DEBUG]   ✅ Proyectos válidos: {len(nombres_proyectos)}")
+                
                 if nombres_proyectos:
-                    proyectos_por_nodo[nombre_nodo] = sorted(nombres_proyectos)
-                    print(f"[DEBUG]   📁 {nombre_nodo}: {len(nombres_proyectos)} proyectos")
+                    proyectos_por_nodo[clave_nodo] = sorted(nombres_proyectos)
+                    print(f"[DEBUG]   📁 {clave_nodo}: {len(nombres_proyectos)} proyectos")
+                else:
+                    print(f"[DEBUG]   ⚠️ No se encontraron proyectos válidos en {clave_nodo}")
                 
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Error procesando nodo: {e}")
+                print(f"[DEBUG] ❌❌❌ ERROR procesando nodo {idx+1}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
         
-        # 🧹 PASO 6: Cerrar el overlay del buscador (SIN GUARDAR)
+        # 🧹 PASO 6: Cerrar el overlay
         try:
             print("[DEBUG] 🧹 Cerrando buscador...")
             driver.execute_script("""
-                // Limpiar búsqueda
                 document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
                 document.getElementById('textoBusqueda').style.color='gray';
-                
-                // Cerrar árbol
                 var tree = $('#treeTipologia');
                 tree.jstree('deselect_all');
                 tree.jstree('close_all');
-                
-                // Cerrar overlay
                 hideOverlay();
             """)
             time.sleep(0.5)
-            
         except Exception as e:
             print(f"[DEBUG] ⚠️ Error cerrando overlay: {e}")
         
-        # 🗑️ PASO 7: Eliminar la línea temporal que creamos (SIN GUARDAR)
+        # 🗑️ PASO 7: Eliminar línea temporal
         try:
             print("[DEBUG] 🗑️ Eliminando línea temporal...")
             selects = driver.find_elements(By.CSS_SELECTOR, "select[id^='listaEmpleadoHoras'][id$='.subproyecto']")
@@ -173,43 +213,39 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
                 ultimo_select = selects[-1]
                 fila = ultimo_select.find_element(By.XPATH, "./ancestor::tr")
                 
-                # Buscar el botón de eliminar (puede tener varios selectores)
-                try:
-                    # Intenta varios selectores posibles para el botón eliminar
-                    btn_eliminar = None
-                    selectores_eliminar = [
-                        "button.botonEliminar",
-                        "button[id*='btEliminar']",
-                        "input[id*='btEliminar']",
-                        "button[onclick*='eliminar']",
-                        "input[onclick*='eliminar']"
-                    ]
-                    
-                    for selector in selectores_eliminar:
-                        try:
-                            btn_eliminar = fila.find_element(By.CSS_SELECTOR, selector)
-                            if btn_eliminar:
-                                break
-                        except:
-                            continue
-                    
-                    if btn_eliminar:
-                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn_eliminar)
-                        time.sleep(0.3)
-                        btn_eliminar.click()
-                        print("[DEBUG] ✅ Línea temporal eliminada")
-                        time.sleep(0.5)
-                    else:
-                        print("[DEBUG] ⚠️ No se encontró botón de eliminar, la línea quedará sin guardar")
-                        
-                except Exception as e:
-                    print(f"[DEBUG] ⚠️ Error eliminando línea: {e}")
-                    # No es crítico, la línea quedará ahí sin guardar
-        
+                selectores_eliminar = [
+                    "button.botonEliminar",
+                    "button[id*='btEliminar']",
+                    "input[id*='btEliminar']",
+                    "button[onclick*='eliminar']",
+                    "input[onclick*='eliminar']"
+                ]
+                
+                btn_eliminar = None
+                for selector in selectores_eliminar:
+                    try:
+                        btn_eliminar = fila.find_element(By.CSS_SELECTOR, selector)
+                        if btn_eliminar:
+                            break
+                    except:
+                        continue
+                
+                if btn_eliminar:
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn_eliminar)
+                    time.sleep(0.3)
+                    btn_eliminar.click()
+                    print("[DEBUG] ✅ Línea temporal eliminada")
+                    time.sleep(0.5)
         except Exception as e:
-            print(f"[DEBUG] ⚠️ Error buscando línea a eliminar: {e}")
+            print(f"[DEBUG] ⚠️ Error eliminando línea: {e}")
         
-        print(f"[DEBUG] ✅ Listado completo: {len(proyectos_por_nodo)} nodos padre")
+        print(f"[DEBUG] ✅ Listado completo: {len(proyectos_por_nodo)} nodos padre con proyectos")
+        print(f"[DEBUG] 📊 Total proyectos encontrados: {sum(len(p) for p in proyectos_por_nodo.values())}")
+        
+        if len(proyectos_por_nodo) == 0:
+            print(f"[DEBUG] ❌❌❌ DICT VACÍO - No se agregaron proyectos al diccionario")
+            print(f"[DEBUG] ❌ Nodos procesados pero sin proyectos válidos")
+        
         return proyectos_por_nodo
         
     except Exception as e:
@@ -220,50 +256,37 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
 
 
 def formatear_lista_proyectos(proyectos_por_nodo, canal="webapp"):
-    """
-    Formatea la lista de proyectos para mostrar al usuario.
-    
-    Args:
-        proyectos_por_nodo: Dict con proyectos organizados por nodo padre
-        canal: Canal de comunicación (webapp, slack, whatsapp)
-        
-    Returns:
-        str: Mensaje formateado con la lista de proyectos
-    """
+    """Formatea la lista de proyectos con jerarquía completa."""
     if not proyectos_por_nodo:
         return "❌ No he podido obtener la lista de proyectos"
     
     total_proyectos = sum(len(proyectos) for proyectos in proyectos_por_nodo.values())
     
     if canal == "slack":
-        mensaje = f"📋 *Proyectos Disponibles* ({total_proyectos} proyectos en {len(proyectos_por_nodo)} áreas)\n\n"
-        
-        for nodo, proyectos in sorted(proyectos_por_nodo.items()):
-            mensaje += f"📁 *{nodo}*\n"
+        mensaje = f"📋 *Proyectos Disponibles* ({total_proyectos} proyectos)\n\n"
+        for ruta, proyectos in sorted(proyectos_por_nodo.items()):
+            mensaje += f"📁 *{ruta}*\n"
             for proyecto in proyectos:
                 mensaje += f"   • {proyecto}\n"
             mensaje += "\n"
     
     elif canal == "whatsapp":
-        mensaje = f"📋 *Proyectos Disponibles*\n"
-        mensaje += f"_{total_proyectos} proyectos en {len(proyectos_por_nodo)} áreas_\n\n"
-        
-        for nodo, proyectos in sorted(proyectos_por_nodo.items()):
-            mensaje += f"📁 *{nodo}*\n"
+        mensaje = f"📋 *Proyectos Disponibles*\n_{total_proyectos} proyectos_\n\n"
+        for ruta, proyectos in sorted(proyectos_por_nodo.items()):
+            mensaje += f"📁 *{ruta}*\n"
             for proyecto in proyectos:
                 mensaje += f"  • {proyecto}\n"
             mensaje += "\n"
     
     else:  # webapp
-        mensaje = f"📋 **Proyectos Disponibles** ({total_proyectos} proyectos en {len(proyectos_por_nodo)} áreas)\n\n"
-        
-        for nodo, proyectos in sorted(proyectos_por_nodo.items()):
-            mensaje += f"📁 **{nodo}**\n"
+        mensaje = f"📋 **Proyectos Disponibles** ({total_proyectos} proyectos)\n\n"
+        for ruta, proyectos in sorted(proyectos_por_nodo.items()):
+            mensaje += f"📁 **{ruta}**\n"
             for proyecto in proyectos:
                 mensaje += f"   • {proyecto}\n"
             mensaje += "\n"
     
-    mensaje += "💡 Para imputar en un proyecto específico, usa:\n"
-    mensaje += "   `Pon 3h en [Departamento] en [Proyecto]`"
+    mensaje += "💡 Puedes filtrar por carpeta:\n"
+    mensaje += "   `Lista proyectos en Admin-Staff`"
     
     return mensaje

@@ -53,9 +53,11 @@ def ejecutar_accion(driver, wait, orden, contexto):
     elif accion == "seleccionar_fecha":
         try:
             fecha = datetime.fromisoformat(orden["parametros"]["fecha"])
-            # 🔥 Guardar fecha en contexto para usarla después
+            # 🔥 Llamar PRIMERO (para que lea la fecha anterior del contexto)
+            resultado = seleccionar_fecha(driver, fecha, contexto)
+            # 🔥 Actualizar contexto DESPUÉS
             contexto["fecha_seleccionada"] = fecha
-            return seleccionar_fecha(driver, fecha, contexto)  # 🆕 Pasar contexto
+            return resultado
         except Exception as e:
             return f"No he podido procesar la fecha: {e}"
 
@@ -114,18 +116,27 @@ def ejecutar_accion(driver, wait, orden, contexto):
     # 🗑️ Eliminar línea
     elif accion == "eliminar_linea":
         try:
-            nombre = orden["parametros"].get("nombre")
-            resultado = eliminar_linea_proyecto(driver, wait, nombre)
+            # 🔧 FIX: Usar .get() para evitar KeyError si no hay parámetros
+            parametros = orden.get("parametros", {})
+            nombre = parametros.get("nombre") if parametros else None
             
-            # Auto-guardar después de eliminar
-            time.sleep(0.5)
-            try:
-                btn_guardar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#btGuardarLinea")))
-                btn_guardar.click()
-                time.sleep(1.5)
-                return resultado + " y he guardado los cambios"
-            except:
-                return resultado + " (recuerda guardar los cambios)"
+            # 🆕 Si no se especificó nombre, usar el proyecto del contexto
+            if not nombre:
+                nombre = contexto.get("proyecto_actual")
+            
+            if not nombre:
+                return "❌ No sé qué proyecto eliminar. Especifica el nombre del proyecto."
+            
+            # 🆕 Pasar la fila del contexto si existe (evita buscar de nuevo)
+            fila_contexto = contexto.get("fila_actual")
+            resultado = eliminar_linea_proyecto(driver, wait, nombre, fila_contexto)
+            
+            # 🆕 Limpiar el contexto después de eliminar
+            contexto["fila_actual"] = None
+            contexto["proyecto_actual"] = None
+            
+            # El flujo normal incluye guardar_linea después de eliminar_linea
+            return resultado
                 
         except Exception as e:
             return f"Error eliminando línea: {e}"
