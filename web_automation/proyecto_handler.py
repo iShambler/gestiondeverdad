@@ -269,16 +269,36 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 nodo_padre_id = nodo_padre_li.get_attribute("id")
                 print(f"[DEBUG] 🆔 Nodo padre ID: {nodo_padre_id}")
                 
-                # Ahora buscar el proyecto SOLO dentro de ese nodo padre
-                xpath_proyecto = (
-                    f"//li[@id='{nodo_padre_id}']//li[@rel='subproyectos']//a[contains(translate(normalize-space(.), "
-                    f"'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "
-                    f"'{nombre_proyecto.lower()}')]"
-                )
+                # 🔥 FIX: Buscar proyectos en el nodo padre y filtrar en Python para coincidencia EXACTA
+                # Esto evita el bucle infinito cuando "Permiso Retribuido" está contenido en "Permiso Retribuido Festivo"
+                xpath_todos_proyectos = f"//li[@id='{nodo_padre_id}']//li[@rel='subproyectos']//a"
+                todos_proyectos_nodo = driver.find_elements(By.XPATH, xpath_todos_proyectos)
                 
-                # 🆕 Buscar TODOS los elementos que coinciden
-                elementos_en_nodo = driver.find_elements(By.XPATH, xpath_proyecto)
-                print(f"[DEBUG] 📊 Encontrados {len(elementos_en_nodo)} proyectos en '{nodo_padre}'")
+                nombre_proyecto_norm = normalizar(nombre_proyecto)
+                
+                # Filtrar: primero buscar coincidencia EXACTA, luego parcial
+                elementos_exactos = []
+                elementos_parciales = []
+                
+                for elem in todos_proyectos_nodo:
+                    try:
+                        texto_elem = elem.text.strip()
+                        texto_elem_norm = normalizar(texto_elem)
+                        
+                        if texto_elem_norm == nombre_proyecto_norm:
+                            # Coincidencia EXACTA
+                            elementos_exactos.append(elem)
+                            print(f"[DEBUG] ✅ Coincidencia EXACTA: '{texto_elem}'")
+                        elif nombre_proyecto_norm in texto_elem_norm:
+                            # Coincidencia parcial (contiene)
+                            elementos_parciales.append(elem)
+                            print(f"[DEBUG] 📌 Coincidencia parcial: '{texto_elem}'")
+                    except:
+                        continue
+                
+                # Preferir coincidencias exactas sobre parciales
+                elementos_en_nodo = elementos_exactos if elementos_exactos else elementos_parciales
+                print(f"[DEBUG] 📊 Encontrados {len(elementos_en_nodo)} proyectos en '{nodo_padre}' (exactos: {len(elementos_exactos)}, parciales: {len(elementos_parciales)})")
                 
                 # 🆕 Si hay MÚLTIPLES en el mismo nodo padre → DESAMBIGUAR
                 if len(elementos_en_nodo) > 1 and not elemento_preseleccionado:
