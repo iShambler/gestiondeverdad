@@ -22,7 +22,8 @@ from .proyecto_handler import (
     imputar_horas_dia,
     imputar_horas_semana,
     borrar_todas_horas_dia,
-    leer_tabla_imputacion
+    leer_tabla_imputacion,
+    copiar_semana_anterior
 )
 
 from .jornada import (
@@ -54,6 +55,7 @@ __all__ = [
     'imputar_horas_semana',
     'borrar_todas_horas_dia',
     'leer_tabla_imputacion',
+    'copiar_semana_anterior',
     
     # Jornada
     'iniciar_jornada',

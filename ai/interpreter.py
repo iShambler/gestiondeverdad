@@ -30,10 +30,11 @@ def validar_ordenes(ordenes, texto, contexto=None):
     tiene_imputacion = any(o.get("accion") in ["imputar_horas_dia", "imputar_horas_semana"] for o in ordenes)
     tiene_eliminacion = any(o.get("accion") == "eliminar_linea" for o in ordenes)
     tiene_borrado_horas = any(o.get("accion") == "borrar_todas_horas_dia" for o in ordenes)
+    tiene_copiar_semana = any(o.get("accion") == "copiar_semana_anterior" for o in ordenes)
 
-    # 🔥 Si hay eliminación o borrado de horas → NO VALIDAR (son acciones válidas sin imputación)
-    if tiene_eliminacion or tiene_borrado_horas:
-        print(f"[DEBUG] ✅ Acción de eliminación/borrado detectada, omitiendo validación")
+    # 🔥 Si hay eliminación, borrado de horas o copiar semana → NO VALIDAR (son acciones válidas sin imputación)
+    if tiene_eliminacion or tiene_borrado_horas or tiene_copiar_semana:
+        print(f"[DEBUG] ✅ Acción especial detectada, omitiendo validación")
         return None
 
     # ----------------------------------------------------------------------
@@ -268,6 +269,13 @@ TIPOS DE ACCIONES
    - "emitir", "expide", "envía" → emitir_linea
    - Resto → guardar_linea
 
+5) COPIAR SEMANA ANTERIOR:
+   - "copia la semana pasada", "igual que la semana pasada", "lo mismo que la semana anterior"
+   - "carga el horario de la semana pasada", "repite la semana pasada"
+   - → copiar_semana_anterior (SIN PARÁMETROS, es una acción atómica)
+   - Esta acción va SOLA, no necesita seleccionar_fecha ni guardar_linea
+   - Lee los proyectos/horas de la semana pasada y los copia a la actual automáticamente
+
 ====================================================
 EJEMPLOS
 ====================================================
@@ -363,6 +371,11 @@ EJEMPLOS
   {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Comercial"}}}},
   {{"accion": "eliminar_linea"}},
   {{"accion": "guardar_linea"}}
+]
+
+"Copia la semana pasada" / "Igual que la semana anterior" / "Carga el horario de la semana pasada"
+[
+  {{"accion": "copiar_semana_anterior"}}
 ]
 
 ====================================================

@@ -20,7 +20,8 @@ from web_automation import (
     finalizar_jornada,
     guardar_linea,
     emitir_linea,
-    volver_inicio
+    volver_inicio,
+    copiar_semana_anterior
 )
 
 
@@ -263,6 +264,14 @@ def ejecutar_accion(driver, wait, orden, contexto):
     # ↩️ Volver a inicio
     elif accion == "volver":
         return volver_inicio(driver)
+
+    # 📅 Copiar semana anterior
+    elif accion == "copiar_semana_anterior":
+        try:
+            exito, mensaje, proyectos = copiar_semana_anterior(driver, wait, contexto)
+            return mensaje
+        except Exception as e:
+            return f"❌ Error al copiar la semana anterior: {e}"
 
     # ❓ Desconocido
     else:

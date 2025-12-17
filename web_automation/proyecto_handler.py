@@ -994,3 +994,218 @@ def leer_tabla_imputacion(driver):
         import traceback
         traceback.print_exc()
         return []
+
+
+def copiar_semana_anterior(driver, wait, contexto=None):
+    """
+    Copia el horario de la semana anterior a la semana actual.
+    
+    Proceso:
+    1. Va a la semana pasada y lee todos los proyectos con sus horas
+    2. Vuelve a la semana actual
+    3. Para cada proyecto de la semana pasada:
+       - Selecciona/crea el proyecto
+       - Imputa las mismas horas en los mismos días
+    4. Guarda al final
+    
+    Args:
+        driver: WebDriver de Selenium
+        wait: WebDriverWait configurado
+        contexto: Diccionario de contexto (opcional)
+        
+    Returns:
+        tuple: (éxito: bool, mensaje: str, proyectos_copiados: list)
+    """
+    from datetime import datetime, timedelta
+    from web_automation.navigation import seleccionar_fecha, lunes_de_semana
+    from web_automation.interactions import guardar_linea
+    
+    try:
+        # Calcular fechas
+        hoy = datetime.now()
+        lunes_actual = lunes_de_semana(hoy)
+        lunes_pasado = lunes_actual - timedelta(days=7)
+        
+        print(f"[DEBUG] 📅 Copiando semana del {lunes_pasado.strftime('%d/%m/%Y')} a semana del {lunes_actual.strftime('%d/%m/%Y')}")
+        
+        # =====================================================
+        # PASO 1: Ir a la semana pasada y leer proyectos
+        # =====================================================
+        print(f"[DEBUG] 🔙 Yendo a la semana pasada...")
+        
+        # Crear contexto temporal para la navegación
+        contexto_nav = contexto.copy() if contexto else {}
+        resultado_fecha = seleccionar_fecha(driver, lunes_pasado, contexto_nav)
+        print(f"[DEBUG] 📅 {resultado_fecha}")
+        
+        time.sleep(1.5)  # Esperar a que cargue la tabla
+        
+        # Leer los proyectos de la semana pasada
+        proyectos_semana_pasada = leer_tabla_imputacion(driver)
+        
+        if not proyectos_semana_pasada:
+            return (False, "❌ No encontré ningún proyecto en la semana pasada. No hay nada que copiar.", [])
+        
+        # Filtrar solo proyectos con horas > 0
+        proyectos_con_horas = [
+            p for p in proyectos_semana_pasada 
+            if p['total'] > 0
+        ]
+        
+        if not proyectos_con_horas:
+            return (False, "❌ La semana pasada no tiene horas imputadas. No hay nada que copiar.", [])
+        
+        print(f"[DEBUG] 📋 Encontrados {len(proyectos_con_horas)} proyectos con horas en la semana pasada")
+        
+        # Guardar info de proyectos para copiar
+        proyectos_a_copiar = []
+        for p in proyectos_con_horas:
+            # Extraer nombre del proyecto (última parte del path)
+            nombre_completo = p['proyecto']
+            partes = nombre_completo.split(' - ')
+            nombre_proyecto = partes[-1].strip() if partes else nombre_completo
+            nodo_padre = partes[-2].strip() if len(partes) >= 2 else None
+            
+            proyectos_a_copiar.append({
+                'nombre': nombre_proyecto,
+                'nodo_padre': nodo_padre,
+                'path_completo': nombre_completo,
+                'horas': p['horas'],
+                'total': p['total']
+            })
+            
+            print(f"[DEBUG]   📦 {nombre_proyecto}: {p['total']}h totales")
+        
+        # =====================================================
+        # PASO 2: Volver a la semana actual
+        # =====================================================
+        print(f"[DEBUG] ➡️ Volviendo a la semana actual...")
+        
+        resultado_fecha = seleccionar_fecha(driver, lunes_actual, contexto_nav)
+        print(f"[DEBUG] 📅 {resultado_fecha}")
+        
+        time.sleep(1.5)  # Esperar a que cargue la tabla
+        
+        # =====================================================
+        # PASO 3: Copiar cada proyecto con sus horas
+        # =====================================================
+        proyectos_copiados = []
+        errores = []
+        
+        for proyecto in proyectos_a_copiar:
+            nombre = proyecto['nombre']
+            nodo_padre = proyecto['nodo_padre']
+            horas = proyecto['horas']
+            
+            print(f"[DEBUG] 📝 Copiando proyecto '{nombre}'...")
+            
+            try:
+                # Seleccionar/crear el proyecto
+                fila, mensaje, necesita_desamb, coincidencias = seleccionar_proyecto(
+                    driver, wait, nombre, nodo_padre, contexto=contexto
+                )
+                
+                # Si necesita desambiguación, saltamos este proyecto por ahora
+                if necesita_desamb:
+                    print(f"[DEBUG] ⚠️ Proyecto '{nombre}' necesita desambiguación, saltando...")
+                    errores.append(f"{nombre} (requiere selección manual)")
+                    continue
+                
+                if not fila:
+                    print(f"[DEBUG] ❌ No se pudo seleccionar '{nombre}': {mensaje}")
+                    errores.append(f"{nombre} ({mensaje})")
+                    continue
+                
+                # Imputar las horas de cada día
+                dias_imputados = []
+                for dia_nombre, valor in horas.items():
+                    if valor > 0:
+                        resultado = imputar_horas_dia(
+                            driver, wait, dia_nombre, valor, fila, nombre, modo="establecer"
+                        )
+                        dias_imputados.append(f"{dia_nombre}: {valor}h")
+                        print(f"[DEBUG]   ✅ {dia_nombre}: {valor}h")
+                
+                if dias_imputados:
+                    # Calcular total de este proyecto
+                    total_proyecto = sum(v for v in horas.values() if v > 0)
+                    
+                    proyectos_copiados.append({
+                        'nombre': nombre,
+                        'total': total_proyecto,
+                        'dias': dias_imputados
+                    })
+                    
+            except Exception as e:
+                print(f"[DEBUG] ❌ Error copiando '{nombre}': {e}")
+                errores.append(f"{nombre} (error: {str(e)[:50]})")
+                continue
+        
+        # =====================================================
+        # PASO 4: Guardar
+        # =====================================================
+        if proyectos_copiados:
+            print(f"[DEBUG] 💾 Guardando...")
+            resultado_guardar = guardar_linea(driver, wait)
+            print(f"[DEBUG] {resultado_guardar}")
+        
+        # =====================================================
+        # Generar mensaje de resultado
+        # =====================================================
+        if proyectos_copiados:
+            # 🔥 Leer la tabla DESPUÉS de copiar para obtener el total REAL
+            # (misma lógica que consultar_semana)
+            time.sleep(1)  # Esperar a que se actualice la tabla
+            proyectos_actuales = leer_tabla_imputacion(driver)
+            
+            # Calcular totales por día (igual que consultar_semana)
+            totales_por_dia = {
+                'lunes': 0.0,
+                'martes': 0.0,
+                'miércoles': 0.0,
+                'jueves': 0.0,
+                'viernes': 0.0
+            }
+            
+            resumen_proyectos = []
+            
+            for proyecto in proyectos_actuales:
+                horas = proyecto['horas']
+                # Calcular total del proyecto sumando L-V
+                total_proyecto = (
+                    horas.get('lunes', 0) + 
+                    horas.get('martes', 0) + 
+                    horas.get('miércoles', 0) + 
+                    horas.get('jueves', 0) + 
+                    horas.get('viernes', 0)
+                )
+                
+                if total_proyecto > 0:
+                    nombre_corto = proyecto['proyecto'].split(' - ')[-1]
+                    resumen_proyectos.append(f"• {nombre_corto}: {total_proyecto}h")
+                    
+                    # Sumar a totales por día
+                    for dia in totales_por_dia.keys():
+                        totales_por_dia[dia] += horas.get(dia, 0)
+            
+            # Calcular total real de la semana
+            total_semana_real = sum(totales_por_dia.values())
+            
+            print(f"[DEBUG] 📊 Total semana leído de tabla: {total_semana_real}h")
+            
+            mensaje_exito = f"✅ He copiado {len(proyectos_copiados)} proyecto(s) de la semana pasada:\n"
+            mensaje_exito += "\n".join(resumen_proyectos)
+            mensaje_exito += f"\n\n📊 **Total semana: {total_semana_real}h**"
+            
+            if errores:
+                mensaje_exito += f"\n\n⚠️ No pude copiar: {', '.join(errores)}"
+            
+            return (True, mensaje_exito, proyectos_copiados)
+        else:
+            return (False, f"❌ No pude copiar ningún proyecto. Errores: {', '.join(errores)}", [])
+    
+    except Exception as e:
+        print(f"[DEBUG] ❌ Error general copiando semana: {e}")
+        import traceback
+        traceback.print_exc()
+        return (False, f"❌ Error al copiar la semana anterior: {e}", [])
