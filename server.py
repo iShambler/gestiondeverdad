@@ -598,11 +598,13 @@ def shutdown_event():
 # 🔥 Manejo de señales para cierre limpio (Ctrl+C, kill)
 import signal
 import sys
+import os
 
 def signal_handler(signum, frame):
     print(f"\n[SERVER] 🛑 Señal {signum} recibida, cerrando...")
     browser_pool.close_all()
-    sys.exit(0)
+    # En lugar de sys.exit(), dejamos que uvicorn maneje el cierre
+    os._exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)

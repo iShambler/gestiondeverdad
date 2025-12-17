@@ -27,10 +27,24 @@ def validar_ordenes(ordenes, texto, contexto=None):
 
     # Identificar si hay proyecto y/o imputación
     tiene_proyecto = any(o.get("accion") == "seleccionar_proyecto" for o in ordenes)
-    tiene_imputacion = any(o.get("accion") in ["imputar_horas_dia", "imputar_horas_semana"] for o in ordenes)
+    
+    # 🔥 Imputación válida = tiene acción de imputar CON horas > 0
+    tiene_imputacion = False
+    for o in ordenes:
+        if o.get("accion") == "imputar_horas_dia":
+            horas = o.get("parametros", {}).get("horas", 0)
+            if horas and horas != 0:
+                tiene_imputacion = True
+                break
+        elif o.get("accion") == "imputar_horas_semana":
+            tiene_imputacion = True
+            break
+    
     tiene_eliminacion = any(o.get("accion") == "eliminar_linea" for o in ordenes)
     tiene_borrado_horas = any(o.get("accion") == "borrar_todas_horas_dia" for o in ordenes)
     tiene_copiar_semana = any(o.get("accion") == "copiar_semana_anterior" for o in ordenes)
+    
+    print(f"[DEBUG] 🔍 Validación - proyecto:{tiene_proyecto} imputacion:{tiene_imputacion} eliminacion:{tiene_eliminacion} borrado:{tiene_borrado_horas} copiar:{tiene_copiar_semana}")
 
     # 🔥 Si hay eliminación, borrado de horas o copiar semana → NO VALIDAR (son acciones válidas sin imputación)
     if tiene_eliminacion or tiene_borrado_horas or tiene_copiar_semana:
@@ -52,6 +66,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
     # 🧩 2. Proyecto sin imputación → Falta horas y día
     # ----------------------------------------------------------------------
     if tiene_proyecto and not tiene_imputacion:
+        print(f"[DEBUG] 📝 Detectado: proyecto SIN imputación - preguntando horas")
         for orden in ordenes:
             if orden.get("accion") == "seleccionar_proyecto":
                 nombre_proyecto = orden.get("parametros", {}).get("nombre")
@@ -60,6 +75,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
             nombre_proyecto = None
 
         if nombre_proyecto:
+            print(f"[DEBUG] 📝 Proyecto encontrado: {nombre_proyecto}")
             return [{
                 "accion": "info_incompleta",
                 "info_parcial": {"proyecto": nombre_proyecto},

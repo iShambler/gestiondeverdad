@@ -26,24 +26,29 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
     if not acciones_ejecutadas:
         return "No he entendido qué quieres que haga. ¿Podrías reformularlo?"
     
-    # 🔥 Extraer fecha si viene en el formato [FECHA:dd/mm/yyyy]
-    fecha_imputacion = None
-    acciones_limpias = []
+    # 🔥 Extraer fechas de cada acción y limpiar mensajes
+    # Ahora mantenemos la fecha asociada a cada acción
+    import re
+    acciones_con_fecha = []
+    
     for acc in acciones_ejecutadas:
+        fecha = None
         if "[FECHA:" in acc:
-            # Extraer fecha
-            import re
             match = re.search(r'\[FECHA:(\d{2}/\d{2}/\d{4})\]', acc)
             if match:
-                fecha_imputacion = match.group(1)
-            # Limpiar el mensaje
+                fecha = match.group(1)
             acc_limpia = re.sub(r'\[FECHA:[^\]]+\]', '', acc).strip()
-            acciones_limpias.append(acc_limpia)
         else:
-            acciones_limpias.append(acc)
+            acc_limpia = acc
+        
+        # Guardar acción con su fecha si la tiene
+        if fecha:
+            acciones_con_fecha.append(f"{acc_limpia} (fecha: {fecha})")
+        else:
+            acciones_con_fecha.append(acc_limpia)
     
     # Crear resumen de acciones
-    resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_limpias])
+    resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_con_fecha])
     
     # 🆕 Si hay nodo_padre en el contexto (Y NO es __buscar__), añadirlo a la información
     info_adicional = ""
@@ -52,11 +57,7 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
         # 🚫 Ignorar si es la señal interna __buscar__
         if nodo_padre != "__buscar__":
             proyecto = contexto.get("proyecto_actual", "proyecto")
-            info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Debes mencionar esto en tu respuesta."
-    
-    # 🔥 Si hay fecha de imputación, añadirla
-    if fecha_imputacion:
-        info_adicional += f"\n\n📅 FECHA IMPORTANTE: Las horas se imputaron para el día {fecha_imputacion}. Debes mencionar esta fecha EXACTA en tu respuesta, NO menciones 'el lunes de esa semana' ni ningún otro día."
+            info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Puedes mencionar esto en tu respuesta."
     
     prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
 
@@ -66,13 +67,18 @@ Has ejecutado las siguientes acciones:
 {resumen_acciones}{info_adicional}
 
 Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando lo que has hecho.
-Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.
-No inventes información que no esté en las acciones ejecutadas.
+
+⚠️ REGLAS IMPORTANTES:
+- Si hay VARIAS acciones con DIFERENTES fechas, menciona CADA fecha específica para cada proyecto/acción.
+- NO digas "para esa misma fecha" si las fechas son diferentes.
+- Usa formato de fecha legible (ej: "el 17/12" o "el viernes 19/12").
+- Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.
+- No inventes información que no esté en las acciones ejecutadas.
 
 Ejemplos de buen estilo:
 - "¡Listo! He imputado 8 horas en Desarrollo para hoy y lo he guardado todo."
-- "Perfecto, ya tienes toda la semana imputada en el proyecto Estudio. He guardado los cambios."
-- "He iniciado tu jornada laboral. ¡A trabajar! 💪"
+- "Perfecto, he puesto 3h en Boda para el 17/12 y 2h en Formación para el 19/12. ¡Guardado! ✅"
+- "¡Hecho! 3 horas en Eventos el lunes 16/12 y 5 horas en Desarrollo el miércoles 18/12."
 
 Respuesta:"""
     
