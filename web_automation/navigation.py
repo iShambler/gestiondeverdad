@@ -35,43 +35,64 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
     Returns:
         str: Mensaje de confirmación o error
     """
-    # 🆕 NUEVO: Solo volver atrás si cambiamos de SEMANA
-    fecha_anterior = contexto.get("fecha_seleccionada") if contexto else None
+    from web_automation.interactions import guardar_linea
     
     print(f"[DEBUG] 📅 Seleccionando fecha: {fecha_obj.strftime('%d/%m/%Y')}")
-    print(f"[DEBUG] 📅 Fecha anterior en contexto: {fecha_anterior.strftime('%d/%m/%Y') if fecha_anterior else 'None'}")
     
-    # Calcular lunes de cada semana
-    lunes_nuevo = lunes_de_semana(fecha_obj)
-    lunes_anterior = lunes_de_semana(fecha_anterior) if fecha_anterior else None
+    # Calcular lunes de la semana objetivo
+    lunes_objetivo = lunes_de_semana(fecha_obj)
+    print(f"[DEBUG] 📅 Lunes objetivo: {lunes_objetivo.strftime('%d/%m/%Y')}")
     
-    print(f"[DEBUG] 📅 Lunes nuevo: {lunes_nuevo.strftime('%d/%m/%Y')}")
-    print(f"[DEBUG] 📅 Lunes anterior: {lunes_anterior.strftime('%d/%m/%Y') if lunes_anterior else 'None'}")
-    print(f"[DEBUG] 📅 ¿Son iguales? {lunes_nuevo == lunes_anterior if lunes_anterior else 'N/A'}")
+    # Obtener la semana actual del contexto
+    fecha_actual_contexto = contexto.get("fecha_seleccionada") if contexto else None
+    lunes_actual = lunes_de_semana(fecha_actual_contexto) if fecha_actual_contexto else None
     
-    # 🔥 Solo volver si estamos en pantalla de imputación Y cambiamos de semana
-    debe_volver = False
+    print(f"[DEBUG] 📅 Fecha actual contexto: {fecha_actual_contexto.strftime('%d/%m/%Y') if fecha_actual_contexto else 'None'}")
+    print(f"[DEBUG] 📅 Lunes actual: {lunes_actual.strftime('%d/%m/%Y') if lunes_actual else 'None'}")
     
+    # 🔥 Verificar si hay botón volver visible (estamos en pantalla de imputación)
     try:
         btn_volver = driver.find_element(By.CSS_SELECTOR, Selectors.VOLVER)
         if btn_volver.is_displayed():
-            # 🆕 Solo volver si cambiamos de semana (o es la primera vez)
-            if lunes_anterior is None or lunes_nuevo != lunes_anterior:
-                print(f"[DEBUG] 🔙 Cambiando de semana ({lunes_anterior.strftime('%d/%m') if lunes_anterior else 'inicio'} → {lunes_nuevo.strftime('%d/%m')}), volviendo atrás...")
+            # Decidir si debemos volver
+            debe_volver = False
+            
+            if lunes_actual is None:
+                # Primera vez o no sabemos dónde estamos
+                print(f"[DEBUG] 🔙 No hay fecha en contexto, volviendo para navegar...")
+                debe_volver = True
+            elif lunes_actual != lunes_objetivo:
+                # Cambiamos de semana
+                print(f"[DEBUG] 🔙 Cambiando de semana ({lunes_actual.strftime('%d/%m')} → {lunes_objetivo.strftime('%d/%m')})")
+                
+                # 🔥 GUARDAR ANTES de volver si hay cambios pendientes
+                print(f"[DEBUG] 💾 Guardando cambios antes de cambiar de semana...")
+                try:
+                    resultado_guardar = guardar_linea(driver, WebDriverWait(driver, 15))
+                    print(f"[DEBUG] 💾 {resultado_guardar}")
+                except Exception as e:
+                    print(f"[DEBUG] ⚠️ Error guardando antes de volver: {e}")
+                
+                debe_volver = True
+            else:
+                # Misma semana, NO volver
+                print(f"[DEBUG] ✅ Misma semana ({lunes_objetivo.strftime('%d/%m')}), NO volver atrás")
+                debe_volver = False
+            
+            if debe_volver:
+                print(f"[DEBUG] 🔙 Volviendo atrás...")
                 btn_volver.click()
                 time.sleep(2)
-                debe_volver = True
                 
-                # 🆕 Limpiar el contexto porque todos los elementos quedan obsoletos
+                # Limpiar el contexto porque todos los elementos quedan obsoletos
                 if contexto:
                     print("[DEBUG] 🧹 Limpiando contexto tras volver atrás...")
                     contexto["fila_actual"] = None
                     contexto["proyecto_actual"] = None
                     contexto["nodo_padre_actual"] = None
-            else:
-                print(f"[DEBUG] ✅ Misma semana ({lunes_nuevo.strftime('%d/%m')}), NO volver atrás, solo cambiar fecha")
     except:
-        # No hay botón volver, ya estamos donde debemos
+        # No hay botón volver, ya estamos en la pantalla principal
+        print(f"[DEBUG] 📅 No hay botón volver visible, estamos en pantalla principal")
         pass
     
     wait = WebDriverWait(driver, 15)
