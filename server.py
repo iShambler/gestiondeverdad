@@ -508,6 +508,16 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             )
             return JSONResponse({"reply": respuesta})
 
+    # ---------------------------------------------------------
+    # WEBAPP NORMAL (sin WhatsApp, sin login inicial)
+    # ---------------------------------------------------------
+    if not texto:
+        return JSONResponse({"reply": "No he recibido ningún mensaje."})
+    
+    # Procesar mensaje para webapp
+    respuesta = await procesar_mensaje_usuario(texto, user_id, db, canal="webapp")
+    return JSONResponse({"reply": respuesta})
+
     
 async def procesar_whatsapp_en_background(texto: str, wa_id: str):
     db = SessionLocal()
@@ -583,3 +593,16 @@ def shutdown_event():
     print("[SERVER] 🛑 Apagando servidor, cerrando todos los navegadores...")
     browser_pool.close_all()
     executor.shutdown(wait=True)
+
+
+# 🔥 Manejo de señales para cierre limpio (Ctrl+C, kill)
+import signal
+import sys
+
+def signal_handler(signum, frame):
+    print(f"\n[SERVER] 🛑 Señal {signum} recibida, cerrando...")
+    browser_pool.close_all()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)

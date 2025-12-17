@@ -51,7 +51,7 @@ class BrowserSession:
             options = webdriver.ChromeOptions()
 
             # MODO HEADLESS
-
+            options.add_argument('--headless=new')  # 🔥 CRÍTICO: Modo headless
             options.add_argument('--disable-gpu')
             options.add_argument('--window-size=1920,1080')
 
@@ -59,6 +59,10 @@ class BrowserSession:
             if platform.system() == "Linux":
                 options.add_argument('--no-sandbox')
                 options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-extensions')
+                options.add_argument('--disable-infobars')
+                options.add_argument('--remote-debugging-port=0')  # Puerto aleatorio
+                options.add_argument('--single-process')  # Reduce memoria
 
             self.driver = webdriver.Chrome(service=service, options=options)
             self.wait = WebDriverWait(self.driver, 15)
@@ -191,4 +195,5 @@ class BrowserPool:
 
 
 # Instancia global del pool
-browser_pool = BrowserPool(max_sessions=50, session_timeout_minutes=10)
+# 🔥 Timeout de 30 min para evitar re-logins frecuentes
+browser_pool = BrowserPool(max_sessions=50, session_timeout_minutes=30)
