@@ -26,7 +26,7 @@ def normalizar(texto):
     )
 
 
-def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None, contexto=None):
+def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None, contexto=None, es_modificacion=False):
     """
     Selecciona el proyecto en la tabla de imputación.
     Si ya existe una línea con ese proyecto, la reutiliza.
@@ -40,6 +40,8 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         nodo_padre: (Opcional) Nombre del nodo padre para desambiguar proyectos con mismo nombre
                     Ejemplo: "Departamento Desarrollo" cuando hay varios "Desarrollo"
         elemento_preseleccionado: (Opcional) WebElement ya seleccionado del árbol (para desambiguación)
+        contexto: (Opcional) Diccionario de contexto de la sesión
+        es_modificacion: (Opcional) True si es para sumar/restar horas a proyecto existente
         
     Returns:
         tuple: (fila: WebElement o None, mensaje: str, necesita_desambiguacion: bool, coincidencias: list)
@@ -146,15 +148,17 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 proyecto_contexto = (contexto or {}).get("proyecto_actual", "").lower() if contexto else ""
                 proyecto_encontrado = normalizar(coincidencia["proyecto"])
                 
-                # Si el proyecto del contexto coincide con el encontrado → usar sin preguntar
-                if proyecto_contexto and normalizar(proyecto_contexto) in proyecto_encontrado:
-                    print(f"[DEBUG] ✅ Proyecto del contexto '{proyecto_contexto}' coincide, usando directamente sin preguntar")
+                # 🔥 USAR DIRECTAMENTE SIN PREGUNTAR si:
+                # 1. El proyecto del contexto coincide con el encontrado, O
+                # 2. Es una modificación (sumar/restar horas a proyecto existente)
+                if (proyecto_contexto and normalizar(proyecto_contexto) in proyecto_encontrado) or es_modificacion:
+                    print(f"[DEBUG] ✅ Usando proyecto existente directamente (contexto={bool(proyecto_contexto)}, modificacion={es_modificacion})")
                     fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
                     time.sleep(0.3)
                     return (fila, f"Usando '{coincidencia['proyecto']}' existente", False, [])
                 
-                # Si NO viene del contexto → preguntar para confirmar
+                # Si NO viene del contexto Y no es modificación → preguntar para confirmar
                 print(f"[DEBUG] 💬 Solicitando confirmación del proyecto existente")
                 return (None, "", "confirmar_existente", coincidencias_encontradas)
             
@@ -598,8 +602,6 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
             
             for idx, sel in enumerate(selects):
                 # Leer el nombre del proyecto
-                title = sel.get_attribute("title") or ""
-                
                 try:
                     texto_selected = driver.execute_script("""
                         var select = arguments[0];
@@ -609,19 +611,16 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
                 except:
                     texto_selected = ""
                 
-                texto_completo = f"{title} {texto_selected}".lower()
-                
                 # Si encontramos el proyecto
-                if normalizar(nombre_proyecto) in normalizar(texto_completo):
+                if texto_selected and normalizar(nombre_proyecto) in normalizar(texto_selected):
                     fila = sel.find_element(By.XPATH, "./ancestor::tr")
-                    print(f"[DEBUG] ✅ Encontrado '{nombre_proyecto}' en línea {idx+1}")
+                    print(f"[DEBUG] ✅ Encontrado '{nombre_proyecto}' en línea {idx+1}: {texto_selected}")
                     break
         
         if not fila:
             return f"No encontré ninguna línea con el proyecto '{nombre_proyecto}'"
         
         # Buscar el botón de eliminar en la fila
-        # 🔧 FIX: Añadir más selectores para el botón de eliminar
         try:
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
             time.sleep(0.3)
@@ -629,9 +628,9 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
             # Intentar varios selectores para el botón eliminar
             btn_eliminar = None
             selectores_eliminar = [
+                "input[id*='btEliminar']",
                 "button.botonEliminar",
                 "button#botonEliminar", 
-                "input[id*='btEliminar']",
                 ".botonEliminar",
                 "[onclick*='eliminar']",
                 "button[title*='liminar']"
@@ -648,24 +647,57 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
             
             if not btn_eliminar:
                 # Último intento: buscar cualquier botón/input en la fila
-                botones = fila.find_elements(By.CSS_SELECTOR, "button, input[type='button']")
+                botones = fila.find_elements(By.CSS_SELECTOR, "button, input[type='button'], input[type='submit']")
+                print(f"[DEBUG] 🔍 Buscando entre {len(botones)} botones en la fila...")
                 for boton in botones:
-                    texto_boton = (boton.get_attribute("title") or boton.text or "").lower()
-                    if "elimin" in texto_boton or "borr" in texto_boton or "quitar" in texto_boton:
+                    texto_boton = (boton.get_attribute("title") or boton.get_attribute("value") or boton.text or "").lower()
+                    onclick = (boton.get_attribute("onclick") or "").lower()
+                    print(f"[DEBUG]   Botón: texto='{texto_boton}', onclick='{onclick[:50]}...'")
+                    if "elimin" in texto_boton or "borr" in texto_boton or "quitar" in texto_boton or "elimin" in onclick:
                         btn_eliminar = boton
-                        print(f"[DEBUG] 🔘 Botón eliminar encontrado por texto: {texto_boton}")
+                        print(f"[DEBUG] 🔘 Botón eliminar encontrado por texto/onclick")
                         break
             
             if not btn_eliminar:
                 return f"Encontré el proyecto '{nombre_proyecto}' pero no encontré el botón para eliminarlo"
             
+            # 🔥 CLICK en el botón eliminar
+            print(f"[DEBUG] 🔘 Haciendo click en botón eliminar...")
             btn_eliminar.click()
-            time.sleep(1)
+            time.sleep(0.5)
+            
+            # 🔥 Manejar posible ALERT de confirmación
+            try:
+                from selenium.webdriver.common.alert import Alert
+                alert = Alert(driver)
+                alert_text = alert.text
+                print(f"[DEBUG] ⚠️ Alert detectado: {alert_text}")
+                alert.accept()  # Aceptar el alert
+                print(f"[DEBUG] ✅ Alert aceptado")
+                time.sleep(0.5)
+            except:
+                # No hay alert, continuar normalmente
+                print(f"[DEBUG] 👍 No hay alert de confirmación")
+            
+            # 🔥 Verificar si hay un modal de confirmación (algunos sistemas usan modals en vez de alerts)
+            try:
+                modal_confirm = driver.find_element(By.CSS_SELECTOR, ".modal.show button.btn-primary, .modal.show button.btn-danger, #confirmModal button")
+                if modal_confirm:
+                    print(f"[DEBUG] 🔘 Modal de confirmación detectado, confirmando...")
+                    modal_confirm.click()
+                    time.sleep(0.5)
+            except:
+                pass
+            
+            time.sleep(0.5)
             
             print(f"[DEBUG] ✅ Línea del proyecto '{nombre_proyecto}' eliminada")
             return f"He eliminado la línea del proyecto '{nombre_proyecto}'"
             
         except Exception as e:
+            print(f"[DEBUG] ❌ Error en eliminación: {e}")
+            import traceback
+            traceback.print_exc()
             return f"Encontré el proyecto pero no pude eliminar la línea: {e}"
     
     except Exception as e:
