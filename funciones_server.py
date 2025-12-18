@@ -307,7 +307,7 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
                                session, db: Session, usuario, user_id: str, canal: str, 
                                indice_orden: int = 0) -> Optional[str]:
     """
-    Maneja respuestas especiales (desambiguación, confirmación)
+    Maneja respuestas especiales (desambiguación)
     
     Args:
         indice_orden: Índice de la orden actual en la lista (para continuar después)
@@ -317,7 +317,7 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
     """
     tipo = mensaje.get("tipo")
     
-    # CASO 1: Desambiguación
+    # Desambiguación
     if tipo == "desambiguacion":
         mensaje_pregunta = generar_mensaje_desambiguacion(
             mensaje["proyecto"],
@@ -330,39 +330,13 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
             mensaje["proyecto"],
             mensaje["coincidencias"],
             ordenes,
-            indice_orden  # 🆕 Guardar índice para continuar después
+            indice_orden
         )
         
         registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", 
                          canal=canal, respuesta=mensaje_pregunta)
         session.update_activity()
         return mensaje_pregunta
-    
-    # CASO 2: Confirmar proyecto existente
-    elif tipo == "confirmar_existente":
-        print(f"[DEBUG] 💬 Proyecto existente encontrado, solicitando confirmación")
-        
-        info_existente = mensaje["coincidencias"][0] if mensaje.get("coincidencias") else {}
-        texto_completo = info_existente.get("texto_completo", "")
-        
-        # 🆕 Detectar tipo de acción para personalizar el mensaje
-        tipo_accion = detectar_tipo_accion(ordenes, indice_orden)
-        mensaje_confirmacion = generar_mensaje_confirmacion_proyecto(texto_completo, tipo_accion, canal)
-        
-        conversation_state_manager.guardar_desambiguacion(
-            user_id,
-            info_existente.get("proyecto", ""),
-            [{"proyecto": info_existente.get("proyecto", ""), 
-              "nodo_padre": info_existente.get("nodo_padre", ""),
-              "path_completo": texto_completo}],
-            ordenes,
-            indice_orden  # 🆕 Guardar índice
-        )
-        
-        registrar_peticion(db, usuario.id, texto, "confirmacion_pendiente", 
-                         canal=canal, respuesta=mensaje_confirmacion)
-        session.update_activity()
-        return mensaje_confirmacion
     
     return None
 
@@ -418,7 +392,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
     
     ordenes_originales = estado["comando_original"]
     nombre_proyecto = estado["nombre_proyecto"]
-    indice_orden = estado.get("indice_orden", 0)  # 🆕 Obtener índice guardado
+    indice_orden = estado.get("indice_orden", 0)
     
     # Modificar la orden que causó desambiguación con proyecto específico
     if indice_orden < len(ordenes_originales):
@@ -429,7 +403,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
             orden["parametros"]["nodo_padre"] = coincidencia["nodo_padre"]
             print(f"[DEBUG] ✅ Proyecto actualizado: '{proyecto_especifico}' bajo '{coincidencia['nodo_padre']}'")
     
-    # 🆕 Ejecutar solo desde el índice que falló en adelante
+    # Ejecutar solo desde el índice que falló en adelante
     respuestas = []
     print(f"[DEBUG] 🔁 Ejecutando órdenes desde índice {indice_orden} hasta {len(ordenes_originales)-1}")
     for idx in range(indice_orden, len(ordenes_originales)):
@@ -440,29 +414,26 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
             mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
             print(f"[DEBUG] 🔁 Resultado: {type(mensaje).__name__} - {str(mensaje)[:100] if not isinstance(mensaje, dict) else 'dict'}")
             
-            # 🆕 Si devuelve dict, es desambiguación - mantener el flujo
+            # Si devuelve dict, es desambiguación - mantener el flujo
             if isinstance(mensaje, dict):
                 tipo_msg = mensaje.get("tipo")
                 
-                # Si necesita NUEVA desambiguación (más específica)
                 if tipo_msg == "desambiguacion":
                     print(f"[DEBUG] 🔄 Necesita desambiguación adicional, actualizando estado...")
                     
-                    # Generar mensaje
                     mensaje_pregunta = generar_mensaje_desambiguacion(
                         mensaje["proyecto"],
                         mensaje["coincidencias"],
                         canal=canal
                     )
                     
-                    # ACTUALIZAR el estado (no limpiar)
                     conversation_state_manager.limpiar_estado(user_id)
                     conversation_state_manager.guardar_desambiguacion(
                         user_id,
                         mensaje["proyecto"],
                         mensaje["coincidencias"],
                         ordenes_originales,
-                        idx  # 🆕 Guardar índice actual
+                        idx
                     )
                     
                     registrar_peticion(db, usuario.id, texto_original, "desambiguacion_pendiente", 
@@ -470,35 +441,6 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
                     session.update_activity()
                     return mensaje_pregunta
                 
-                # 🆕 Si necesita CONFIRMACIÓN de proyecto existente
-                elif tipo_msg == "confirmar_existente":
-                    print(f"[DEBUG] 💬 Proyecto existente encontrado durante ejecución, solicitando confirmación...")
-                    
-                    info_existente = mensaje["coincidencias"][0] if mensaje.get("coincidencias") else {}
-                    texto_completo = info_existente.get("texto_completo", "")
-                    
-                    # 🆕 Detectar tipo de acción para personalizar el mensaje
-                    tipo_accion = detectar_tipo_accion(ordenes_originales, idx)
-                    mensaje_confirmacion = generar_mensaje_confirmacion_proyecto(texto_completo, tipo_accion, canal)
-                    
-                    # ACTUALIZAR el estado (no limpiar)
-                    conversation_state_manager.limpiar_estado(user_id)
-                    conversation_state_manager.guardar_desambiguacion(
-                        user_id,
-                        info_existente.get("proyecto", ""),
-                        [{"proyecto": info_existente.get("proyecto", ""),
-                          "nodo_padre": info_existente.get("nodo_padre", ""),
-                          "path_completo": texto_completo}],
-                        ordenes_originales,
-                        idx  # 🆕 Guardar índice actual
-                    )
-                    
-                    registrar_peticion(db, usuario.id, texto_original, "confirmacion_pendiente", 
-                                     canal=canal, respuesta=mensaje_confirmacion)
-                    session.update_activity()
-                    return mensaje_confirmacion
-                
-                # Error desconocido
                 else:
                     conversation_state_manager.limpiar_estado(user_id)
                     return "❌ Algo salió mal al seleccionar el proyecto. Inténtalo de nuevo."
@@ -526,7 +468,7 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
     """
     ordenes_originales = estado["comando_original"]
     nombre_proyecto = estado["nombre_proyecto"]
-    indice_orden = estado.get("indice_orden", 0)  # 🆕 Obtener índice guardado
+    indice_orden = estado.get("indice_orden", 0)
     
     # Modificar la orden que causó desambiguación para buscar en sistema
     if indice_orden < len(ordenes_originales):
@@ -534,7 +476,7 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
         if orden.get("accion") == "seleccionar_proyecto":
             orden["parametros"]["nodo_padre"] = "__buscar__"
     
-    # 🆕 Re-ejecutar solo desde el índice que falló
+    # Re-ejecutar solo desde el índice que falló
     respuestas = []
     for idx in range(indice_orden, len(ordenes_originales)):
         orden = ordenes_originales[idx]
@@ -542,7 +484,7 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
         with session.lock:
             mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
             
-            # 🆕 Manejar desambiguación o confirmación
+            # Manejar desambiguación
             if isinstance(mensaje, dict):
                 tipo_msg = mensaje.get("tipo")
                 
@@ -559,39 +501,13 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
                         mensaje["proyecto"],
                         mensaje["coincidencias"],
                         ordenes_originales,
-                        idx  # 🆕 Guardar índice actual
+                        idx
                     )
                     
                     registrar_peticion(db, usuario.id, texto_original, "desambiguacion_pendiente", 
                                      canal=canal, respuesta=mensaje_pregunta)
                     session.update_activity()
                     return mensaje_pregunta
-                
-                elif tipo_msg == "confirmar_existente":
-                    print(f"[DEBUG] 💬 Proyecto existente encontrado en sistema, solicitando confirmación...")
-                    
-                    info_existente = mensaje["coincidencias"][0] if mensaje.get("coincidencias") else {}
-                    texto_completo = info_existente.get("texto_completo", "")
-                    
-                    # 🆕 Detectar tipo de acción para personalizar el mensaje
-                    tipo_accion = detectar_tipo_accion(ordenes_originales, idx)
-                    mensaje_confirmacion = generar_mensaje_confirmacion_proyecto(texto_completo, tipo_accion, canal)
-                    
-                    conversation_state_manager.limpiar_estado(user_id)
-                    conversation_state_manager.guardar_desambiguacion(
-                        user_id,
-                        info_existente.get("proyecto", ""),
-                        [{"proyecto": info_existente.get("proyecto", ""),
-                          "nodo_padre": info_existente.get("nodo_padre", ""),
-                          "path_completo": texto_completo}],
-                        ordenes_originales,
-                        idx
-                    )
-                    
-                    registrar_peticion(db, usuario.id, texto_original, "confirmacion_pendiente", 
-                                     canal=canal, respuesta=mensaje_confirmacion)
-                    session.update_activity()
-                    return mensaje_confirmacion
             
             if mensaje:
                 respuestas.append(mensaje)

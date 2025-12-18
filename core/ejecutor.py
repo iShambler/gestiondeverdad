@@ -66,31 +66,18 @@ def ejecutar_accion(driver, wait, orden, contexto):
     elif accion == "seleccionar_proyecto":
         try:
             nombre = orden["parametros"].get("nombre")
-            nodo_padre = orden["parametros"].get("nodo_padre")  # 🆕 Nuevo parámetro
-            
-            # 🔥 Detectar si es una modificación (hay imputación después en el contexto)
-            es_modificacion = contexto.get("es_modificacion_pendiente", False)
+            nodo_padre = orden["parametros"].get("nodo_padre")
             
             # 🔍 Debug: mostrar si hay nodo padre
             if nodo_padre:
                 print(f"[DEBUG] 🎯 Seleccionando proyecto con jerarquía: '{nombre}' bajo '{nodo_padre}'")
-            if es_modificacion:
-                print(f"[DEBUG] 🔄 Modo modificación activado - usar proyecto existente directamente")
             
-            # 🆕 Desempaquetar 4 valores en lugar de 2
+            # Desempaquetar 4 valores
             fila, mensaje, necesita_desambiguacion, coincidencias = seleccionar_proyecto(
-                driver, wait, nombre, nodo_padre, contexto=contexto, es_modificacion=es_modificacion
+                driver, wait, nombre, nodo_padre, contexto=contexto
             )
             
-            # 🆕 Si necesita confirmar proyecto existente
-            if necesita_desambiguacion == "confirmar_existente":
-                return {
-                    "tipo": "confirmar_existente",
-                    "proyecto": nombre,
-                    "coincidencias": coincidencias  # ✅ Devolver coincidencias (lista con info_existente)
-                }
-            
-            # 🆕 Si necesita desambiguación, devolver info especial
+            # Si necesita desambiguación, devolver info especial
             if necesita_desambiguacion:
                 return {
                     "tipo": "desambiguacion",
@@ -102,9 +89,9 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 # ✅ Proyecto encontrado o creado correctamente
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
-                contexto["nodo_padre_actual"] = nodo_padre  # 🆕 Guardar nodo padre
+                contexto["nodo_padre_actual"] = nodo_padre
                 
-                # 🆕 Guardar último proyecto usado
+                # Guardar último proyecto usado
                 user_id = contexto.get("user_id")
                 if user_id:
                     from conversation_state import conversation_state_manager
@@ -115,8 +102,8 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 # ❌ Proyecto NO encontrado - DETENER ejecución
                 contexto["fila_actual"] = None
                 contexto["proyecto_actual"] = None
-                contexto["error_critico"] = True  # Marcar error crítico
-                return mensaje  # El mensaje ya viene con el error
+                contexto["error_critico"] = True
+                return mensaje
                 
         except Exception as e:
             return f"Error seleccionando proyecto: {e}"
@@ -303,28 +290,10 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
     
     respuestas = []
     
-    # 🔥 Pre-procesar: detectar si hay modificaciones (seleccionar_proyecto + imputar)
-    # Esto permite usar proyectos existentes sin preguntar cuando el usuario
-    # quiere sumar/restar horas
-    for i, orden in enumerate(ordenes):
-        if orden.get("accion") == "seleccionar_proyecto":
-            # Buscar si la siguiente acción es una imputación
-            if i + 1 < len(ordenes):
-                siguiente = ordenes[i + 1]
-                if siguiente.get("accion") in ["imputar_horas_dia", "imputar_horas_semana"]:
-                    # Marcar que es una modificación
-                    contexto["es_modificacion_pendiente"] = True
-                    print(f"[DEBUG] 🔄 Detectado: seleccionar_proyecto + imputar → modo modificación")
-                    break
-    
     for orden in ordenes:
         # Si hay un error crítico, detener ejecución
         if contexto.get("error_critico"):
             break
-        
-        # Limpiar flag de modificación después de usarlo
-        if orden.get("accion") == "imputar_horas_dia" or orden.get("accion") == "imputar_horas_semana":
-            contexto["es_modificacion_pendiente"] = False
             
         mensaje = ejecutar_accion(driver, wait, orden, contexto)
         if mensaje:

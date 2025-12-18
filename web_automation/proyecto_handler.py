@@ -26,7 +26,7 @@ def normalizar(texto):
     )
 
 
-def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None, contexto=None, es_modificacion=False):
+def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None, contexto=None):
     """
     Selecciona el proyecto en la tabla de imputación.
     Si ya existe una línea con ese proyecto, la reutiliza.
@@ -41,7 +41,6 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     Ejemplo: "Departamento Desarrollo" cuando hay varios "Desarrollo"
         elemento_preseleccionado: (Opcional) WebElement ya seleccionado del árbol (para desambiguación)
         contexto: (Opcional) Diccionario de contexto de la sesión
-        es_modificacion: (Opcional) True si es para sumar/restar horas a proyecto existente
         
     Returns:
         tuple: (fila: WebElement o None, mensaje: str, necesita_desambiguacion: bool, coincidencias: list)
@@ -142,25 +141,14 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         if coincidencias_encontradas and not nodo_padre:
             print(f"[DEBUG] 📊 Encontradas {len(coincidencias_encontradas)} coincidencias en tabla")
             
-            # 🔥 NUEVO: Si solo hay UNA coincidencia Y viene del contexto → USAR DIRECTAMENTE
+            # Si solo hay UNA coincidencia → USAR DIRECTAMENTE
             if len(coincidencias_encontradas) == 1:
                 coincidencia = coincidencias_encontradas[0]
-                proyecto_contexto = (contexto or {}).get("proyecto_actual", "").lower() if contexto else ""
-                proyecto_encontrado = normalizar(coincidencia["proyecto"])
-                
-                # 🔥 USAR DIRECTAMENTE SIN PREGUNTAR si:
-                # 1. El proyecto del contexto coincide con el encontrado, O
-                # 2. Es una modificación (sumar/restar horas a proyecto existente)
-                if (proyecto_contexto and normalizar(proyecto_contexto) in proyecto_encontrado) or es_modificacion:
-                    print(f"[DEBUG] ✅ Usando proyecto existente directamente (contexto={bool(proyecto_contexto)}, modificacion={es_modificacion})")
-                    fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
-                    time.sleep(0.3)
-                    return (fila, f"Usando '{coincidencia['proyecto']}' existente", False, [])
-                
-                # Si NO viene del contexto Y no es modificación → preguntar para confirmar
-                print(f"[DEBUG] 💬 Solicitando confirmación del proyecto existente")
-                return (None, "", "confirmar_existente", coincidencias_encontradas)
+                print(f"[DEBUG] ✅ Usando proyecto existente directamente")
+                fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
+                time.sleep(0.3)
+                return (fila, f"Usando '{coincidencia['proyecto']}' existente", False, [])
             
             # Si hay MÚLTIPLES coincidencias, devolver tipo "desambiguacion"
             # El usuario debe elegir entre las que ya tiene
