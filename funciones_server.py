@@ -319,10 +319,14 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
     
     # Desambiguación
     if tipo == "desambiguacion":
+        # Detectar tipo de acción para personalizar el mensaje
+        tipo_accion = detectar_tipo_accion(ordenes, indice_orden)
+        
         mensaje_pregunta = generar_mensaje_desambiguacion(
             mensaje["proyecto"],
             mensaje["coincidencias"],
-            canal=canal
+            canal=canal,
+            tipo_accion=tipo_accion
         )
         
         conversation_state_manager.guardar_desambiguacion(
@@ -421,10 +425,14 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
                 if tipo_msg == "desambiguacion":
                     print(f"[DEBUG] 🔄 Necesita desambiguación adicional, actualizando estado...")
                     
+                    # Detectar tipo de acción para personalizar el mensaje
+                    tipo_accion = detectar_tipo_accion(ordenes_originales, idx)
+                    
                     mensaje_pregunta = generar_mensaje_desambiguacion(
                         mensaje["proyecto"],
                         mensaje["coincidencias"],
-                        canal=canal
+                        canal=canal,
+                        tipo_accion=tipo_accion
                     )
                     
                     conversation_state_manager.limpiar_estado(user_id)
@@ -489,10 +497,14 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
                 tipo_msg = mensaje.get("tipo")
                 
                 if tipo_msg == "desambiguacion":
+                    # Detectar tipo de acción para personalizar el mensaje
+                    tipo_accion = detectar_tipo_accion(ordenes_originales, idx)
+                    
                     mensaje_pregunta = generar_mensaje_desambiguacion(
                         mensaje["proyecto"],
                         mensaje["coincidencias"],
-                        canal=canal
+                        canal=canal,
+                        tipo_accion=tipo_accion
                     )
                     
                     conversation_state_manager.limpiar_estado(user_id)

@@ -173,7 +173,7 @@ def encontrar_mejor_coincidencia_nodo(nodo_respuesta, coincidencias):
         return None
 
 
-def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp"):
+def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp", tipo_accion="imputar"):
     """
     Genera un mensaje preguntando al usuario cuál proyecto quiere.
     
@@ -181,6 +181,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
         nombre_proyecto: Nombre del proyecto buscado
         coincidencias: Lista de coincidencias
         canal: Canal de comunicación (webapp, slack, whatsapp)
+        tipo_accion: Tipo de acción ('imputar', 'eliminar', 'borrar_horas', 'modificar')
         
     Returns:
         str: Mensaje formateado para el usuario
@@ -191,8 +192,19 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     if len(coincidencias) == 1:
         return None  # No hay ambigüedad
     
-    # 🆕 Detectar si son proyectos existentes (tienen horas) o del sistema
+    # Detectar si son proyectos existentes (tienen horas) o del sistema
     son_existentes = all(coin.get('total_horas') is not None for coin in coincidencias)
+    
+    # Determinar la pregunta según el tipo de acción
+    if tipo_accion == "eliminar":
+        pregunta_accion = "¿Cuál quieres eliminar?"
+        emoji = "🗑️"
+    elif tipo_accion == "borrar_horas":
+        pregunta_accion = "¿De cuál quieres borrar las horas?"
+        emoji = "🧹"
+    else:  # imputar o modificar
+        pregunta_accion = "¿En cuál quieres añadir horas?" if son_existentes else "¿En cuál quieres imputar?"
+        emoji = "💬"
     
     # Formato según el canal
     if canal == "slack":
@@ -201,18 +213,14 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"{idx}. `{coin['path_completo']}` - *{horas}h*\n"
-            mensaje += f"\n💬 *¿En cuál quieres añadir horas?*\n"
-            mensaje += f"• Responde con el *número* o *nombre del departamento*\n"
-            mensaje += f"• Escribe *'ninguno'* o *'otro'* si quieres un proyecto diferente\n"
-            mensaje += f"• Escribe *'cancelar'* para abandonar"
         else:
             mensaje = f"🤔 He encontrado *{len(coincidencias)}* proyectos llamados *'{nombre_proyecto}'*:\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 mensaje += f"{idx}. `{coin['path_completo']}`\n"
-            mensaje += f"\n💬 *¿En cuál quieres imputar?*\n"
-            mensaje += f"• Responde con el *número* o *nombre del departamento*\n"
-            mensaje += f"• Escribe *'ninguno'* o *'otro'* si quieres un proyecto diferente\n"
-            mensaje += f"• Escribe *'cancelar'* para abandonar"
+        mensaje += f"\n{emoji} *{pregunta_accion}*\n"
+        mensaje += f"• Responde con el *número* o *nombre del departamento*\n"
+        mensaje += f"• Escribe *'ninguno'* o *'otro'* si quieres un proyecto diferente\n"
+        mensaje += f"• Escribe *'cancelar'* para abandonar"
     
     elif canal == "whatsapp":
         if son_existentes:
@@ -220,18 +228,14 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"{idx}. {coin['path_completo']} - *{horas}h*\n"
-            mensaje += f"\n💬 *¿En cuál quieres añadir horas?*\n"
-            mensaje += f"• Número o nombre del departamento\n"
-            mensaje += f"• 'ninguno' o 'otro' para buscar diferente\n"
-            mensaje += f"• 'cancelar' para salir"
         else:
             mensaje = f"🤔 *He encontrado {len(coincidencias)} proyectos llamados '{nombre_proyecto}'*:\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 mensaje += f"{idx}. {coin['path_completo']}\n"
-            mensaje += f"\n💬 *¿En cuál quieres imputar?*\n"
-            mensaje += f"• Número o nombre del departamento\n"
-            mensaje += f"• 'ninguno' o 'otro' para buscar diferente\n"
-            mensaje += f"• 'cancelar' para salir"
+        mensaje += f"\n{emoji} *{pregunta_accion}*\n"
+        mensaje += f"• Número o nombre del departamento\n"
+        mensaje += f"• 'ninguno' o 'otro' para buscar diferente\n"
+        mensaje += f"• 'cancelar' para salir"
     
     else:  # webapp
         if son_existentes:
@@ -239,18 +243,14 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"**{idx}.** {coin['path_completo']} - **{horas}h**\n"
-            mensaje += f"\n💬 **¿En cuál quieres añadir horas?**\n"
-            mensaje += f"• Responde con el **número** o **nombre del departamento**\n"
-            mensaje += f"• Escribe **'ninguno'** o **'otro'** si quieres un proyecto diferente\n"
-            mensaje += f"• Escribe **'cancelar'** para abandonar"
         else:
             mensaje = f"🤔 He encontrado **{len(coincidencias)}** proyectos llamados **'{nombre_proyecto}'**:\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 mensaje += f"**{idx}.** {coin['path_completo']}\n"
-            mensaje += f"\n💬 **¿En cuál quieres imputar?**\n"
-            mensaje += f"• Responde con el **número** o **nombre del departamento**\n"
-            mensaje += f"• Escribe **'ninguno'** o **'otro'** si quieres un proyecto diferente\n"
-            mensaje += f"• Escribe **'cancelar'** para abandonar"
+        mensaje += f"\n{emoji} **{pregunta_accion}**\n"
+        mensaje += f"• Responde con el **número** o **nombre del departamento**\n"
+        mensaje += f"• Escribe **'ninguno'** o **'otro'** si quieres un proyecto diferente\n"
+        mensaje += f"• Escribe **'cancelar'** para abandonar"
     
     return mensaje
 
