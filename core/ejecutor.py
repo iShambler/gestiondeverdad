@@ -72,9 +72,14 @@ def ejecutar_accion(driver, wait, orden, contexto):
             if nodo_padre:
                 print(f"[DEBUG] 🎯 Seleccionando proyecto con jerarquía: '{nombre}' bajo '{nodo_padre}'")
             
+            # Detectar si es para "borrar horas" (no tiene sentido crear proyecto para borrarlo)
+            solo_existente = contexto.get("es_borrado_horas", False)
+            if solo_existente:
+                print(f"[DEBUG] 🧹 Modo borrar horas: solo buscar proyecto existente")
+            
             # Desempaquetar 4 valores
             fila, mensaje, necesita_desambiguacion, coincidencias = seleccionar_proyecto(
-                driver, wait, nombre, nodo_padre, contexto=contexto
+                driver, wait, nombre, nodo_padre, contexto=contexto, solo_existente=solo_existente
             )
             
             # Si necesita desambiguación, devolver info especial
@@ -290,10 +295,30 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
     
     respuestas = []
     
+    # Pre-procesar: detectar si es "borrar horas de proyecto específico"
+    # (seleccionar_proyecto seguido de imputar_horas_dia con horas=0 y modo=establecer)
+    for i, orden in enumerate(ordenes):
+        if orden.get("accion") == "seleccionar_proyecto":
+            # Buscar si la siguiente acción es "borrar horas" (imputar 0 con establecer)
+            if i + 1 < len(ordenes):
+                siguiente = ordenes[i + 1]
+                if siguiente.get("accion") == "imputar_horas_dia":
+                    horas = siguiente.get("parametros", {}).get("horas", 0)
+                    modo = siguiente.get("parametros", {}).get("modo", "sumar")
+                    if horas == 0 and modo == "establecer":
+                        # Es borrar horas de proyecto específico
+                        contexto["es_borrado_horas"] = True
+                        print(f"[DEBUG] 🧹 Detectado: seleccionar_proyecto + imputar(0, establecer) → modo borrar horas")
+                        break
+    
     for orden in ordenes:
         # Si hay un error crítico, detener ejecución
         if contexto.get("error_critico"):
             break
+        
+        # Limpiar flag después de usarlo
+        if orden.get("accion") == "imputar_horas_dia":
+            contexto["es_borrado_horas"] = False
             
         mensaje = ejecutar_accion(driver, wait, orden, contexto)
         if mensaje:

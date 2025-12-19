@@ -277,14 +277,32 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
     """
     respuestas = []
     
+    # Pre-procesar: detectar si es "borrar horas de proyecto específico"
+    # (seleccionar_proyecto seguido de imputar_horas_dia con horas=0 y modo=establecer)
+    for i, orden in enumerate(ordenes):
+        if orden.get("accion") == "seleccionar_proyecto":
+            if i + 1 < len(ordenes):
+                siguiente = ordenes[i + 1]
+                if siguiente.get("accion") == "imputar_horas_dia":
+                    horas = siguiente.get("parametros", {}).get("horas", 0)
+                    modo = siguiente.get("parametros", {}).get("modo", "sumar")
+                    if horas == 0 and modo == "establecer":
+                        contexto["es_borrado_horas"] = True
+                        print(f"[DEBUG] 🧹 Detectado: seleccionar_proyecto + imputar(0, establecer) → modo borrar horas")
+                        break
+    
     for idx, orden in enumerate(ordenes):
+        # Limpiar flag después de usarlo
+        if orden.get("accion") == "imputar_horas_dia":
+            contexto["es_borrado_horas"] = False
+        
         with session.lock:
             mensaje = ejecutar_accion(session.driver, session.wait, orden, contexto)
         
         # Verificar si necesita desambiguación o confirmación
         if isinstance(mensaje, dict):
             resultado = manejar_respuesta_especial(mensaje, orden, ordenes, texto, session, 
-                                                   db, usuario, user_id, canal, idx)  # 🆕 Pasar índice
+                                                   db, usuario, user_id, canal, idx)
             if resultado:
                 return resultado
         
@@ -409,6 +427,20 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
     
     # Ejecutar solo desde el índice que falló en adelante
     respuestas = []
+    
+    # Pre-procesar: detectar si es "borrar horas de proyecto específico"
+    for i, orden in enumerate(ordenes_originales):
+        if orden.get("accion") == "seleccionar_proyecto":
+            if i + 1 < len(ordenes_originales):
+                siguiente = ordenes_originales[i + 1]
+                if siguiente.get("accion") == "imputar_horas_dia":
+                    horas = siguiente.get("parametros", {}).get("horas", 0)
+                    modo = siguiente.get("parametros", {}).get("modo", "sumar")
+                    if horas == 0 and modo == "establecer":
+                        contexto["es_borrado_horas"] = True
+                        print(f"[DEBUG] 🧹 Detectado en desambiguación: modo borrar horas")
+                        break
+    
     print(f"[DEBUG] 🔁 Ejecutando órdenes desde índice {indice_orden} hasta {len(ordenes_originales)-1}")
     for idx in range(indice_orden, len(ordenes_originales)):
         orden = ordenes_originales[idx]

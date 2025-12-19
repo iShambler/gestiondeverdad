@@ -51,11 +51,11 @@ class BrowserSession:
             options = webdriver.ChromeOptions()
 
             # MODO HEADLESS
-            options.add_argument('--headless=new')  # 🔥 CRÍTICO: Modo headless
+    
             options.add_argument('--disable-gpu')
             options.add_argument('--window-size=1920,1080')
 
-            # Solo Linux
+            # Solo Linuxcor
             if platform.system() == "Linux":
                 options.add_argument('--no-sandbox')
                 options.add_argument('--disable-dev-shm-usage')

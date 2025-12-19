@@ -28,12 +28,17 @@ def validar_ordenes(ordenes, texto, contexto=None):
     # Identificar si hay proyecto y/o imputación
     tiene_proyecto = any(o.get("accion") == "seleccionar_proyecto" for o in ordenes)
     
-    # 🔥 Imputación válida = tiene acción de imputar CON horas > 0
+    # Imputación válida = tiene acción de imputar CON horas > 0
+    # O con horas = 0 pero modo = "establecer" (borrar horas de un día específico)
     tiene_imputacion = False
     for o in ordenes:
         if o.get("accion") == "imputar_horas_dia":
             horas = o.get("parametros", {}).get("horas", 0)
-            if horas and horas != 0:
+            modo = o.get("parametros", {}).get("modo", "sumar")
+            # Es imputación válida si:
+            # - Tiene horas != 0, O
+            # - Tiene horas == 0 pero modo == "establecer" (borrar horas)
+            if horas != 0 or modo == "establecer":
                 tiene_imputacion = True
                 break
         elif o.get("accion") == "imputar_horas_semana":
@@ -229,14 +234,13 @@ REGLAS GENERALES
 2. Fechas:
    - "hoy" = {hoy}. Sin fecha → usar {hoy}
    - "ayer" = hoy -1; "mañana" = hoy +1
-   - 🚨 Día de la semana SIN "próximo/siguiente" → SIEMPRE el PRÓXIMO (hacia adelante)
-     Ejemplos con hoy={dia_semana} {hoy}:
-     - "el lunes" = PRÓXIMO lunes (si hoy es lunes, sería el siguiente lunes)
-     - "el martes" = PRÓXIMO martes
-     - "el viernes" = PRÓXIMO viernes
-   - "la semana pasada" / "el lunes pasado" → entonces sí ir hacia atrás
-   - "próxima semana" / "semana que viene" → día de la semana siguiente
-   - IMPORTANTE: Si dice "el martes", calcula la fecha del MARTES, NO del lunes de esa semana
+   - 🚨 REGLA CLAVE: Día de la semana SIN especificar semana → SIEMPRE la SEMANA ACTUAL
+     Ejemplo: Si hoy es viernes 19/12 y dice "el martes" → martes 16/12 (de ESTA semana)
+     Ejemplo: Si hoy es lunes 15/12 y dice "el viernes" → viernes 19/12 (de ESTA semana)
+   - "la semana pasada" / "el lunes pasado" → semana anterior
+   - "próxima semana" / "semana que viene" / "el lunes que viene" → semana siguiente
+   - "esta semana" → usar los días de la semana actual (redundante pero explícito)
+   - IMPORTANTE: Si dice "el martes", calcula la fecha del MARTES de ESTA semana, NO del lunes
    - Referencia temporal != "hoy" → PRIMERA acción: seleccionar_fecha con la fecha EXACTA del día mencionado
 
 3. Proyectos múltiples del MISMO día → INTERCALAR sin guardar_linea entre ellos:

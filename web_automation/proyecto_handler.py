@@ -26,7 +26,7 @@ def normalizar(texto):
     )
 
 
-def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None, contexto=None):
+def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, elemento_preseleccionado=None, contexto=None, solo_existente=False):
     """
     Selecciona el proyecto en la tabla de imputación.
     Si ya existe una línea con ese proyecto, la reutiliza.
@@ -41,6 +41,8 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     Ejemplo: "Departamento Desarrollo" cuando hay varios "Desarrollo"
         elemento_preseleccionado: (Opcional) WebElement ya seleccionado del árbol (para desambiguación)
         contexto: (Opcional) Diccionario de contexto de la sesión
+        solo_existente: (Opcional) Si True, NO crea el proyecto si no existe en la tabla
+                        Útil para borrar horas - no tiene sentido crear un proyecto para borrarlo
         
     Returns:
         tuple: (fila: WebElement o None, mensaje: str, necesita_desambiguacion: bool, coincidencias: list)
@@ -169,6 +171,11 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     return (fila, f"Usando '{coincidencia['proyecto']}' de '{coincidencia['nodo_padre']}'", False, [])
 
         # Si no existe → añadimos nueva línea
+        # PERO si solo_existente=True, NO crear y devolver error
+        if solo_existente:
+            print(f"[DEBUG] ⚠️ Proyecto '{nombre_proyecto}' NO encontrado en tabla y solo_existente=True")
+            return (None, f"❌ No hay horas de '{nombre_proyecto}' en esta semana. No hay nada que borrar.", False, [])
+        
         print(f"[DEBUG] ➕ Proyecto '{nombre_proyecto}' NO encontrado, añadiendo nueva línea...")
         try:
             btn_nueva_linea = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BTN_NUEVA_LINEA)))
