@@ -1,6 +1,7 @@
 # credential_manager.py
 """
-Gestor de credenciales con capacidad de actualización
+Gestor de credenciales con capacidad de actualización.
+Verifica login antes de guardar (mismo flujo que primera vez).
 """
 from sqlalchemy.orm import Session
 from db import Usuario, obtener_usuario_por_origen, cifrar
@@ -10,13 +11,13 @@ class CredentialManager:
     """Maneja la actualización y corrección de credenciales"""
     
     def __init__(self):
-        # Diccionario: user_id -> {"esperando_confirmacion": bool, "nuevo_username": str, "esperando": "username"|"password"}
+        # Diccionario: user_id -> {"estado": str}
         self.usuarios_cambiando_credenciales = {}
     
     def iniciar_cambio_credenciales(self, user_id: str):
         """Inicia el proceso de cambio de credenciales"""
         self.usuarios_cambiando_credenciales[user_id] = {
-            "esperando": "ambas"  # Ahora siempre pedimos ambas a la vez
+            "estado": "esperando_credenciales"
         }
     
     def esta_cambiando_credenciales(self, user_id: str) -> bool:
@@ -25,17 +26,65 @@ class CredentialManager:
     
     def procesar_nueva_credencial(self, db: Session, user_id: str, texto: str, canal: str = "webapp"):
         """
-        Procesa el username y password nuevos que el usuario está proporcionando.
-        Ahora siempre espera AMBAS credenciales juntas.
+        Procesa las nuevas credenciales del usuario.
+        
+        FLUJO (igual que primera vez):
+        1. Extraer credenciales del texto
+        2. Si no se extraen → pedir de nuevo
+        3. Si se extraen → devolver para que server.py haga login y guarde
         
         Returns:
-            (completado, mensaje)
+            (necesita_login, mensaje, credenciales)
+            - necesita_login=True → server.py debe hacer login con las credenciales
+            - necesita_login=False → hubo error o cancelación
         """
         estado = self.usuarios_cambiando_credenciales.get(user_id)
         
         if not estado:
-            return True, None
+            return (False, None, None)
         
+        # Manejar cancelación
+        texto_lower = texto.lower().strip()
+        if texto_lower in ['cancelar', 'cancel', 'no', 'salir']:
+            self.finalizar_cambio(user_id)
+            return (False, "❌ Cambio de credenciales cancelado.", None)
+        
+        # Extraer credenciales (misma función que primera vez)
+        from auth_handler import extraer_credenciales_con_gpt
+        credenciales = extraer_credenciales_con_gpt(texto)
+        
+        username = credenciales.get("username")
+        password = credenciales.get("password")
+        
+        # Validar que tengamos AMBAS credenciales
+        if not credenciales["ambos"]:
+            mensaje_incompleto = (
+                "⚠️ No he podido extraer las credenciales.\n\n"
+                "📝 *Envíamelas así:*\n"
+                "```\n"
+                "Usuario: tu_usuario  Contraseña: tu_contraseña\n"
+                "```\n\n"
+                "💡 También puedes escribir:\n"
+                "_pablo.solis y contraseña MiClave123_\n\n"
+                "⚠️ Escribe *'cancelar'* para salir."
+            )
+            return (False, mensaje_incompleto, None)
+        
+        # Validar longitud mínima
+        if len(username) < 3:
+            return (False, "❌ El usuario debe tener al menos 3 caracteres. Inténtalo de nuevo.", None)
+        
+        if len(password) < 4:
+            return (False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo.", None)
+        
+        # Credenciales extraídas OK → devolver para que server.py haga login
+        return (True, None, {"username": username, "password": password})
+    
+    def guardar_credenciales(self, db: Session, user_id: str, username: str, password: str, canal: str = "webapp"):
+        """
+        Guarda las credenciales después de verificar login exitoso.
+        Llamado por server.py después de hacer login OK.
+        """
         # Obtener usuario
         if canal == "slack":
             usuario = obtener_usuario_por_origen(db, slack_id=user_id)
@@ -45,36 +94,9 @@ class CredentialManager:
             usuario = obtener_usuario_por_origen(db, app_id=user_id)
         
         if not usuario:
-            self.finalizar_cambio(user_id)
-            return True, "⚠️ Error al cambiar credenciales. Intenta de nuevo."
+            return False, "⚠️ Error: usuario no encontrado."
         
-        # Usar la misma función de extracción que auth_handler
-        from auth_handler import extraer_credenciales_con_gpt
-        
-        credenciales = extraer_credenciales_con_gpt(texto)
-        
-        username = credenciales.get("username")
-        password = credenciales.get("password")
-        
-        # Validar que tengamos AMBAS credenciales
-        if not credenciales["ambos"]:
-            mensaje_incompleto = (
-                "⚠️ Necesito AMBAS credenciales para continuar.\n\n"
-                "📝 **Envíamelas así:**\n"
-                "```\n"
-                "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
-                "```"
-            )
-            return False, mensaje_incompleto
-        
-        # Validar longitud mínima
-        if not username or len(username) < 3:
-            return False, "❌ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo."
-        
-        if not password or len(password) < 4:
-            return False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo."
-        
-        # Guardar nuevas credenciales
+        # Guardar credenciales cifradas
         usuario.username_intranet = username
         usuario.password_intranet = cifrar(password)
         db.commit()
@@ -82,7 +104,7 @@ class CredentialManager:
         # Finalizar proceso
         self.finalizar_cambio(user_id)
         
-        return True, f"🎉 ¡Credenciales actualizadas correctamente!\n\n✅ Usuario: **{username}**\n✅ Contraseña: ******\n\nYa puedes volver a usar el servicio normalmente."
+        return True, f"🎉 *¡Credenciales actualizadas!*\n\n✅ Usuario: *{username}*\n✅ Contraseña: ******\n\n🚀 Ya puedes seguir usando el bot."
     
     def finalizar_cambio(self, user_id: str):
         """Finaliza el proceso de cambio de credenciales"""

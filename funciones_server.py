@@ -107,22 +107,76 @@ def hacer_login_con_lock(session, username: str, password: str) -> Tuple[bool, s
 def manejar_cambio_credenciales(texto: str, user_id: str, usuario, db: Session, 
                                 canal: str) -> Tuple[bool, str, bool]:
     """
-    Maneja el proceso de cambio de credenciales
+    Maneja el proceso de cambio de credenciales.
+    
+    FLUJO (igual que primera vez):
+    1. Extraer credenciales del texto
+    2. Hacer login para verificar
+    3. Si login OK → guardar credenciales
+    4. Si login falla → pedir de nuevo
     
     Returns:
         (completado: bool, mensaje: str, debe_continuar: bool)
     """
-    # Manejar cancelación
-    if texto.lower().strip() in ['cancelar', 'cancel', 'no']:
-        credential_manager.finalizar_cambio(user_id)
-        respuesta = "❌ Cambio de credenciales cancelado. Si necesitas ayuda, contacta con soporte."
-        registrar_peticion(db, usuario.id, texto, "autenticacion", canal=canal, respuesta=respuesta)
+    from browser_pool import browser_pool
+    
+    # Procesar credenciales (extrae y valida formato)
+    necesita_login, mensaje, credenciales = credential_manager.procesar_nueva_credencial(
+        db, user_id, texto, canal=canal
+    )
+    
+    # Si no necesita login (cancelación o error de formato)
+    if not necesita_login:
+        registrar_peticion(db, usuario.id, texto, "cambio_credenciales", canal=canal, respuesta=mensaje)
+        return (False, mensaje, False)
+    
+    # Credenciales extraídas OK → hacer login para verificar
+    username = credenciales["username"]
+    password = credenciales["password"]
+    
+    print(f"[INFO] Verificando nuevas credenciales para {user_id}: {username}")
+    
+    # Obtener sesión del navegador
+    session = browser_pool.get_session(user_id)
+    if not session or not session.driver:
+        respuesta = "⚠️ No he podido iniciar el navegador. Intenta de nuevo."
+        registrar_peticion(db, usuario.id, texto, "cambio_credenciales", canal=canal, respuesta=respuesta)
         return (False, respuesta, False)
     
-    completado, mensaje = credential_manager.procesar_nueva_credencial(db, user_id, texto, canal=canal)
-    registrar_peticion(db, usuario.id, texto, "cambio_credenciales", canal=canal, respuesta=mensaje)
+    # Hacer login con las nuevas credenciales
+    try:
+        success, mensaje_login = hacer_login_con_lock(session, username, password)
+        
+        if success:
+            # Login OK → guardar credenciales
+            session.is_logged_in = True
+            ok, mensaje_guardado = credential_manager.guardar_credenciales(
+                db, user_id, username, password, canal=canal
+            )
+            registrar_peticion(db, usuario.id, texto, "cambio_credenciales", 
+                             canal=canal, respuesta=mensaje_guardado)
+            return (True, mensaje_guardado, False)
+        else:
+            # Login falló → pedir de nuevo
+            respuesta = (
+                "❌ *Error de login*: Las credenciales no son correctas.\n\n"
+                "📝 *Envíamelas de nuevo:*\n"
+                "```\n"
+                "Usuario: tu_usuario  Contraseña: tu_contraseña\n"
+                "```\n\n"
+                "💡 También puedes escribir:\n"
+                "_pablo.solis y contraseña MiClave123_\n\n"
+                "⚠️ Escribe *'cancelar'* para salir."
+            )
+            registrar_peticion(db, usuario.id, texto, "cambio_credenciales", 
+                             canal=canal, respuesta=respuesta, estado="credenciales_invalidas")
+            return (False, respuesta, False)
     
-    return (completado, mensaje, False)
+    except Exception as e:
+        respuesta = f"⚠️ Error al verificar credenciales: {e}"
+        registrar_peticion(db, usuario.id, texto, "cambio_credenciales", 
+                         canal=canal, respuesta=respuesta, estado="error")
+        return (False, respuesta, False)
 
 
 def realizar_login_inicial(session, user_id: str, username: str, password: str, 

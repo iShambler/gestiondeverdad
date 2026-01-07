@@ -86,6 +86,8 @@ def extraer_credenciales_con_gpt(texto: str) -> dict:
     - Usuario: xxx  /  Contraseña: yyy  (con dos puntos)
     - Usuario xxx  /  Contraseña yyy    (sin dos puntos)
     - usuario paco contraseña pepe      (sin dos puntos)
+    - paco y contraseña pepe            (lenguaje natural)
+    - mi usuario es paco y mi clave es pepe
     
     Returns:
         dict: {"username": str, "password": str, "ambos": bool}
@@ -97,32 +99,63 @@ def extraer_credenciales_con_gpt(texto: str) -> dict:
     username = None
     password = None
     
-    # Patrón más flexible: con o sin dos puntos
-    # Buscar "usuario" seguido de: dos puntos opcional, luego capturar hasta encontrar "contraseña" o fin de línea
-    usuario_match = re.search(
-        r'(?:usuario|user|username|login)\s*:?\s+([^\n\r]+?)(?=\s+(?:contraseña|contrasena|password|pass|clave|y\s*contraseña|y\s*password)|\s*$)',
+    # =====================================================
+    # PATRÓN 1: Lenguaje natural "XXX y contraseña YYY"
+    # Ejemplo: "pablo.solis y contraseña Arelance2026k."
+    # =====================================================
+    patron_natural = re.search(
+        r'^([^\s]+)\s+y\s+(?:contraseña|contrasena|password|pass|clave)\s+([^\s]+)',
         texto_limpio,
         re.IGNORECASE
     )
     
-    if usuario_match:
-        username = usuario_match.group(1).strip()
-        # Solo limpiar espacios finales, NO puntos ni comas (pueden ser parte del usuario)
-        username = re.sub(r'\s+$', '', username)
-        print(f"[DEBUG extraer_credenciales] Usuario encontrado: '{username}'")
+    if patron_natural:
+        username = patron_natural.group(1).strip().rstrip('.')
+        password = patron_natural.group(2).strip().rstrip('.')
+        print(f"[DEBUG extraer_credenciales] Patrón natural detectado: user='{username}', pass='{password}'")
     
-    # Buscar "contraseña" seguido de: dos puntos opcional, luego capturar hasta fin de línea o paréntesis
-    password_match = re.search(
-        r'(?:contraseña|contrasena|password|pass|clave|pwd)\s*:?\s+([^\n\r(]+)',
-        texto_limpio,
-        re.IGNORECASE
-    )
+    # =====================================================
+    # PATRÓN 2: Con palabra clave "usuario" explícita
+    # Ejemplo: "Usuario: pablo.solis Contraseña: xxx"
+    # =====================================================
+    if not username:
+        usuario_match = re.search(
+            r'(?:usuario|user|username|login)\s*:?\s+([^\n\r]+?)(?=\s+(?:contraseña|contrasena|password|pass|clave|y\s*contraseña|y\s*password)|\s*$)',
+            texto_limpio,
+            re.IGNORECASE
+        )
+        
+        if usuario_match:
+            username = usuario_match.group(1).strip()
+            username = re.sub(r'\s+$', '', username)
+            print(f"[DEBUG extraer_credenciales] Usuario encontrado (patrón 2): '{username}'")
     
-    if password_match:
-        password = password_match.group(1).strip()
-        # Solo limpiar espacios finales, NO puntos ni comas (pueden ser parte de la contraseña)
-        password = re.sub(r'\s+$', '', password)
-        print(f"[DEBUG extraer_credenciales] Contraseña encontrada: '{password}'")
+    if not password:
+        password_match = re.search(
+            r'(?:contraseña|contrasena|password|pass|clave|pwd)\s*:?\s+([^\n\r(]+)',
+            texto_limpio,
+            re.IGNORECASE
+        )
+        
+        if password_match:
+            password = password_match.group(1).strip()
+            password = re.sub(r'\s+$', '', password)
+            print(f"[DEBUG extraer_credenciales] Contraseña encontrada (patrón 2): '{password}'")
+    
+    # =====================================================
+    # PATRÓN 3: "mi usuario es X y mi clave es Y"
+    # =====================================================
+    if not username or not password:
+        patron_es = re.search(
+            r'(?:mi\s+)?(?:usuario|user)\s+(?:es\s+)?([^\s,]+).*?(?:mi\s+)?(?:contraseña|contrasena|password|pass|clave)\s+(?:es\s+)?([^\s,]+)',
+            texto_limpio,
+            re.IGNORECASE
+        )
+        
+        if patron_es:
+            username = patron_es.group(1).strip().rstrip('.')
+            password = patron_es.group(2).strip().rstrip('.')
+            print(f"[DEBUG extraer_credenciales] Patrón 'es' detectado: user='{username}', pass='{password}'")
     
     resultado = {
         "username": username,
