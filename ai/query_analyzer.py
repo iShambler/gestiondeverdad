@@ -47,7 +47,6 @@ Si es TIPO B (consulta de horas), extrae la fecha y tipo:
 }}
 
 Reglas para TIPO B:
-- Siempre usa el año 2025
 - Si pregunta por "esta semana" → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
 - Si pregunta por un día específico → tipo: "dia", fecha: ese día exacto
