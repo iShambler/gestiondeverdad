@@ -448,6 +448,12 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         if not session or not session.driver:
             return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador."})
 
+        # 🆕 VERIFICAR SI ESTÁ CAMBIANDO CREDENCIALES (antes de hacer login con las viejas)
+        if credential_manager.esta_cambiando_credenciales(wa_id):
+            _, mensaje, _ = manejar_cambio_credenciales(texto, wa_id, usuario_wa, db, "whatsapp")
+            session.is_logged_in = False
+            return JSONResponse({"reply": mensaje})
+
         username, password = obtener_credenciales(db, wa_id, canal="whatsapp")
         if username and password:
             success, mensaje, debe_continuar = realizar_login_inicial(
