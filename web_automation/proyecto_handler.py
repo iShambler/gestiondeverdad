@@ -794,7 +794,11 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
     """
     Imputa las horas de lunes a viernes dentro de la fila (<tr>) del proyecto.
     Usa las horas por defecto de Constants.HORAS_SEMANA_DEFAULT.
-    Si un campo no está disponible (festivo, deshabilitado, etc.), lo omite.
+    
+    IMPORTANTE:
+    - Si un campo no está disponible (deshabilitado), lo omite.
+    - Si el día YA tiene horas en CUALQUIER proyecto (festivo, vacaciones, etc.), lo omite.
+    - Viernes = 6.5h, resto = 8.5h (según HORAS_SEMANA_DEFAULT)
     
     Args:
         driver: WebDriver de Selenium
@@ -806,12 +810,71 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
         str: Mensaje de confirmación o error
     """
     dias_imputados = []
+    dias_omitidos = []
 
     try:
+        # 🆕 PASO 1: Leer las horas existentes de TODOS los proyectos para cada día
+        horas_existentes_por_dia = {
+            'lunes': 0.0,
+            'martes': 0.0,
+            'miércoles': 0.0,
+            'jueves': 0.0,
+            'viernes': 0.0
+        }
+        
+        # Buscar TODAS las filas con proyectos
+        selects = driver.find_elements(By.CSS_SELECTOR, "select[name*='subproyecto']")
+        if not selects:
+            selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
+        
+        for sel in selects:
+            try:
+                # Verificar si tiene un proyecto seleccionado
+                proyecto_nombre = driver.execute_script("""
+                    var select = arguments[0];
+                    var selectedOption = select.options[select.selectedIndex];
+                    return selectedOption ? selectedOption.text : '';
+                """, sel)
+                
+                if not proyecto_nombre or proyecto_nombre == "Seleccione opción":
+                    continue
+                
+                fila_actual = sel.find_element(By.XPATH, "./ancestor::tr")
+                
+                # Leer horas de cada día
+                for dia_nombre in horas_existentes_por_dia.keys():
+                    try:
+                        dia_key = Constants.DIAS_KEYS.get(dia_nombre)
+                        if not dia_key:
+                            continue
+                        campo = fila_actual.find_element(By.CSS_SELECTOR, Selectors.campo_horas_dia(dia_key))
+                        valor = campo.get_attribute("value") or "0"
+                        try:
+                            valor_float = float(valor.replace(",", "."))
+                        except ValueError:
+                            valor_float = 0.0
+                        horas_existentes_por_dia[dia_nombre] += valor_float
+                    except:
+                        pass
+            except:
+                continue
+        
+        print(f"[DEBUG] 📊 Horas existentes por día: {horas_existentes_por_dia}")
+        
+        # 🆕 PASO 2: Imputar solo en días SIN horas existentes
         for dia_nombre, valor in Constants.HORAS_SEMANA_DEFAULT.items():
             try:
+                # Verificar si el día ya tiene horas de otro proyecto
+                horas_dia_existentes = horas_existentes_por_dia.get(dia_nombre, 0)
+                
+                if horas_dia_existentes > 0:
+                    print(f"[DEBUG] ⏭️ {dia_nombre}: ya tiene {horas_dia_existentes}h, omitiendo")
+                    dias_omitidos.append(f"{dia_nombre} (ya tiene {horas_dia_existentes}h)")
+                    continue
+                
                 dia_key = Constants.DIAS_KEYS[dia_nombre]
                 campo = fila.find_element(By.CSS_SELECTOR, Selectors.campo_horas_dia(dia_key))
+                
                 if campo.is_enabled():
                     # Hacer scroll y click
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", campo)
@@ -824,8 +887,13 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
                     campo.send_keys(str(valor))
                     
                     dias_imputados.append(f"{dia_nombre} ({valor}h)")
+                    print(f"[DEBUG] ✅ {dia_nombre}: imputado {valor}h")
                     time.sleep(0.1)
-            except Exception:
+                else:
+                    print(f"[DEBUG] ⏭️ {dia_nombre}: campo deshabilitado")
+                    dias_omitidos.append(f"{dia_nombre} (bloqueado)")
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Error en {dia_nombre}: {e}")
                 pass
         
         # 🆕 CRÍTICO: Después de modificar TODOS los días, salir del último input
@@ -841,9 +909,17 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
         if dias_imputados:
             dias_texto = ", ".join(dias_imputados)
             proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
-            return f"He imputado toda la semana {proyecto_texto}: {dias_texto}"
+            mensaje = f"He imputado {proyecto_texto}: {dias_texto}"
+            
+            if dias_omitidos:
+                mensaje += f"\n⏭️ Omitidos: {', '.join(dias_omitidos)}"
+            
+            return mensaje
         else:
-            return f"No he podido imputar ningún día (puede que estén bloqueados o sean festivos)"
+            if dias_omitidos:
+                return f"No he imputado ningún día porque ya tienen horas: {', '.join(dias_omitidos)}"
+            else:
+                return f"No he podido imputar ningún día (puede que estén bloqueados)"
 
     except Exception as e:
         return f"Ha habido un problema al imputar la semana: {e}"
