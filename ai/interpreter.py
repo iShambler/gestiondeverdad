@@ -234,14 +234,18 @@ REGLAS GENERALES
 2. Fechas:
    - "hoy" = {hoy}. Sin fecha → usar {hoy}
    - "ayer" = hoy -1; "mañana" = hoy +1
-   - 🚨 REGLA CLAVE: Día de la semana SIN especificar semana → SIEMPRE la SEMANA ACTUAL
-     Ejemplo: Si hoy es viernes 19/12 y dice "el martes" → martes 16/12 (de ESTA semana)
-     Ejemplo: Si hoy es lunes 15/12 y dice "el viernes" → viernes 19/12 (de ESTA semana)
-   - "la semana pasada" / "el lunes pasado" → semana anterior
-   - "próxima semana" / "semana que viene" / "el lunes que viene" → semana siguiente
-   - "esta semana" → usar los días de la semana actual (redundante pero explícito)
-   - IMPORTANTE: Si dice "el martes", calcula la fecha del MARTES de ESTA semana, NO del lunes
-   - Referencia temporal != "hoy" → PRIMERA acción: seleccionar_fecha con la fecha EXACTA del día mencionado
+   - 🚨 REGLA CRÍTICA: SIEMPRE usar la FECHA EXACTA del día mencionado, NUNCA el lunes de esa semana
+     - Si dice "el jueves de la semana pasada" → calcular la fecha del JUEVES de la semana pasada
+     - Si dice "el martes" → calcular la fecha del MARTES de esta semana
+     - NUNCA sustituir por el lunes, SIEMPRE el día específico mencionado
+   - Ejemplos con hoy = {hoy} ({dia_semana}):
+     - "el lunes" → lunes de ESTA semana (calcular fecha exacta)
+     - "el jueves" → jueves de ESTA semana (calcular fecha exacta)
+     - "el jueves de la semana pasada" → jueves de la SEMANA ANTERIOR (calcular fecha exacta)
+     - "el martes de la próxima semana" → martes de la SEMANA SIGUIENTE (calcular fecha exacta)
+   - "la semana pasada" sin día específico → lunes de la semana anterior
+   - "próxima semana" sin día específico → lunes de la semana siguiente
+   - 🚨 TANTO seleccionar_fecha COMO imputar_horas_dia deben usar LA MISMA FECHA EXACTA del día mencionado
 
 3. Proyectos múltiples del MISMO día → INTERCALAR sin guardar_linea entre ellos:
    "3h en X y 2h en Y" (mismo día) → seleccionar_fecha → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2) → guardar_linea (UNA VEZ AL FINAL)
@@ -342,6 +346,15 @@ EJEMPLOS
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-16", "horas": 2}}}},
   {{"accion": "guardar_linea"}}
 ]
+
+"3 horas en Formación el jueves de la semana pasada" (si hoy es miércoles 8 enero 2025, jueves semana pasada = 2 enero 2025)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-01-02"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Formación"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-01-02", "horas": 3}}}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA IMPORTANTE: El JUEVES de la semana pasada es 2025-01-02, NO el lunes 2024-12-30. Usar siempre la fecha del día específico.
 
 "Ponme 3h en Eventos el lunes, 2h en Desarrollo el martes y 4h en Formación el jueves"
 [

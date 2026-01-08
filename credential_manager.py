@@ -64,8 +64,6 @@ class CredentialManager:
                 "```\n"
                 "Usuario: tu_usuario  Contraseña: tu_contraseña\n"
                 "```\n\n"
-                "💡 También puedes escribir:\n"
-                "_pablo.solis y contraseña MiClave123_\n\n"
                 "⚠️ Escribe *'cancelar'* para salir."
             )
             return (False, mensaje_incompleto, None)
