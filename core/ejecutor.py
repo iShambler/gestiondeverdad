@@ -295,22 +295,73 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
     
     respuestas = []
     
-    # Pre-procesar: detectar si es "borrar horas de proyecto específico"
-    # (seleccionar_proyecto seguido de imputar_horas_dia con horas=0 y modo=establecer)
+    # ==========================================================================
+    # 🆕 PRE-PROCESAMIENTO: Detectar si GPT generó "toda la semana" como 5 imputar_horas_dia
+    # Si es así, convertir a una sola acción imputar_horas_semana
+    # ==========================================================================
+    ordenes_procesadas = []
+    i = 0
+    while i < len(ordenes):
+        orden = ordenes[i]
+        
+        # Detectar patrón: seleccionar_proyecto + 5x imputar_horas_dia (L-V)
+        if orden.get("accion") == "seleccionar_proyecto":
+            # Contar cuántos imputar_horas_dia consecutivos hay después
+            dias_encontrados = set()
+            j = i + 1
+            while j < len(ordenes) and ordenes[j].get("accion") == "imputar_horas_dia":
+                dia_param = ordenes[j].get("parametros", {}).get("dia", "")
+                # Normalizar día (puede venir como fecha ISO o nombre)
+                try:
+                    fecha_obj = datetime.fromisoformat(dia_param)
+                    dia = fecha_obj.strftime("%A").lower()
+                    dias_map = {"monday": "lunes", "tuesday": "martes", "wednesday": "miércoles", 
+                               "thursday": "jueves", "friday": "viernes"}
+                    dia = dias_map.get(dia, dia)
+                except:
+                    dia = dia_param.lower()
+                dias_encontrados.add(dia)
+                j += 1
+            
+            # Si hay exactamente 5 días (L-V), es "toda la semana"
+            dias_semana = {"lunes", "martes", "miércoles", "miercoles", "jueves", "viernes"}
+            if len(dias_encontrados) >= 5 and dias_encontrados.intersection(dias_semana):
+                print(f"[DEBUG] 🔄 Detectado patrón 'toda la semana' (5 imputar_horas_dia), convirtiendo a imputar_horas_semana")
+                
+                # Añadir seleccionar_proyecto
+                ordenes_procesadas.append(orden)
+                
+                # Reemplazar los 5 imputar_horas_dia por UN imputar_horas_semana
+                ordenes_procesadas.append({"accion": "imputar_horas_semana"})
+                
+                # Saltar los 5 imputar_horas_dia originales
+                i = j
+                continue
+        
+        ordenes_procesadas.append(orden)
+        i += 1
+    
+    # Usar las órdenes procesadas
+    ordenes = ordenes_procesadas
+    
+    # ==========================================================================
+    # PRE-PROCESAMIENTO: Detectar si es "borrar horas de proyecto específico"
+    # ==========================================================================
     for i, orden in enumerate(ordenes):
         if orden.get("accion") == "seleccionar_proyecto":
-            # Buscar si la siguiente acción es "borrar horas" (imputar 0 con establecer)
             if i + 1 < len(ordenes):
                 siguiente = ordenes[i + 1]
                 if siguiente.get("accion") == "imputar_horas_dia":
                     horas = siguiente.get("parametros", {}).get("horas", 0)
                     modo = siguiente.get("parametros", {}).get("modo", "sumar")
                     if horas == 0 and modo == "establecer":
-                        # Es borrar horas de proyecto específico
                         contexto["es_borrado_horas"] = True
                         print(f"[DEBUG] 🧹 Detectado: seleccionar_proyecto + imputar(0, establecer) → modo borrar horas")
                         break
     
+    # ==========================================================================
+    # EJECUCIÓN
+    # ==========================================================================
     for orden in ordenes:
         # Si hay un error crítico, detener ejecución
         if contexto.get("error_critico"):
