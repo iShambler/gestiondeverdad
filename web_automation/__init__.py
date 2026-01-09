@@ -31,10 +31,6 @@ from .jornada import (
     finalizar_jornada
 )
 
-from .listado_proyectos_backup import (
-    listar_todos_proyectos,
-    formatear_lista_proyectos
-)
 
 __all__ = [
     # Interactions
