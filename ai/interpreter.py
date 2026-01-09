@@ -274,8 +274,17 @@ Capitalizar siempre.
 TIPOS DE ACCIONES
 ====================================================
 1) IMPUTAR HORAS:
-   - Modo: "sumar" (default) o "establecer" (si dice "totales", "cambia a", "exactamente")
-   - Restar → horas negativas + modo "sumar"
+   - imputar_horas_dia: Para UN día específico. Requiere día y horas.
+     Modo: "sumar" (default) o "establecer" (si dice "totales", "cambia a", "exactamente")
+     Restar → horas negativas + modo "sumar"
+   
+   - imputar_horas_semana: Para TODA LA SEMANA (L-V). NO requiere parámetros.
+     🚨 OBLIGATORIO usar cuando el usuario diga:
+        - "toda la semana", "la semana entera", "semana completa"
+        - "de lunes a viernes", "todos los días"
+        - "imputa la semana", "rellena la semana"
+     El sistema automáticamente usa las horas correctas (8.5h L-J, 6.5h V)
+     y omite días que ya tengan horas (festivos, vacaciones, etc.)
 
 2) ELIMINAR HORAS:
    A) Sin proyecto: "borra horas del <día>" → borrar_todas_horas_dia
