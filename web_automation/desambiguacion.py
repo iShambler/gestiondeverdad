@@ -203,8 +203,40 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     if len(coincidencias) == 0:
         return f"❌ No he encontrado ningún proyecto llamado '{nombre_proyecto}'"
     
+    # 🆕 Caso especial: 1 coincidencia (proyecto existente) → preguntar si quiere usarlo
     if len(coincidencias) == 1:
-        return None  # No hay ambigüedad
+        coin = coincidencias[0]
+        horas = coin.get('total_horas', 0)
+        path = coin.get('path_completo', nombre_proyecto)
+        
+        # Determinar pregunta según tipo de acción
+        if tipo_accion == "eliminar":
+            pregunta = "¿Quieres eliminar este proyecto?"
+            emoji = "🗑️"
+        elif tipo_accion == "borrar_horas":
+            pregunta = "¿Quieres borrar las horas de este proyecto?"
+            emoji = "🧹"
+        else:  # imputar o modificar
+            pregunta = "¿Quieres añadir horas a este proyecto?"
+            emoji = "⏱️"
+        
+        if canal == "webapp":
+            return (
+                f"✅ **Ya tienes 1 proyecto con horas:**\n\n"
+                f"**1.** {path} - **{horas}h**\n\n"
+                f"{emoji} **{pregunta}**\n\n"
+                f"💡 Responde:\n"
+                f"- **'1'** o **'sí'** para continuar\n"
+                f"- **'otro'** para buscar un proyecto diferente\n"
+                f"- **'cancelar'** para abandonar"
+            )
+        else:
+            return (
+                f"✅ *Ya tienes 1 proyecto con horas:*\n\n"
+                f"1. {path} - *{horas}h*\n\n"
+                f"{emoji} *{pregunta}*\n\n"
+                f"Responde '1' o 'sí' para continuar, 'otro' para buscar diferente, 'cancelar' para salir"
+            )
     
     # Detectar si son proyectos existentes (tienen horas) o del sistema
     son_existentes = all(coin.get('total_horas') is not None for coin in coincidencias)
