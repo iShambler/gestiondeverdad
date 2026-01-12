@@ -52,7 +52,7 @@ class ConversationStateManager:
         
         return estado.get("tipo") in ["desambiguacion_proyecto", "info_incompleta"]
     
-    def guardar_desambiguacion(self, user_id, nombre_proyecto, coincidencias, comando_original, indice_orden=0):
+    def guardar_desambiguacion(self, user_id, nombre_proyecto, coincidencias, comando_original, indice_orden=0, respuestas_acumuladas=None, texto_original=None):
         """
         Guarda el estado de una pregunta de desambiguación pendiente.
         
@@ -62,13 +62,17 @@ class ConversationStateManager:
             coincidencias: Lista de coincidencias de buscar_proyectos_duplicados()
             comando_original: Comando original del usuario para reejecutar después
             indice_orden: Índice de la orden que causó la desambiguación (para continuar después)
+            respuestas_acumuladas: Lista de respuestas ya generadas antes de la desambiguación
+            texto_original: Texto original completo del comando del usuario
         """
         self.estados[user_id] = {
             "tipo": "desambiguacion_proyecto",
             "nombre_proyecto": nombre_proyecto,
             "coincidencias": coincidencias,
             "comando_original": comando_original,
-            "indice_orden": indice_orden,  # 🆕 Guardar índice
+            "indice_orden": indice_orden,
+            "respuestas_acumuladas": respuestas_acumuladas or [],  # 🆕 Guardar respuestas previas
+            "texto_original": texto_original,  # 🆕 Guardar texto original completo
             "timestamp": datetime.now()
         }
         
@@ -76,6 +80,7 @@ class ConversationStateManager:
         print(f"[CONVERSACION]    Proyecto: {nombre_proyecto}")
         print(f"[CONVERSACION]    Coincidencias: {len(coincidencias)}")
         print(f"[CONVERSACION]    Índice orden: {indice_orden}")
+        print(f"[CONVERSACION]    Respuestas acumuladas: {len(respuestas_acumuladas or [])}")
     
     def obtener_desambiguacion(self, user_id):
         """

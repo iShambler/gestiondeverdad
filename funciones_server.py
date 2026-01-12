@@ -320,11 +320,11 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
         return mensaje_error
     
     # Ejecutar órdenes
-    return ejecutar_ordenes_y_generar_respuesta(ordenes, comando, session, contexto, 
+    return ejecutar_ordenes_y_generar_respuesta(ordenes, comando, texto_original, session, contexto, 
                                                 db, usuario, user_id, canal)
 
 
-def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, contexto: dict,
+def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, texto_original: str, session, contexto: dict,
                                          db: Session, usuario, user_id: str, canal: str) -> str:
     """
     Ejecuta una lista de órdenes y genera la respuesta final
@@ -355,8 +355,8 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
         
         # Verificar si necesita desambiguación o confirmación
         if isinstance(mensaje, dict):
-            resultado = manejar_respuesta_especial(mensaje, orden, ordenes, texto, session, 
-                                                   db, usuario, user_id, canal, idx)
+            resultado = manejar_respuesta_especial(mensaje, orden, ordenes, texto, texto_original, session, 
+                                                   db, usuario, user_id, canal, idx, respuestas)
             if resultado:
                 return resultado
         
@@ -365,29 +365,33 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
     
     # Generar respuesta natural
     if respuestas:
-        respuesta_natural = generar_respuesta_natural(respuestas, texto, contexto)
+        respuesta_natural = generar_respuesta_natural(respuestas, texto_original, contexto)
     else:
         respuesta_natural = "He procesado la instrucción, pero no hubo mensajes de salida."
     
-    registrar_peticion(db, usuario.id, texto, "comando", canal=canal, 
+    registrar_peticion(db, usuario.id, texto_original, "comando", canal=canal, 
                      respuesta=respuesta_natural, acciones=ordenes)
     session.update_activity()
     return respuesta_natural
 
 
-def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto: str,
+def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto: str, texto_original: str,
                                session, db: Session, usuario, user_id: str, canal: str, 
-                               indice_orden: int = 0) -> Optional[str]:
+                               indice_orden: int = 0, respuestas_acumuladas: list = None) -> Optional[str]:
     """
     Maneja respuestas especiales (desambiguación)
     
     Args:
         indice_orden: Índice de la orden actual en la lista (para continuar después)
+        respuestas_acumuladas: Lista de respuestas ya generadas antes de la desambiguación
     
     Returns:
         mensaje para el usuario o None si no es respuesta especial
     """
     tipo = mensaje.get("tipo")
+    
+    if respuestas_acumuladas is None:
+        respuestas_acumuladas = []
     
     # Desambiguación
     if tipo == "desambiguacion":
@@ -406,7 +410,9 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
             mensaje["proyecto"],
             mensaje["coincidencias"],
             ordenes,
-            indice_orden
+            indice_orden,
+            respuestas_acumuladas=respuestas_acumuladas,  # 🆕 Pasar respuestas acumuladas
+            texto_original=texto_original  # 🆕 Pasar texto original
         )
         
         registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", 
@@ -470,6 +476,12 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
     nombre_proyecto = estado["nombre_proyecto"]
     indice_orden = estado.get("indice_orden", 0)
     
+    # 🆕 Recuperar respuestas acumuladas de desambiguaciones anteriores
+    respuestas_previas = estado.get("respuestas_acumuladas", [])
+    
+    # 🆕 Recuperar texto original del comando completo
+    texto_comando_original = estado.get("texto_original", f"Pon horas en {nombre_proyecto}")
+    
     # Modificar la orden que causó desambiguación con proyecto específico
     if indice_orden < len(ordenes_originales):
         orden = ordenes_originales[indice_orden]
@@ -480,7 +492,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
             print(f"[DEBUG] ✅ Proyecto actualizado: '{proyecto_especifico}' bajo '{coincidencia['nodo_padre']}'")
     
     # Ejecutar solo desde el índice que falló en adelante
-    respuestas = []
+    respuestas = list(respuestas_previas)  # 🆕 Empezar con las respuestas previas
     
     # Pre-procesar: detectar si es "borrar horas de proyecto específico"
     for i, orden in enumerate(ordenes_originales):
@@ -496,6 +508,8 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
                         break
     
     print(f"[DEBUG] 🔁 Ejecutando órdenes desde índice {indice_orden} hasta {len(ordenes_originales)-1}")
+    print(f"[DEBUG] 🔁 Respuestas previas acumuladas: {len(respuestas_previas)}")
+    
     for idx in range(indice_orden, len(ordenes_originales)):
         orden = ordenes_originales[idx]
         print(f"[DEBUG] 🔁 Ejecutando orden {idx}: {orden.get('accion')}")
@@ -527,7 +541,9 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
                         mensaje["proyecto"],
                         mensaje["coincidencias"],
                         ordenes_originales,
-                        idx
+                        idx,
+                        respuestas_acumuladas=respuestas,  # 🆕 Pasar respuestas acumuladas
+                        texto_original=texto_comando_original  # 🆕 Pasar texto original
                     )
                     
                     registrar_peticion(db, usuario.id, texto_original, "desambiguacion_pendiente", 
@@ -545,7 +561,8 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
     conversation_state_manager.limpiar_estado(user_id)
     
     if respuestas:
-        respuesta_natural = generar_respuesta_natural(respuestas, f"Pon horas en {nombre_proyecto}", contexto)
+        # 🆕 Usar el texto original completo para generar la respuesta
+        respuesta_natural = generar_respuesta_natural(respuestas, texto_comando_original, contexto)
     else:
         respuesta_natural = "✅ Listo"
     
@@ -564,6 +581,10 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
     nombre_proyecto = estado["nombre_proyecto"]
     indice_orden = estado.get("indice_orden", 0)
     
+    # 🆕 Recuperar respuestas y texto original
+    respuestas_previas = estado.get("respuestas_acumuladas", [])
+    texto_comando_original = estado.get("texto_original", f"Pon horas en {nombre_proyecto}")
+    
     # Modificar la orden que causó desambiguación para buscar en sistema
     if indice_orden < len(ordenes_originales):
         orden = ordenes_originales[indice_orden]
@@ -571,7 +592,8 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
             orden["parametros"]["nodo_padre"] = "__buscar__"
     
     # Re-ejecutar solo desde el índice que falló
-    respuestas = []
+    respuestas = list(respuestas_previas)  # 🆕 Empezar con respuestas previas
+    
     for idx in range(indice_orden, len(ordenes_originales)):
         orden = ordenes_originales[idx]
         
@@ -599,7 +621,9 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
                         mensaje["proyecto"],
                         mensaje["coincidencias"],
                         ordenes_originales,
-                        idx
+                        idx,
+                        respuestas_acumuladas=respuestas,  # 🆕 Pasar respuestas
+                        texto_original=texto_comando_original  # 🆕 Pasar texto original
                     )
                     
                     registrar_peticion(db, usuario.id, texto_original, "desambiguacion_pendiente", 
@@ -613,7 +637,7 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
     conversation_state_manager.limpiar_estado(user_id)
     
     if respuestas:
-        respuesta_natural = generar_respuesta_natural(respuestas, f"Pon horas en {nombre_proyecto}", contexto)
+        respuesta_natural = generar_respuesta_natural(respuestas, texto_comando_original, contexto)
     else:
         respuesta_natural = "✅ Listo"
     
