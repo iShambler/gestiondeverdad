@@ -320,15 +320,25 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
         return mensaje_error
     
     # Ejecutar órdenes
-    return ejecutar_ordenes_y_generar_respuesta(ordenes, comando, texto_original, session, contexto, 
-                                                db, usuario, user_id, canal)
+    return ejecutar_ordenes_y_generar_respuesta(ordenes, comando, session, contexto, 
+                                                db, usuario, user_id, canal,
+                                                texto_original=texto_original)
 
 
-def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, texto_original: str, session, contexto: dict,
-                                         db: Session, usuario, user_id: str, canal: str) -> str:
+def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, contexto: dict,
+                                         db: Session, usuario, user_id: str, canal: str,
+                                         texto_original: str = None) -> str:
     """
     Ejecuta una lista de órdenes y genera la respuesta final
+    
+    Args:
+        texto_original: Texto original del usuario (si es diferente a texto). 
+                       Si no se proporciona, se usa texto.
     """
+    # Si no se proporciona texto_original, usar texto
+    if texto_original is None:
+        texto_original = texto
+    
     respuestas = []
     
     # Pre-procesar: detectar si es "borrar horas de proyecto específico"
