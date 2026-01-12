@@ -264,14 +264,23 @@ REGLAS GENERALES
    - Al final de TODAS las órdenes
 
 ====================================================
-NODO PADRE
+NODO PADRE - JERÁRQUIA COMPLETA
 ====================================================
-REGLA #1 (PRIORIDAD): Doble "en" → primera = nodo_padre, segunda = proyecto
-  Ej: "3h en staff en permiso" → {{"nombre": "Permiso", "nodo_padre": "Staff"}}
+La estructura jerárquica es: Empresa/Cliente → Departamento/Área → Proyecto
 
-Palabras clave: "Departamento X", "Área X", "Staff", "Administración", "Comercial"
-Separadores: "X / Y", "X - Y" → nodo_padre = X, nombre = Y
-Capitalizar siempre.
+REGLA #1 (PRIORIDAD): Doble "en" → primera = nodo_padre, segunda = proyecto
+  Ejemplos:
+  - "3h en staff en permiso" → {{"nombre": "Permiso", "nodo_padre": "Staff"}}
+  - "4h en desarrollo en subvenciones" → {{"nombre": "Desarrollo", "nodo_padre": "Subvenciones"}}
+  - "5h en subvenciones en marketing" → {{"nombre": "Marketing", "nodo_padre": "Subvenciones"}}
+
+REGLA #2: Palabras clave de jerarquía
+  - "Departamento X", "Área X", "Staff", "Administración", "Comercial", "Subvenciones"
+  - Separadores: "X / Y", "X - Y" → nodo_padre = X, nombre = Y
+  - Capitalizar siempre los nombres
+
+⚠️ IMPORTANTE: El nodo_padre puede ser un departamento ("Subvenciones") o una empresa/cliente ("Inn2Travel", "Menpe")
+El sistema buscará el proyecto dentro de ese nodo específico.
 
 ====================================================
 TIPOS DE ACCIONES
@@ -428,6 +437,15 @@ NOTA IMPORTANTE: El JUEVES de la semana pasada es 2025-01-02, NO el lunes 2024-1
 [
   {{"accion": "copiar_semana_anterior"}}
 ]
+
+"Pon 4 horas en desarrollo en subvenciones" (doble "en" = nodo_padre + proyecto)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "{hoy}"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo", "nodo_padre": "Subvenciones"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": 4}}}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA: "desarrollo en subvenciones" → primera "en" = nodo_padre (Subvenciones), segunda implícita = proyecto (Desarrollo)
 
 "Pon toda la semana en Desarrollo" (hoy es {hoy} que es {dia_semana}, calcular lunes de esta semana)
 [

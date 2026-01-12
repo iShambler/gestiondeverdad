@@ -79,8 +79,22 @@ def buscar_proyectos_duplicados(driver, wait, nombre_proyecto):
                 # Obtener el nombre del proyecto
                 nombre_elem = elemento.text.strip()
                 
-                # Obtener el nodo padre (elemento <li> padre)
+                # 🔥 FILTRO: Verificar que sea un proyecto FINAL (nodo hoja con rel='subproyectos')
+                # Los nodos intermedios (departamentos, áreas) NO deberían estar en la lista
                 li_proyecto = elemento.find_element(By.XPATH, "./ancestor::li[@rel='subproyectos'][1]")
+                
+                # 🔥 VERIFICACIÓN ADICIONAL: Comprobar que NO tenga hijos con rel='subproyectos'
+                # Si tiene hijos, es un nodo intermedio (departamento), no un proyecto final
+                try:
+                    hijos_subproyectos = li_proyecto.find_elements(By.XPATH, ".//li[@rel='subproyectos']")
+                    # Si encuentra hijos (y no es él mismo), es un nodo intermedio → SKIP
+                    if len(hijos_subproyectos) > 1:  # > 1 porque se cuenta a sí mismo
+                        print(f"[DEBUG]   ⏭️ Saltando nodo intermedio: {nombre_elem}")
+                        continue
+                except:
+                    pass  # Si falla, asumir que es un proyecto final
+                
+                # Obtener el nodo padre inmediato
                 li_padre = li_proyecto.find_element(By.XPATH, "./ancestor::li[1]")
                 
                 # Obtener el nombre del nodo padre
