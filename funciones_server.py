@@ -44,6 +44,9 @@ def detectar_tipo_accion(ordenes: List[dict], indice_actual: int) -> str:
             modo = parametros.get("modo", "sumar")
             if horas == 0 and modo == "establecer":
                 return "borrar_horas"
+            # 🔥 Detectar si es RESTAR (horas negativas)
+            elif horas < 0:
+                return "restar_horas"
             else:
                 return "imputar"
         elif accion == "imputar_horas_semana":
