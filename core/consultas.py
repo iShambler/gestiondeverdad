@@ -26,9 +26,9 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
     print(f"[DEBUG] 📅 consultar_dia - Fecha recibida: {fecha_obj.strftime('%Y-%m-%d %A')}")
     
     try:
-        # Calcular el lunes de esa semana para navegar
-        lunes = lunes_de_semana(fecha_obj)
-        seleccionar_fecha(driver, lunes)
+        # 🆕 Navegar directamente a la fecha del día (no al lunes)
+        # Esto asegura que el día esté habilitado en la vista
+        seleccionar_fecha(driver, fecha_obj)
         time.sleep(2)  # Esperar a que cargue la tabla
         
         # Leer la información de la tabla
@@ -137,6 +137,10 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
     Consulta la información de una semana específica.
     Navega a la fecha, lee la tabla y devuelve un resumen.
     
+    🆕 IMPORTANTE: Si la semana está partida entre dos meses (ej: 30 dic - 3 ene),
+    el sistema hace DOS consultas y combina los resultados, ya que GestiónITT
+    solo muestra habilitados los días del mes activo.
+    
     Args:
         driver: WebDriver de Selenium
         wait: WebDriverWait configurado
@@ -151,20 +155,83 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
     print(f"[DEBUG] 📅 consultar_semana - Fecha recibida: {fecha_obj.strftime('%Y-%m-%d %A')}")
     
     try:
-        # Seleccionar la fecha (lunes de la semana)
+        # Calcular lunes y viernes de la semana
         lunes = lunes_de_semana(fecha_obj)
-        seleccionar_fecha(driver, lunes)
-        time.sleep(2)  # Esperar a que cargue la tabla
+        viernes = lunes + timedelta(days=4)
         
-        # Leer la información de la tabla
-        proyectos = leer_tabla_imputacion(driver)
+        print(f"[DEBUG] 📅 Semana: {lunes.strftime('%d/%m/%Y')} - {viernes.strftime('%d/%m/%Y')}")
+        
+        # 🆕 DETECTAR SI LA SEMANA CRUZA MESES
+        semana_partida = lunes.month != viernes.month
+        
+        if semana_partida:
+            print(f"[DEBUG] ⚠️ Semana PARTIDA entre meses: {lunes.strftime('%B')} y {viernes.strftime('%B')}")
+        
+        # Diccionario para acumular horas de todos los proyectos
+        proyectos_combinados = {}
+        
+        # =====================================================
+        # 🆕 CONSULTA 1: Navegar al LUNES (días del primer mes)
+        # =====================================================
+        print(f"[DEBUG] 📊 Consulta 1: Navegando al lunes {lunes.strftime('%d/%m/%Y')}...")
+        seleccionar_fecha(driver, lunes)
+        time.sleep(2)
+        
+        proyectos_lunes = leer_tabla_imputacion(driver)
+        print(f"[DEBUG] 📊 Consulta 1 (lunes): {len(proyectos_lunes)} proyectos encontrados")
+        
+        # Acumular proyectos de la primera consulta
+        for proyecto in proyectos_lunes:
+            nombre = proyecto['proyecto']
+            if nombre not in proyectos_combinados:
+                proyectos_combinados[nombre] = {
+                    'proyecto': nombre,
+                    'horas': {'lunes': 0, 'martes': 0, 'miércoles': 0, 'jueves': 0, 'viernes': 0}
+                }
+            # Sumar horas de cada día
+            for dia in ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']:
+                proyectos_combinados[nombre]['horas'][dia] += proyecto['horas'].get(dia, 0)
+        
+        # =====================================================
+        # 🆕 CONSULTA 2: Si semana partida, navegar al VIERNES
+        # =====================================================
+        if semana_partida:
+            print(f"[DEBUG] 🔄 Consulta 2: Navegando al viernes {viernes.strftime('%d/%m/%Y')} para completar...")
+            seleccionar_fecha(driver, viernes)
+            time.sleep(2)
+            
+            proyectos_viernes = leer_tabla_imputacion(driver)
+            print(f"[DEBUG] 📊 Consulta 2 (viernes): {len(proyectos_viernes)} proyectos encontrados")
+            
+            # Acumular proyectos de la segunda consulta
+            for proyecto in proyectos_viernes:
+                nombre = proyecto['proyecto']
+                if nombre not in proyectos_combinados:
+                    proyectos_combinados[nombre] = {
+                        'proyecto': nombre,
+                        'horas': {'lunes': 0, 'martes': 0, 'miércoles': 0, 'jueves': 0, 'viernes': 0}
+                    }
+                # Sumar horas de cada día (solo si el valor actual es 0, para evitar duplicados)
+                for dia in ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']:
+                    valor_actual = proyectos_combinados[nombre]['horas'][dia]
+                    valor_nuevo = proyecto['horas'].get(dia, 0)
+                    # Solo actualizar si el valor actual es 0 (evitar duplicados)
+                    if valor_actual == 0 and valor_nuevo > 0:
+                        proyectos_combinados[nombre]['horas'][dia] = valor_nuevo
+            
+            print(f"[DEBUG] ✅ Datos combinados de ambas consultas")
+        
+        # Convertir diccionario a lista
+        proyectos = list(proyectos_combinados.values())
         
         if not proyectos:
-            return "No hay horas imputadas en esa semana"
+            fecha_inicio = lunes.strftime('%d/%m/%Y')
+            fecha_fin = viernes.strftime('%d/%m/%Y')
+            return f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n⚪ No hay horas imputadas en esta semana"
         
         # Formatear la información
         fecha_inicio = lunes.strftime('%d/%m/%Y')
-        fecha_fin = (lunes + timedelta(days=4)).strftime('%d/%m/%Y')
+        fecha_fin = viernes.strftime('%d/%m/%Y')
         
         resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n"
         
@@ -181,7 +248,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         for proyecto in proyectos:
             horas = proyecto['horas']
             for dia in totales_por_dia.keys():
-                totales_por_dia[dia] += horas[dia]
+                totales_por_dia[dia] += horas.get(dia, 0)
         
         # Calcular total real de la semana sumando los días
         total_semana = sum(totales_por_dia.values())
@@ -189,11 +256,17 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         # 🌐 Generar encabezado según canal
         if canal == "webapp":
             resumen = f"<h3 style='margin: 0 0 5px 0;'>📅 Semana del {fecha_inicio} al {fecha_fin}</h3>\n"
+            if semana_partida:
+                resumen += "<p style='font-size: 0.8em; color: #666; margin: 0 0 8px 0;'>ℹ️ Semana entre dos meses - datos combinados</p>\n"
             resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
             resumen += "<thead><tr style='background-color: #f0f0f0;'><th>Proyecto</th><th>Total</th><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th></tr></thead>\n"
             resumen += "<tbody>\n"
         else:
-            resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n"
+            resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n"
+            if semana_partida:
+                resumen += "ℹ️ _Semana entre dos meses - datos combinados_\n"
+            resumen += "\n"
+            
         for proyecto in proyectos:
             nombre_corto = proyecto['proyecto'].split(' - ')[-1]  # Solo la última parte
             horas = proyecto['horas']
@@ -335,34 +408,30 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                 resumen += "</p>\n"
         else:
             # Formato texto para Slack
-            avisos_mostrados = False
-            
             if dias_exceso:
                 resumen += "\n\n⚠️ EXCESO DE HORAS:\n"
                 for dia_info in dias_exceso:
                     resumen += f"  • {dia_info}\n"
-                avisos_mostrados = True
             
             if dias_faltantes:
                 resumen += "\n⚠️ FALTAN HORAS:\n"
                 for dia_info in dias_faltantes:
                     resumen += f"  • {dia_info}\n"
-                avisos_mostrados = True
             
             if dias_sin_imputar:
                 resumen += "\n⚠️ DÍAS SIN IMPUTAR:\n"
                 for dia_info in dias_sin_imputar:
                     resumen += f"  • {dia_info}\n"
-                avisos_mostrados = True
-            
-
         
         print(f"[DEBUG] ✅ consultar_semana - Resumen generado ({len(resumen)} caracteres)")
         print(f"[DEBUG] Total semana calculado: {total_semana}h")
-        print(f"[DEBUG] Primeras 200 chars: {resumen[:200]}")
+        if semana_partida:
+            print(f"[DEBUG] ℹ️ Semana partida: se hicieron 2 consultas")
         return resumen
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return f"No he podido consultar la semana: {e}"
 
 
