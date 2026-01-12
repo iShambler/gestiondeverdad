@@ -68,17 +68,21 @@ Has ejecutado las siguientes acciones:
 
 Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando lo que has hecho.
 
-⚠️ REGLAS IMPORTANTES:
-- Si hay VARIAS acciones con DIFERENTES fechas, menciona CADA fecha específica para cada proyecto/acción.
+⚠️ REGLAS CRÍTICAS:
+- NUNCA inventes fechas. USA EXACTAMENTE las fechas que aparecen en las acciones.
+- Si una acción dice "(fecha: 12/01/2026)", usa ESA FECHA, no otra.
+- Si dice "el lunes" y hay "(fecha: 12/01/2026)", di "el lunes 12/01" o "el lunes 12 de enero", NO "el lunes 1 de diciembre".
+- Si hay VARIAS acciones con DIFERENTES fechas, menciona CADA fecha específica.
 - NO digas "para esa misma fecha" si las fechas son diferentes.
-- Usa formato de fecha legible (ej: "el 17/12" o "el viernes 19/12").
+- Usa formato de fecha legible (ej: "el 12/01" o "el lunes 12/01").
+- Si no estás seguro de una fecha, NO la menciones, di solo "el lunes/martes/etc."
 - Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.
-- No inventes información que no esté en las acciones ejecutadas.
 
 Ejemplos de buen estilo:
 - "¡Listo! He imputado 8 horas en Desarrollo para hoy y lo he guardado todo."
 - "Perfecto, he puesto 3h en Boda para el 17/12 y 2h en Formación para el 19/12. ¡Guardado! ✅"
-- "¡Hecho! 3 horas en Eventos el lunes 16/12 y 5 horas en Desarrollo el miércoles 18/12."
+- "¡Hecho! He restado 4 horas del proyecto Estudio el lunes 12/01, dejando un total de 7 horas."
+- Si la acción dice "(fecha: 12/01/2026)" y "el lunes", di: "el lunes 12/01" o "el lunes 12 de enero"
 
 Respuesta:"""
     
