@@ -47,9 +47,28 @@ Si es TIPO B (consulta de horas), extrae la fecha y tipo:
 }}
 
 Reglas para TIPO B:
-- Si pregunta por "esta semana" → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL
+- Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL
+- Si pregunta por "la semana pasada" → tipo: "semana", fecha: LUNES DE LA SEMANA ANTERIOR
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
 - Si pregunta por un día específico → tipo: "dia", fecha: ese día exacto
+
+🚨 CÁLCULO DEL LUNES DE LA SEMANA ACTUAL:
+Hoy es {hoy} ({dia_semana})
+- Si {dia_semana} = Monday → lunes = {hoy}
+- Si {dia_semana} = Tuesday → lunes = {hoy} - 1 día
+- Si {dia_semana} = Wednesday → lunes = {hoy} - 2 días
+- Si {dia_semana} = Thursday → lunes = {hoy} - 3 días
+- Si {dia_semana} = Friday → lunes = {hoy} - 4 días
+- Si {dia_semana} = Saturday → lunes = {hoy} - 5 días
+- Si {dia_semana} = Sunday → lunes = {hoy} - 6 días (lunes anterior)
+
+🚨 CRÍTICO: "resumen de la semana" SIN especificar = ESTA SEMANA (calcular lunes actual según tabla arriba)
+🚨 SOLO si dice "semana pasada", "semana anterior", "last week" → usar lunes anterior menos 7 días
+
+Ejemplos:
+- "resumen de la semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
+- "qué tengo esta semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
+- "resumen de la semana pasada" → {{"fecha": "[LUNES_ACTUAL - 7 DIAS]", "tipo": "semana"}}
 
 Devuelve SOLO el JSON, sin texto adicional.
 
