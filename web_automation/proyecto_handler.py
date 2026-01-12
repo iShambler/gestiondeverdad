@@ -139,25 +139,6 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     "fila_idx": idx
                 })
         
-        # 🆕 Si encontramos coincidencias Y no hay nodo_padre especificado
-        if coincidencias_encontradas and not nodo_padre:
-            print(f"[DEBUG] 📊 Encontradas {len(coincidencias_encontradas)} coincidencias en tabla")
-            
-            # Si solo hay UNA coincidencia → USAR DIRECTAMENTE
-            if len(coincidencias_encontradas) == 1:
-                coincidencia = coincidencias_encontradas[0]
-                print(f"[DEBUG] ✅ Usando proyecto existente directamente")
-                fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
-                time.sleep(0.3)
-                return (fila, f"Usando '{coincidencia['proyecto']}' existente", False, [])
-            
-            # Si hay MÚLTIPLES coincidencias, devolver tipo "desambiguacion"
-            # El usuario debe elegir entre las que ya tiene
-            else:
-                print(f"[DEBUG] 💬 Múltiples proyectos encontrados, solicitando selección")
-                return (None, "", "desambiguacion", coincidencias_encontradas)
-        
         # 🆕 Si YA especificó nodo_padre (está confirmando)
         if coincidencias_encontradas and nodo_padre:
             # Buscar la coincidencia que match con el nodo_padre
@@ -169,6 +150,15 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
                     time.sleep(0.3)
                     return (fila, f"Usando '{coincidencia['proyecto']}' de '{coincidencia['nodo_padre']}'", False, [])
+        
+        # 🆕 Si NO especificó nodo_padre Y hay coincidencias → SIEMPRE PREGUNTAR
+        # Esto permite al usuario elegir entre:
+        # - Usar un proyecto existente en la tabla
+        # - Buscar otro proyecto diferente en el sistema
+        if coincidencias_encontradas and not nodo_padre:
+            print(f"[DEBUG] 💬 Proyecto(s) encontrado(s) en tabla sin nodo_padre especificado")
+            print(f"[DEBUG] 💬 Preguntando al usuario ({len(coincidencias_encontradas)} coincidencia(s))")
+            return (None, "", "desambiguacion", coincidencias_encontradas)
 
         # Si no existe → añadimos nueva línea
         # PERO si solo_existente=True, NO crear y devolver error
