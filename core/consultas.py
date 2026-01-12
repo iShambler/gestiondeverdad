@@ -256,16 +256,11 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         # 🌐 Generar encabezado según canal
         if canal == "webapp":
             resumen = f"<h3 style='margin: 0 0 5px 0;'>📅 Semana del {fecha_inicio} al {fecha_fin}</h3>\n"
-            if semana_partida:
-                resumen += "<p style='font-size: 0.8em; color: #666; margin: 0 0 8px 0;'>ℹ️ Semana entre dos meses - datos combinados</p>\n"
             resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
             resumen += "<thead><tr style='background-color: #f0f0f0;'><th>Proyecto</th><th>Total</th><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th></tr></thead>\n"
             resumen += "<tbody>\n"
         else:
-            resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n"
-            if semana_partida:
-                resumen += "ℹ️ _Semana entre dos meses - datos combinados_\n"
-            resumen += "\n"
+            resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n"
             
         for proyecto in proyectos:
             nombre_corto = proyecto['proyecto'].split(' - ')[-1]  # Solo la última parte
@@ -369,8 +364,25 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
             'viernes': 'Viernes'
         }
         
+        # 🆕 Detectar qué días tienen Festivo o Vacaciones (no se validan)
+        dias_con_festivo_o_vacaciones = set()
+        for proyecto in proyectos:
+            nombre_lower = proyecto['proyecto'].lower()
+            if 'festivo' in nombre_lower or 'vacaciones' in nombre_lower:
+                # Marcar los días que tienen horas en este proyecto
+                for dia in ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']:
+                    if proyecto['horas'].get(dia, 0) > 0:
+                        dias_con_festivo_o_vacaciones.add(dia)
+        
+        if dias_con_festivo_o_vacaciones:
+            print(f"[DEBUG] 🏖️ Días con Festivo/Vacaciones (sin validar): {dias_con_festivo_o_vacaciones}")
+        
         # Verificar cada día (totales_por_dia ya está calculado arriba)
         for dia, total in totales_por_dia.items():
+            # 🆕 SKIP: No validar días con Festivo o Vacaciones
+            if dia in dias_con_festivo_o_vacaciones:
+                continue
+            
             # Determinar límite según el día (viernes = 6.5h, resto = 8.5h)
             limite_horas = 6.5 if dia == 'viernes' else 8.5
             
