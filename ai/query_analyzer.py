@@ -98,6 +98,9 @@ Respuesta:"""
         
         raw = response.choices[0].message.content.strip()
         
+        # 🔥 DEBUG: Ver qué devuelve GPT
+        print(f"[DEBUG] 🤖 GPT raw response para '{texto}': {raw}")
+        
         # Limpiar posible markdown
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[1]  # Quitar primera línea
