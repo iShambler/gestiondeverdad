@@ -224,7 +224,10 @@ Hoy es {hoy} ({dia_semana}).
 REGLAS GENERALES
 ====================================================
 1. Orden de acciones:
-   a) seleccionar_fecha (si fecha != hoy o indefinida)
+   a) seleccionar_fecha:
+      - SIEMPRE cuando uses imputar_horas_semana (calcular lunes de la semana)
+      - Cuando la fecha != hoy
+      - Cuando se especifica un día concreto ("el lunes", "mañana", etc.)
    b) iniciar_jornada (si se menciona)
    c) seleccionar_proyecto (cuando se impute/borre de un proyecto)
    d) imputar_horas_dia / imputar_horas_semana / borrar_todas_horas_dia / eliminar_linea
@@ -279,12 +282,18 @@ TIPOS DE ACCIONES
      Restar → horas negativas + modo "sumar"
    
    - imputar_horas_semana: Para TODA LA SEMANA (L-V). NO requiere parámetros.
+     🚨 CRÍTICO: SIEMPRE debe ir precedida de seleccionar_fecha con el LUNES de la semana
+     🚨 Si el usuario NO especifica semana → calcular el lunes de la semana ACTUAL
      🚨 OBLIGATORIO usar cuando el usuario diga:
         - "toda la semana", "la semana entera", "semana completa"
         - "de lunes a viernes", "todos los días"
         - "imputa la semana", "rellena la semana"
      El sistema automáticamente usa las horas correctas (8.5h L-J, 6.5h V)
      y omite días que ya tengan horas (festivos, vacaciones, etc.)
+     
+     Ejemplos:
+     - "pon toda la semana en Desarrollo" → seleccionar_fecha(lunes_semana_actual) + seleccionar_proyecto + imputar_horas_semana
+     - "imputa la semana en Formación" → seleccionar_fecha(lunes_semana_actual) + seleccionar_proyecto + imputar_horas_semana
 
 2) ELIMINAR HORAS:
    A) Sin proyecto: "borra horas del <día>" → borrar_todas_horas_dia
@@ -418,6 +427,25 @@ NOTA IMPORTANTE: El JUEVES de la semana pasada es 2025-01-02, NO el lunes 2024-1
 "Copia la semana pasada" / "Igual que la semana anterior" / "Carga el horario de la semana pasada"
 [
   {{"accion": "copiar_semana_anterior"}}
+]
+
+"Pon toda la semana en Desarrollo" (hoy es {hoy} que es {dia_semana}, calcular lunes de esta semana)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "[LUNES_SEMANA_ACTUAL]"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
+  {{"accion": "imputar_horas_semana"}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA: Calcular el lunes de la semana actual:
+- Si hoy es lunes a domingo → ir hacia atrás hasta encontrar el lunes de esta semana
+- Domingo pertenece a la semana que termina (lunes anterior)
+
+"Imputa la semana en Formación" (sin especificar = semana actual)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "[LUNES_SEMANA_ACTUAL]"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Formación"}}}},
+  {{"accion": "imputar_horas_semana"}},
+  {{"accion": "guardar_linea"}}
 ]
 
 ====================================================
