@@ -405,6 +405,8 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
     
     # Desambiguación
     if tipo == "desambiguacion":
+        print(f"[DEBUG] ⏸️ DESAMBIGUACIÓN DETECTADA en funciones_server.py")
+        
         # Detectar tipo de acción para personalizar el mensaje
         tipo_accion = detectar_tipo_accion(ordenes, indice_orden)
         
@@ -415,6 +417,7 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
             tipo_accion=tipo_accion
         )
         
+        print(f"[DEBUG] 💾 Guardando estado de desambiguación")
         conversation_state_manager.guardar_desambiguacion(
             user_id,
             mensaje["proyecto"],
@@ -428,8 +431,11 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
         registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", 
                          canal=canal, respuesta=mensaje_pregunta)
         session.update_activity()
+        
+        print(f"[DEBUG] 🛑 RETORNANDO mensaje de desambiguación: {mensaje_pregunta[:100]}...")
         return mensaje_pregunta
     
+    print(f"[DEBUG] ⚠️ Tipo de mensaje NO es desambiguación: {tipo}")
     return None
 
 
