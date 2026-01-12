@@ -50,7 +50,14 @@ Reglas para TIPO B:
 - Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL
 - Si pregunta por "la semana pasada" → tipo: "semana", fecha: LUNES DE LA SEMANA ANTERIOR
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
-- Si pregunta por un día específico → tipo: "dia", fecha: ese día exacto
+- Si pregunta por un día específico futuro (ej: "el viernes", "mañana") → tipo: "dia", fecha: ese día exacto
+- Si pregunta por un día específico PASADO (ej: "jueves pasado", "el martes pasado", "ayer"):
+  * Calcula el día más reciente en el PASADO
+  * Hoy es {dia_semana} ({hoy})
+  * "jueves pasado" = último jueves que ya ocurrió (puede ser hace 3 días o hace 10 días, depende de qué día es hoy)
+  * "lunes pasado" = último lunes que ya ocurrió
+  * "ayer" = {hoy} - 1 día
+  * tipo: "dia", fecha: ese día específico calculado (NO el lunes de esa semana)
 
 🚨 CÁLCULO DEL LUNES DE LA SEMANA ACTUAL:
 Hoy es {hoy} ({dia_semana})
@@ -69,6 +76,10 @@ Ejemplos:
 - "resumen de la semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
 - "qué tengo esta semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
 - "resumen de la semana pasada" → {{"fecha": "[LUNES_ACTUAL - 7 DIAS]", "tipo": "semana"}}
+- "dame las horas del jueves pasado" (hoy={hoy}=Sunday) → {{"fecha": "2026-01-09", "tipo": "dia"}} (jueves fue hace 3 días)
+- "dame las horas del jueves pasado" (hoy={hoy}=Monday) → {{"fecha": "2026-01-09", "tipo": "dia"}} (jueves fue hace 4 días)
+- "qué tenía el martes pasado" (hoy={hoy}=Sunday) → {{"fecha": "2026-01-07", "tipo": "dia"}} (martes fue hace 5 días)
+- "resumen de ayer" → {{"fecha": "[HOY - 1]", "tipo": "dia"}}
 
 Devuelve SOLO el JSON, sin texto adicional.
 
