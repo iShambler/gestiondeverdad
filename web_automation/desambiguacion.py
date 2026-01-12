@@ -213,7 +213,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
         if tipo_accion == "eliminar":
             pregunta = "¿Quieres eliminar este proyecto?"
             emoji = "🗑️"
-        elif tipo_accion == "borrar_horas":
+        elif tipo_accion in ["borrar_horas", "borrar"]:
             pregunta = "¿Quieres borrar las horas de este proyecto?"
             emoji = "🧹"
         else:  # imputar o modificar
