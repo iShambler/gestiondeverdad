@@ -19,7 +19,28 @@ def interpretar_consulta(texto):
         dict: {'fecha': 'YYYY-MM-DD', 'tipo': 'dia'|'semana'|'listar_proyectos'} o None
     """
     hoy = datetime.now().strftime("%Y-%m-%d")
-    dia_semana = datetime.now().strftime("%A")
+    hoy_obj = datetime.now()
+    dia_semana = hoy_obj.strftime("%A")
+    
+    # Calcular ejemplos dinámicos
+    ayer = (hoy_obj - timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    # Calcular jueves pasado
+    weekday_hoy = hoy_obj.weekday()  # 0=Monday, 6=Sunday
+    weekday_jueves = 3  # Thursday
+    if weekday_hoy > weekday_jueves:
+        dias_atras_jueves = weekday_hoy - weekday_jueves
+    else:
+        dias_atras_jueves = 7 - (weekday_jueves - weekday_hoy)
+    jueves_pasado = (hoy_obj - timedelta(days=dias_atras_jueves)).strftime("%Y-%m-%d")
+    
+    # Calcular martes pasado
+    weekday_martes = 1  # Tuesday
+    if weekday_hoy > weekday_martes:
+        dias_atras_martes = weekday_hoy - weekday_martes
+    else:
+        dias_atras_martes = 7 - (weekday_martes - weekday_hoy)
+    martes_pasado = (hoy_obj - timedelta(days=dias_atras_martes)).strftime("%Y-%m-%d")
     
     prompt = f"""Eres un asistente que interpreta consultas sobre horas laborales y proyectos disponibles.
 
@@ -52,12 +73,22 @@ Reglas para TIPO B:
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
 - Si pregunta por un día específico futuro (ej: "el viernes", "mañana") → tipo: "dia", fecha: ese día exacto
 - Si pregunta por un día específico PASADO (ej: "jueves pasado", "el martes pasado", "ayer"):
-  * Calcula el día más reciente en el PASADO
+  * CRÍTICO: Calcula desde HOY ({hoy}) hacia ATRÁS
+  * Encuentra el día más reciente en el PASADO con ese nombre
   * Hoy es {dia_semana} ({hoy})
-  * "jueves pasado" = último jueves que ya ocurrió (puede ser hace 3 días o hace 10 días, depende de qué día es hoy)
-  * "lunes pasado" = último lunes que ya ocurrió
-  * "ayer" = {hoy} - 1 día
-  * tipo: "dia", fecha: ese día específico calculado (NO el lunes de esa semana)
+  * Mapeo de días: Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4, Saturday=5, Sunday=6
+  * ALGORITMO:
+    1. Obtener weekday de hoy: {dia_semana} = [número del 0-6]
+    2. Obtener weekday objetivo (ej: "jueves"=Thursday=3)
+    3. Calcular días atrás:
+       - Si weekday_hoy > weekday_objetivo: días_atrás = weekday_hoy - weekday_objetivo
+       - Si weekday_hoy <= weekday_objetivo: días_atrás = 7 - (weekday_objetivo - weekday_hoy)
+    4. Fecha = {hoy} - días_atrás días
+  * Ejemplo concreto HOY ({hoy}={dia_semana}):
+    - Si piden "jueves pasado" y hoy es Sunday(6): días_atrás = 7-(3-6) = 7-(-3) = 10? NO
+    - CORRECTO: Si hoy es Sunday(6) y quieren Thursday(3): hoy(6) > objetivo(3) → días_atrás = 6-3 = 3 días
+    - Fecha = {hoy} - 3 días = jueves pasado
+  * tipo: "dia", fecha: ese día específico calculado
 
 🚨 CÁLCULO DEL LUNES DE LA SEMANA ACTUAL:
 Hoy es {hoy} ({dia_semana})
@@ -76,10 +107,9 @@ Ejemplos:
 - "resumen de la semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
 - "qué tengo esta semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
 - "resumen de la semana pasada" → {{"fecha": "[LUNES_ACTUAL - 7 DIAS]", "tipo": "semana"}}
-- "dame las horas del jueves pasado" (hoy={hoy}=Sunday) → {{"fecha": "2026-01-09", "tipo": "dia"}} (jueves fue hace 3 días)
-- "dame las horas del jueves pasado" (hoy={hoy}=Monday) → {{"fecha": "2026-01-09", "tipo": "dia"}} (jueves fue hace 4 días)
-- "qué tenía el martes pasado" (hoy={hoy}=Sunday) → {{"fecha": "2026-01-07", "tipo": "dia"}} (martes fue hace 5 días)
-- "resumen de ayer" → {{"fecha": "[HOY - 1]", "tipo": "dia"}}
+- "dame las horas del jueves pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{jueves_pasado}", "tipo": "dia"}} (jueves fue hace {dias_atras_jueves} días)
+- "qué tenía el martes pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{martes_pasado}", "tipo": "dia"}} (martes fue hace {dias_atras_martes} días)
+- "resumen de ayer" → {{"fecha": "{ayer}", "tipo": "dia"}}
 
 Devuelve SOLO el JSON, sin texto adicional.
 
