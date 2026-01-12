@@ -372,6 +372,13 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
             contexto["es_borrado_horas"] = False
             
         mensaje = ejecutar_accion(driver, wait, orden, contexto)
+        
+        # 🔥 DETECCIÓN DE DESAMBIGUACIÓN: Si la acción devuelve un dict con tipo="desambiguacion", DETENER
+        if isinstance(mensaje, dict) and mensaje.get("tipo") == "desambiguacion":
+            print(f"[DEBUG] ⏸️ Desambiguación detectada, deteniendo ejecución de acciones")
+            respuestas.append(mensaje)
+            break  # 🔥 DETENER aquí, no continuar con las siguientes acciones
+        
         if mensaje:
             respuestas.append(mensaje)
     
