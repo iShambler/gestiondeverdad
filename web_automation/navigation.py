@@ -24,6 +24,64 @@ def lunes_de_semana(fecha):
     return fecha - timedelta(days=fecha.weekday())
 
 
+def detectar_dias_deshabilitados(driver):
+    """
+    Detecta qué días de la semana actual están deshabilitados en la tabla.
+    GestiónITT usa la clase 'tdDiaDisabled' para días de otro mes.
+    
+    Returns:
+        dict: {'lunes': True/False, 'martes': True/False, ...}
+              True = habilitado (se puede editar), False = deshabilitado
+    """
+    dias_estado = {
+        'lunes': True,
+        'martes': True,
+        'miércoles': True,
+        'jueves': True,
+        'viernes': True
+    }
+    
+    # Mapeo de posición a día (las columnas de días en la tabla)
+    dias_orden = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']
+    
+    try:
+        # Buscar todas las celdas de encabezado de días
+        celdas_dias = driver.find_elements(By.CSS_SELECTOR, "td.tdDia, td.tdDiaDisabled")
+        
+        print(f"[DEBUG] 🔍 Detectando días deshabilitados... ({len(celdas_dias)} celdas encontradas)")
+        
+        dia_idx = 0
+        for celda in celdas_dias:
+            if dia_idx >= 5:  # Solo L-V
+                break
+                
+            clase = celda.get_attribute("class") or ""
+            texto = celda.text.strip().lower()
+            
+            # Verificar si es un día de la semana (contiene el nombre)
+            es_dia_semana = any(dia in texto for dia in ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes'])
+            
+            if es_dia_semana:
+                esta_deshabilitado = 'tdDiaDisabled' in clase
+                dia_nombre = dias_orden[dia_idx]
+                dias_estado[dia_nombre] = not esta_deshabilitado
+                
+                print(f"[DEBUG]   {dia_nombre.capitalize()}: {'❌ Deshabilitado' if esta_deshabilitado else '✅ Habilitado'}")
+                dia_idx += 1
+        
+        # Resumen
+        dias_deshabilitados = [dia for dia, habilitado in dias_estado.items() if not habilitado]
+        if dias_deshabilitados:
+            print(f"[DEBUG] ⚠️ Días deshabilitados: {dias_deshabilitados}")
+        else:
+            print(f"[DEBUG] ✅ Todos los días habilitados")
+            
+    except Exception as e:
+        print(f"[DEBUG] ⚠️ Error detectando días deshabilitados: {e}")
+    
+    return dias_estado
+
+
 def seleccionar_fecha(driver, fecha_obj, contexto=None):
     """Abre el calendario, navega hasta el mes correcto y selecciona el día.
     

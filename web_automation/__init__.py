@@ -13,7 +13,8 @@ from .interactions import (
 
 from .navigation import (
     seleccionar_fecha,
-    lunes_de_semana
+    lunes_de_semana,
+    detectar_dias_deshabilitados
 )
 
 from .proyecto_handler import (
@@ -43,6 +44,7 @@ __all__ = [
     # Navigation
     'seleccionar_fecha',
     'lunes_de_semana',
+    'detectar_dias_deshabilitados',
     
     # Proyecto Handler
     'seleccionar_proyecto',

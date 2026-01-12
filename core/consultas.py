@@ -137,9 +137,8 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
     Consulta la información de una semana específica.
     Navega a la fecha, lee la tabla y devuelve un resumen.
     
-    🆕 IMPORTANTE: Si la semana está partida entre dos meses (ej: 30 dic - 3 ene),
-    el sistema hace DOS consultas y combina los resultados, ya que GestiónITT
-    solo muestra habilitados los días del mes activo.
+    🆕 IMPORTANTE: Detecta si hay días deshabilitados en la vista actual
+    y hace una segunda consulta si es necesario para obtener todos los datos.
     
     Args:
         driver: WebDriver de Selenium
@@ -150,7 +149,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
     Returns:
         str: Resumen formateado con las horas de la semana
     """
-    from web_automation import lunes_de_semana, seleccionar_fecha, leer_tabla_imputacion
+    from web_automation import lunes_de_semana, seleccionar_fecha, leer_tabla_imputacion, detectar_dias_deshabilitados
     
     print(f"[DEBUG] 📅 consultar_semana - Fecha recibida: {fecha_obj.strftime('%Y-%m-%d %A')}")
     
@@ -161,21 +160,19 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         
         print(f"[DEBUG] 📅 Semana: {lunes.strftime('%d/%m/%Y')} - {viernes.strftime('%d/%m/%Y')}")
         
-        # 🆕 DETECTAR SI LA SEMANA CRUZA MESES
-        semana_partida = lunes.month != viernes.month
-        
-        if semana_partida:
-            print(f"[DEBUG] ⚠️ Semana PARTIDA entre meses: {lunes.strftime('%B')} y {viernes.strftime('%B')}")
-        
         # Diccionario para acumular horas de todos los proyectos
         proyectos_combinados = {}
         
         # =====================================================
-        # 🆕 CONSULTA 1: Navegar al LUNES (días del primer mes)
+        # CONSULTA 1: Navegar al LUNES
         # =====================================================
         print(f"[DEBUG] 📊 Consulta 1: Navegando al lunes {lunes.strftime('%d/%m/%Y')}...")
         seleccionar_fecha(driver, lunes)
         time.sleep(2)
+        
+        # 🆕 Detectar si hay días deshabilitados
+        dias_estado = detectar_dias_deshabilitados(driver)
+        dias_deshabilitados = [dia for dia, habilitado in dias_estado.items() if not habilitado]
         
         proyectos_lunes = leer_tabla_imputacion(driver)
         print(f"[DEBUG] 📊 Consulta 1 (lunes): {len(proyectos_lunes)} proyectos encontrados")
@@ -193,10 +190,10 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                 proyectos_combinados[nombre]['horas'][dia] += proyecto['horas'].get(dia, 0)
         
         # =====================================================
-        # 🆕 CONSULTA 2: Si semana partida, navegar al VIERNES
+        # CONSULTA 2: Si hay días deshabilitados, navegar al VIERNES
         # =====================================================
-        if semana_partida:
-            print(f"[DEBUG] 🔄 Consulta 2: Navegando al viernes {viernes.strftime('%d/%m/%Y')} para completar...")
+        if dias_deshabilitados:
+            print(f"[DEBUG] 🔄 Consulta 2: Navegando al viernes {viernes.strftime('%d/%m/%Y')} para completar días: {dias_deshabilitados}...")
             seleccionar_fecha(driver, viernes)
             time.sleep(2)
             
@@ -211,11 +208,11 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                         'proyecto': nombre,
                         'horas': {'lunes': 0, 'martes': 0, 'miércoles': 0, 'jueves': 0, 'viernes': 0}
                     }
-                # Sumar horas de cada día (solo si el valor actual es 0, para evitar duplicados)
-                for dia in ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']:
+                # Sumar horas solo de los días que estaban deshabilitados
+                for dia in dias_deshabilitados:
                     valor_actual = proyectos_combinados[nombre]['horas'][dia]
                     valor_nuevo = proyecto['horas'].get(dia, 0)
-                    # Solo actualizar si el valor actual es 0 (evitar duplicados)
+                    # Solo actualizar si el valor actual es 0
                     if valor_actual == 0 and valor_nuevo > 0:
                         proyectos_combinados[nombre]['horas'][dia] = valor_nuevo
             
@@ -437,8 +434,8 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         
         print(f"[DEBUG] ✅ consultar_semana - Resumen generado ({len(resumen)} caracteres)")
         print(f"[DEBUG] Total semana calculado: {total_semana}h")
-        if semana_partida:
-            print(f"[DEBUG] ℹ️ Semana partida: se hicieron 2 consultas")
+        if dias_deshabilitados:
+            print(f"[DEBUG] ℹ️ Días deshabilitados detectados: {dias_deshabilitados} - se hicieron 2 consultas")
         return resumen
     
     except Exception as e:
