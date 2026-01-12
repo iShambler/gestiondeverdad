@@ -219,7 +219,10 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
         elif tipo_accion == "restar_horas":
             pregunta = "¿Quieres restar horas a este proyecto?"
             emoji = "➖"
-        else:  # imputar o modificar
+        elif tipo_accion == "establecer_horas":
+            pregunta = "¿Quieres establecer las horas de este proyecto?"
+            emoji = "📝"
+        else:  # imputar o modificar (sumar)
             pregunta = "¿Quieres añadir horas a este proyecto?"
             emoji = "⏱️"
         
@@ -251,7 +254,13 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     elif tipo_accion == "borrar_horas":
         pregunta_accion = "¿De cuál quieres borrar las horas?"
         emoji = "🧹"
-    else:  # imputar o modificar
+    elif tipo_accion == "restar_horas":
+        pregunta_accion = "¿A cuál quieres restar horas?"
+        emoji = "➖"
+    elif tipo_accion == "establecer_horas":
+        pregunta_accion = "¿En cuál quieres establecer las horas?"
+        emoji = "📝"
+    else:  # imputar o modificar (sumar)
         pregunta_accion = "¿En cuál quieres añadir horas?" if son_existentes else "¿En cuál quieres imputar?"
         emoji = "💬"
     
