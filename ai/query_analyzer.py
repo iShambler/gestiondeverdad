@@ -22,6 +22,23 @@ def interpretar_consulta(texto):
     hoy_obj = datetime.now()
     dia_semana = hoy_obj.strftime("%A")
     
+    # 🔥 DEBUG: Verificar fecha actual
+    print(f"[DEBUG] 📅 HOY calculado: {hoy} ({dia_semana})")
+    print(f"[DEBUG] 📅 Weekday: {hoy_obj.weekday()} (0=Monday, 6=Sunday)")
+    
+    # Calcular lunes de esta semana
+    weekday_actual = hoy_obj.weekday()
+    if weekday_actual == 0:  # Ya es lunes
+        lunes_esta_semana = hoy
+    else:
+        lunes_esta_semana = (hoy_obj - timedelta(days=weekday_actual)).strftime("%Y-%m-%d")
+    
+    # Calcular lunes de la semana pasada
+    lunes_semana_pasada = (hoy_obj - timedelta(days=weekday_actual + 7)).strftime("%Y-%m-%d")
+    
+    print(f"[DEBUG] 📅 Lunes de ESTA semana: {lunes_esta_semana}")
+    print(f"[DEBUG] 📅 Lunes de SEMANA PASADA: {lunes_semana_pasada}")
+    
     # Calcular ejemplos dinámicos
     ayer = (hoy_obj - timedelta(days=1)).strftime("%Y-%m-%d")
     
@@ -68,7 +85,7 @@ Si es TIPO B (consulta de horas), extrae la fecha y tipo:
 }}
 
 Reglas para TIPO B:
-- Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: LUNES DE LA SEMANA ACTUAL
+- Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: HOY (NO el lunes, sino la fecha actual)
 - Si pregunta por "la semana pasada" → tipo: "semana", fecha: LUNES DE LA SEMANA ANTERIOR
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
 - Si pregunta por un día específico futuro (ej: "el viernes", "mañana") → tipo: "dia", fecha: ese día exacto
@@ -104,9 +121,9 @@ Hoy es {hoy} ({dia_semana})
 🚨 SOLO si dice "semana pasada", "semana anterior", "last week" → usar lunes anterior menos 7 días
 
 Ejemplos:
-- "resumen de la semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
-- "qué tengo esta semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "[CALCULAR_SEGUN_TABLA]", "tipo": "semana"}}
-- "resumen de la semana pasada" → {{"fecha": "[LUNES_ACTUAL - 7 DIAS]", "tipo": "semana"}}
+- "resumen de la semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "{hoy}", "tipo": "semana"}} (usa HOY, NO el lunes)
+- "qué tengo esta semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "{hoy}", "tipo": "semana"}}
+- "resumen de la semana pasada" → {{"fecha": "{lunes_semana_pasada}", "tipo": "semana"}}
 - "dame las horas del jueves pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{jueves_pasado}", "tipo": "dia"}} (jueves fue hace {dias_atras_jueves} días)
 - "qué tenía el martes pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{martes_pasado}", "tipo": "dia"}} (martes fue hace {dias_atras_martes} días)
 - "resumen de ayer" → {{"fecha": "{ayer}", "tipo": "dia"}}
@@ -139,18 +156,10 @@ Respuesta:"""
         
         data = json.loads(raw)
         
-        # VALIDACIÓN ADICIONAL: Asegurar que la fecha sea un lunes SOLO si tipo="semana"
-        try:
-            if data.get("tipo") == "semana":
-                fecha_obj = datetime.fromisoformat(data["fecha"])
-                # Si no es lunes (weekday != 0), calcular el lunes de esa semana
-                if fecha_obj.weekday() != 0:
-                    dias_hasta_lunes = fecha_obj.weekday()
-                    lunes = fecha_obj - timedelta(days=dias_hasta_lunes)
-                    data["fecha"] = lunes.strftime("%Y-%m-%d")
-                    print(f"[DEBUG] 🔧 Ajustado a lunes: {data['fecha']}")
-        except:
-            pass
+        # ✅ NO forzar al lunes para tipo="semana"
+        # GestiónITT muestra la semana completa desde cualquier día
+        # Si el usuario pide "resumen de la semana" y hoy es martes,
+        # debe navegar al martes (que carga toda la semana L-V)
         
         return data
     

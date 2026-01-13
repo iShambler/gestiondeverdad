@@ -361,6 +361,9 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
     
     # Pre-procesar: detectar si es "borrar horas de proyecto específico"
     # (seleccionar_proyecto seguido de imputar_horas_dia con horas=0 y modo=establecer)
+    # 🔥 IMPORTANTE: marcar SOLO las órdenes específicas, no todo el contexto
+    ordenes_borrar = set()  # Índices de las órdenes que son borrado de horas
+    
     for i, orden in enumerate(ordenes):
         if orden.get("accion") == "seleccionar_proyecto":
             if i + 1 < len(ordenes):
@@ -369,13 +372,15 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
                     horas = siguiente.get("parametros", {}).get("horas", 0)
                     modo = siguiente.get("parametros", {}).get("modo", "sumar")
                     if horas == 0 and modo == "establecer":
-                        contexto["es_borrado_horas"] = True
-                        print(f"[DEBUG] 🧹 Detectado: seleccionar_proyecto + imputar(0, establecer) → modo borrar horas")
-                        break
+                        ordenes_borrar.add(i)  # Marcar el seleccionar_proyecto
+                        ordenes_borrar.add(i + 1)  # Marcar el imputar_horas_dia
+                        print(f"[DEBUG] 🧹 Detectado borrado en órdenes {i} y {i+1}")
     
     for idx, orden in enumerate(ordenes):
-        # Limpiar flag después de usarlo
-        if orden.get("accion") == "imputar_horas_dia":
+        # 🔥 Activar flag de borrado SOLO si esta orden específica es de borrado
+        if idx in ordenes_borrar:
+            contexto["es_borrado_horas"] = True
+        else:
             contexto["es_borrado_horas"] = False
         
         with session.lock:
