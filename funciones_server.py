@@ -359,6 +359,10 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
     
     respuestas = []
     
+    # 🔥 Limpiar contexto de proyectos al inicio de cada comando
+    contexto["proyectos_comando_actual"] = []  # Lista de proyectos usados en este comando
+    contexto["proyecto_actual"] = None  # Último proyecto usado (se actualiza durante ejecución)
+    
     # Pre-procesar: detectar si es "borrar horas de proyecto específico"
     # (seleccionar_proyecto seguido de imputar_horas_dia con horas=0 y modo=establecer)
     # 🔥 IMPORTANTE: marcar SOLO las órdenes específicas, no todo el contexto

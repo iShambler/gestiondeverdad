@@ -151,17 +151,21 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     time.sleep(0.3)
                     return (fila, f"Usando '{coincidencia['proyecto']}' de '{coincidencia['nodo_padre']}'", False, [])
         
-        # 🆕 Si NO especificó nodo_padre Y hay coincidencias → Verificar si es el mismo proyecto del comando
+        # 🆕 Si NO especificó nodo_padre Y hay coincidencias → Verificar si debe usar contexto
         # Esto permite al usuario elegir entre:
         # - Usar un proyecto existente en la tabla
         # - Buscar otro proyecto diferente en el sistema
         if coincidencias_encontradas and not nodo_padre:
-            # 🔥 NUEVO: Si ya usamos este proyecto en este comando, usar directamente
+            # 🔥 CRITERIO: Solo usar contexto si el proyecto fue INFERIDO (no mencionado por el usuario)
+            # Es decir, comandos como "quítale 2h" donde GPT infiere el proyecto del contexto
+            # Pero NO en "pon 3h en desarrollo" donde el usuario SÍ lo mencionó
+            
+            inferido_contexto = contexto.get("inferido_contexto", False) if contexto else False
             proyecto_actual_contexto = contexto.get("proyecto_actual") if contexto else None
             
-            if proyecto_actual_contexto and normalizar(proyecto_actual_contexto) == normalizar(nombre_proyecto):
-                # ✅ Es el MISMO proyecto que ya usamos antes en este comando
-                print(f"[DEBUG] ✅ Mismo proyecto '{nombre_proyecto}' usado en este comando, reutilizando directamente")
+            if inferido_contexto and proyecto_actual_contexto and normalizar(proyecto_actual_contexto) == normalizar(nombre_proyecto):
+                # ✅ Proyecto INFERIDO del contexto (usuario NO lo mencionó) → Usar directamente
+                print(f"[DEBUG] ✅ Proyecto '{nombre_proyecto}' inferido del contexto, usando directamente sin preguntar")
                 fila = selects[coincidencias_encontradas[0]["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
                 time.sleep(0.3)
@@ -170,9 +174,9 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     contexto["fila_actual"] = fila
                 return (fila, f"Usando '{coincidencias_encontradas[0]['proyecto']}'", False, [])
             else:
-                # ❌ Proyecto DIFERENTE o primera vez → Preguntar
-                print(f"[DEBUG] 💬 Proyecto(s) encontrado(s) en tabla sin nodo_padre especificado")
-                print(f"[DEBUG] 💬 Preguntando al usuario ({len(coincidencias_encontradas)} coincidencia(s))")
+                # ❌ Usuario MENCIONÓ el proyecto o no hay contexto → Preguntar
+                print(f"[DEBUG] 💬 Proyecto '{nombre_proyecto}' mencionado por usuario, preguntando...")
+                print(f"[DEBUG] 💬 {len(coincidencias_encontradas)} coincidencia(s) encontrada(s)")
                 return (None, "", "desambiguacion", coincidencias_encontradas)
 
         # Si no existe → añadimos nueva línea

@@ -67,10 +67,16 @@ def ejecutar_accion(driver, wait, orden, contexto):
         try:
             nombre = orden["parametros"].get("nombre")
             nodo_padre = orden["parametros"].get("nodo_padre")
+            inferido_contexto = orden["parametros"].get("inferido_contexto", False)  # 🔥 NUEVO
             
-            # 🔍 Debug: mostrar si hay nodo padre
+            # 🔥 Pasar flag al contexto para que proyecto_handler lo use
+            contexto["inferido_contexto"] = inferido_contexto
+            
+            # 🔍 Debug: mostrar si hay nodo padre o si es inferido
             if nodo_padre:
                 print(f"[DEBUG] 🎯 Seleccionando proyecto con jerarquía: '{nombre}' bajo '{nodo_padre}'")
+            if inferido_contexto:
+                print(f"[DEBUG] 🧠 Proyecto '{nombre}' inferido del contexto (no mencionado por usuario)")
             
             # Detectar si es para "borrar horas" (no tiene sentido crear proyecto para borrarlo)
             solo_existente = contexto.get("es_borrado_horas", False)
@@ -81,6 +87,9 @@ def ejecutar_accion(driver, wait, orden, contexto):
             fila, mensaje, necesita_desambiguacion, coincidencias = seleccionar_proyecto(
                 driver, wait, nombre, nodo_padre, contexto=contexto, solo_existente=solo_existente
             )
+            
+            # 🔥 Limpiar flag después de usarlo
+            contexto["inferido_contexto"] = False
             
             # Si necesita desambiguación, devolver info especial
             if necesita_desambiguacion:
@@ -95,6 +104,17 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
                 contexto["nodo_padre_actual"] = nodo_padre
+                
+                # 🔥 Guardar en lista de proyectos del comando actual
+                if "proyectos_comando_actual" in contexto:
+                    fecha_actual = contexto.get("fecha_seleccionada")
+                    contexto["proyectos_comando_actual"].append({
+                        "nombre": nombre,
+                        "nodo_padre": nodo_padre,
+                        "fecha": fecha_actual,
+                        "dia": fecha_actual.strftime("%A").lower() if fecha_actual else None
+                    })
+                    print(f"[DEBUG] 💾 Guardado '{nombre}' en proyectos_comando_actual ({len(contexto['proyectos_comando_actual'])} proyectos)")
                 
                 # Guardar último proyecto usado
                 user_id = contexto.get("user_id")
