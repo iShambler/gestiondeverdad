@@ -36,8 +36,13 @@ def interpretar_consulta(texto):
     # Calcular lunes de la semana pasada
     lunes_semana_pasada = (hoy_obj - timedelta(days=weekday_actual + 7)).strftime("%Y-%m-%d")
     
+    # 🔥 Calcular lunes de la semana siguiente
+    dias_hasta_proximo_lunes = 7 - weekday_actual  # Días desde hoy hasta el próximo lunes
+    lunes_semana_siguiente = (hoy_obj + timedelta(days=dias_hasta_proximo_lunes)).strftime("%Y-%m-%d")
+    
     print(f"[DEBUG] 📅 Lunes de ESTA semana: {lunes_esta_semana}")
     print(f"[DEBUG] 📅 Lunes de SEMANA PASADA: {lunes_semana_pasada}")
+    print(f"[DEBUG] 📅 Lunes de SEMANA SIGUIENTE: {lunes_semana_siguiente}")
     
     # Calcular ejemplos dinámicos
     ayer = (hoy_obj - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -87,6 +92,7 @@ Si es TIPO B (consulta de horas), extrae la fecha y tipo:
 Reglas para TIPO B:
 - Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: HOY (NO el lunes, sino la fecha actual)
 - Si pregunta por "la semana pasada" → tipo: "semana", fecha: LUNES DE LA SEMANA ANTERIOR
+- Si pregunta por "próxima semana" / "siguiente semana" / "next week" / "la semana que viene" → tipo: "semana", fecha: LUNES DE LA SEMANA SIGUIENTE
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
 - Si pregunta por un día específico futuro (ej: "el viernes", "mañana") → tipo: "dia", fecha: ese día exacto
 - Si pregunta por un día específico PASADO (ej: "jueves pasado", "el martes pasado", "ayer"):
@@ -124,6 +130,9 @@ Ejemplos:
 - "resumen de la semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "{hoy}", "tipo": "semana"}} (usa HOY, NO el lunes)
 - "qué tengo esta semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "{hoy}", "tipo": "semana"}}
 - "resumen de la semana pasada" → {{"fecha": "{lunes_semana_pasada}", "tipo": "semana"}}
+- "resumen de la próxima semana" → {{"fecha": "{lunes_semana_siguiente}", "tipo": "semana"}}
+- "qué tengo la siguiente semana" → {{"fecha": "{lunes_semana_siguiente}", "tipo": "semana"}}
+- "resumen de la semana que viene" → {{"fecha": "{lunes_semana_siguiente}", "tipo": "semana"}}
 - "dame las horas del jueves pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{jueves_pasado}", "tipo": "dia"}} (jueves fue hace {dias_atras_jueves} días)
 - "qué tenía el martes pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{martes_pasado}", "tipo": "dia"}} (martes fue hace {dias_atras_martes} días)
 - "resumen de ayer" → {{"fecha": "{ayer}", "tipo": "dia"}}

@@ -135,7 +135,8 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
             else:
                 # Misma semana, NO volver
                 print(f"[DEBUG] ✅ Misma semana ({lunes_objetivo.strftime('%d/%m')}), NO volver atrás")
-                debe_volver = False
+                # 🔥 RETORNAR INMEDIATAMENTE - No necesitamos hacer nada más
+                return f"Ya estás en la semana del {lunes_objetivo.strftime('%d/%m/%Y')}"
             
             if debe_volver:
                 print(f"[DEBUG] 🔙 Volviendo atrás...")
