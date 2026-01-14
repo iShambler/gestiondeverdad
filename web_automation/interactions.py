@@ -80,6 +80,19 @@ def hacer_login(driver, wait, username=None, password=None):
         if "botonSalirHtml" in html_completo:
             print(f"[DEBUG] ✅ Encontrado 'botonSalirHtml' en el HTML")
             print(f"[DEBUG] ✅ CONFIRMADO: Login exitoso")
+            
+            # 🔥 NUEVO: Comprobar si existe el botón especial "Imputar horas"
+            print(f"[DEBUG] 🔍 Buscando botón especial 'Imputar horas'...")
+            try:
+                boton_imputar = driver.find_element(By.ID, "botonImputar")
+                if boton_imputar:
+                    print(f"[DEBUG] ✅ Botón 'Imputar horas' encontrado, haciendo click...")
+                    boton_imputar.click()
+                    time.sleep(2)  # Esperar a que cargue la pantalla de imputación
+                    print(f"[DEBUG] ✅ Click en botón 'Imputar horas' completado")
+            except:
+                print(f"[DEBUG] ℹ️ Botón 'Imputar horas' no encontrado (interfaz estándar)")
+            
             return True, "login_exitoso"
         else:
             print(f"[DEBUG] No se encontró 'botonSalirHtml' en el HTML")

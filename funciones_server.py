@@ -274,7 +274,95 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
     info_parcial = estado['info_parcial']
     que_falta = estado['que_falta']
     
-    # Construir comando completo
+    # 🔥 NUEVO: Manejo de confirmación y selección de proyecto del flujo inteligente
+    if que_falta in ["confirmacion_proyecto", "seleccion_proyecto"]:
+        proyectos = estado.get("proyectos", [])
+        
+        if que_falta == "confirmacion_proyecto":
+            # Un solo proyecto, espera sí/no
+            if texto_lower in ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep', '1']:
+                proyecto_seleccionado = proyectos[0]
+            elif texto_lower in ['no', 'nop', 'nope', 'n', 'nel', 'negativo']:
+                conversation_state_manager.limpiar_estado(user_id)
+                respuesta = "👍 Vale, cancelado."
+                registrar_peticion(db, usuario.id, texto, "confirmacion_rechazada", 
+                                 canal=canal, respuesta=respuesta)
+                session.update_activity()
+                return respuesta
+            else:
+                return "❌ No he entendido. Responde 'sí' o 'no'."
+        else:
+            # Múltiples proyectos, espera número
+            try:
+                indice = int(texto.strip()) - 1
+                if 0 <= indice < len(proyectos):
+                    proyecto_seleccionado = proyectos[indice]
+                else:
+                    return f"❌ Número inválido. Por favor, elige entre 1 y {len(proyectos)}."
+            except ValueError:
+                return "❌ Por favor, responde con el número del proyecto (1, 2, 3...)."
+        
+        # 🔥 Construir comando completo con el proyecto seleccionado
+        horas = info_parcial.get('horas')
+        dia = info_parcial.get('dia')
+        nombre_proyecto = proyecto_seleccionado['nombre']
+        
+        # Extraer nodo_padre del path completo
+        path_completo = proyecto_seleccionado['path_completo']
+        partes = path_completo.split(' - ')
+        nodo_padre = ' - '.join(partes[:-1]) if len(partes) > 1 else None
+        
+        print(f"[DEBUG] ✅ Proyecto seleccionado: {nombre_proyecto}")
+        print(f"[DEBUG] 📂 Nodo padre: {nodo_padre}")
+        print(f"[DEBUG] ⏱️ Horas: {horas}, Día: {dia}")
+        
+        # Limpiar estado
+        conversation_state_manager.limpiar_estado(user_id)
+        
+        # 🔥 EJECUTAR DIRECTAMENTE sin volver a interpretar con GPT
+        # Ya tenemos toda la información, construir las órdenes manualmente
+        ordenes = []
+        
+        # Agregar seleccionar_fecha
+        ordenes.append({
+            "accion": "seleccionar_fecha",
+            "parametros": {"fecha": dia}
+        })
+        
+        # Agregar seleccionar_proyecto
+        proyecto_params = {"nombre": nombre_proyecto}
+        if nodo_padre:
+            proyecto_params["nodo_padre"] = nodo_padre
+        
+        ordenes.append({
+            "accion": "seleccionar_proyecto",
+            "parametros": proyecto_params
+        })
+        
+        # Agregar imputar_horas_dia
+        ordenes.append({
+            "accion": "imputar_horas_dia",
+            "parametros": {
+                "dia": dia,
+                "horas": horas
+            }
+        })
+        
+        # Agregar guardar_linea
+        ordenes.append({
+            "accion": "guardar_linea"
+        })
+        
+        print(f"[DEBUG] 🛠️ Órdenes construidas: {ordenes}")
+        
+        # Ejecutar órdenes
+        texto_original = f"{'Quitar' if horas < 0 else 'Sumar'} {abs(horas)}h {'de' if horas < 0 else 'a'} {nombre_proyecto}"
+        return ejecutar_ordenes_y_generar_respuesta(
+            ordenes, texto_original, session, contexto, 
+            db, usuario, user_id, canal, texto_original=texto_original
+        )
+    
+    # Construir comando completo (flujo antiguo)
     comando_completo = None
     
     if que_falta == "proyecto":
@@ -321,6 +409,10 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
     except Exception as e:
         print(f"[DEBUG] ⚠️ No se pudo leer la tabla: {e}")
     
+    # 🔥 Pasar la tabla al contexto para que el validador la use
+    if tabla_actual:
+        contexto["tabla_actual"] = tabla_actual
+    
     ordenes = interpretar_con_gpt(comando, contexto, tabla_actual)
     
     if not ordenes:
@@ -329,13 +421,52 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
         session.update_activity()
         return respuesta
     
-    # Verificar errores de validación
+    # 🔥 Verificar si necesita leer la tabla (nueva acción)
+    if len(ordenes) == 1 and ordenes[0].get('accion') == 'necesita_tabla':
+        print(f"[DEBUG] 📊 GPT indica que necesita leer la tabla")
+        
+        # Leer tabla si no la tenemos
+        if not tabla_actual:
+            try:
+                with session.lock:
+                    tabla_actual = leer_tabla_imputacion(session.driver)
+                    contexto["tabla_actual"] = tabla_actual
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Error al leer tabla: {e}")
+                respuesta = "⚠️ No he podido leer la tabla de imputación."
+                registrar_peticion(db, usuario.id, texto_original, "error", canal=canal, respuesta=respuesta)
+                session.update_activity()
+                return respuesta
+        
+        # Volver a interpretar CON la tabla
+        texto_original_guardado = ordenes[0].get('texto_original', comando)
+        ordenes = interpretar_con_gpt(texto_original_guardado, contexto, tabla_actual)
+        
+        if not ordenes:
+            respuesta = "🤔 No he entendido qué quieres que haga."
+            registrar_peticion(db, usuario.id, texto_original, "comando", canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
+    
+    # Verificar errores de validación o info incompleta
     if len(ordenes) == 1 and ordenes[0].get('accion') in ['error_validacion', 'info_incompleta']:
-        mensaje_error = ordenes[0].get('mensaje', '🤔 No he entendido qué quieres que haga.')
+        mensaje_respuesta = ordenes[0].get('mensaje', '🤔 No he entendido qué quieres que haga.')
+        
+        # 🔥 Si es info_incompleta, guardar el estado
+        if ordenes[0].get('accion') == 'info_incompleta':
+            que_falta = ordenes[0].get('que_falta')
+            info_parcial = ordenes[0].get('info_parcial', {})
+            proyectos = ordenes[0].get('proyectos', [])
+            
+            print(f"[DEBUG] 📦 Guardando info_incompleta: que_falta={que_falta}")
+            conversation_state_manager.guardar_info_incompleta(
+                user_id, info_parcial, que_falta, proyectos=proyectos
+            )
+        
         registrar_peticion(db, usuario.id, texto_original, "comando_invalido", 
-                         canal=canal, respuesta=mensaje_error)
+                         canal=canal, respuesta=mensaje_respuesta)
         session.update_activity()
-        return mensaje_error
+        return mensaje_respuesta
     
     # Ejecutar órdenes
     return ejecutar_ordenes_y_generar_respuesta(ordenes, comando, session, contexto, 
