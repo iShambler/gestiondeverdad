@@ -1,0 +1,45 @@
+NOTA IMPORTANTE - CAMBIOS PENDIENTES
+
+El filesystem tool puede LEER archivos de Windows con ruta C:\... pero NO puede ESCRIBIR ni EDITAR.
+
+Para completar la solución:
+
+===============================================================================
+CAMBIO 1 - INTERPRETER.PY
+===============================================================================
+Archivo: C:\Proyectos\gestiondeverdad\ai\interpreter.py
+Ubicación: Busca "🚨 QUITAR / RESTAR / SUMAR:" (aprox línea 417-422)
+
+AÑADIR después de las 3 líneas de ejemplos y ANTES de "- imputar_horas_semana:":
+
+     🚫 REGLA CRÍTICA - NO ADIVINAR PROYECTOS:
+     Si el usuario dice "quita/suma/establece X horas" SIN mencionar explícitamente el proyecto,
+     NO incluyas 'seleccionar_proyecto'. El sistema preguntará automáticamente.
+     
+     Ejemplos de CUÁNDO NO incluir seleccionar_proyecto:
+     - "quita 2h el viernes" → NO proyecto
+     - "suma 3h hoy" → NO proyecto
+     - "quitale media hora" → NO proyecto
+     
+     Ejemplos de CUÁNDO SÍ incluir seleccionar_proyecto:
+     - "quita 2h A Desarrollo" → SÍ proyecto
+     - "quita 2h de Estudio" → SÍ proyecto
+
+===============================================================================
+CAMBIO 2 - RESPONSE_GENERATOR.PY
+===============================================================================
+Archivo: C:\Proyectos\gestiondeverdad\ai\response_generator.py
+Ubicación: Busca "⚠️ REGLAS CRÍTICAS:" (aprox línea 47)
+
+AÑADIR después de la línea sobre fechas:
+
+- Si una acción dice "restado" o "quitado", NUNCA digas "añadido" o "sumado".
+- Si una acción dice "añadido" o "sumado", NUNCA digas "restado" o "quitado".
+- Respeta EXACTAMENTE el tipo de operación realizada (restar vs sumar).
+
+===============================================================================
+RESUMEN
+===============================================================================
+1. ✅ Validación contra quitar de 0h → YA IMPLEMENTADO en proyecto_handler.py
+2. ⚙️ Prompt GPT intérprete → CAMBIO 1 arriba (interpreter.py)
+3. ⚙️ Prompt GPT response → CAMBIO 2 arriba (response_generator.py)

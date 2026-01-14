@@ -746,6 +746,12 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
 
             nuevas_horas = float(horas)
             
+            # 🆕 VALIDACIÓN: No permitir quitar horas de 0
+            if modo == "sumar" and nuevas_horas < 0 and valor_actual == 0:
+                proyecto_texto = f"de {nombre_proyecto}" if nombre_proyecto else ""
+                print(f"[DEBUG] ❌ Intento de quitar {abs(nuevas_horas)}h {proyecto_texto} el {dia} pero ya tiene 0h")
+                return f"❌ No puedo quitar {abs(nuevas_horas)}h {proyecto_texto} el {dia} porque ya tiene 0h"
+            
             if modo == "establecer":
                 total = nuevas_horas
                 # Limpiar con Ctrl+A y Delete para asegurar

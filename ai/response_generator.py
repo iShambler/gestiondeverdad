@@ -77,11 +77,20 @@ Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando
 - Usa formato de fecha legible (ej: "el 12/01" o "el lunes 12/01").
 - Si no estás seguro de una fecha, NO la menciones, di solo "el lunes/martes/etc."
 - Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.
+- 🚨 RESPETA LA OPERACIÓN EXACTA: Si la acción dice "restado" o "quitado", usa ESE verbo. Si dice "sumado" o "añadido", usa ESE verbo. NO los confundas.
+  Ejemplos CORRECTOS:
+  - Acción: "Restado 2 horas" → Respuesta: "He restado/quitado 2 horas" ✅
+  - Acción: "Sumado 3 horas" → Respuesta: "He sumado/añadido 3 horas" ✅
+  - Acción: "Establecido a 5 horas" → Respuesta: "He establecido/puesto 5 horas totales" ✅
+  Ejemplos INCORRECTOS:
+  - Acción: "Restado 2 horas" → Respuesta: "He añadido 2 horas" ❌ (confunde restar con añadir)
+  - Acción: "Sumado 3 horas" → Respuesta: "He quitado 3 horas" ❌ (confunde sumar con quitar)
 
-Ejemplos de buen estilo:
+Ejemplos de buen estilo completo:
 - "¡Listo! He imputado 8 horas en Desarrollo para hoy y lo he guardado todo."
 - "Perfecto, he puesto 3h en Boda para el 17/12 y 2h en Formación para el 19/12. ¡Guardado! ✅"
 - "¡Hecho! He restado 4 horas del proyecto Estudio el lunes 12/01, dejando un total de 7 horas."
+- "Perfecto, he quitado 2 horas de Desarrollo el viernes 16/01. ✅"
 - Si la acción dice "(fecha: 12/01/2026)" y "el lunes", di: "el lunes 12/01" o "el lunes 12 de enero"
 
 Respuesta:"""
@@ -102,8 +111,8 @@ Respuesta:"""
         return respuesta
     
     except Exception as e:
-        # Fallback: si falla GPT, unir las respuestas simples (ya limpias)
-        return " · ".join(acciones_limpias)
+        # Fallback: si falla GPT, unir las acciones con fecha
+        return " · ".join(acciones_con_fecha)
 
 
 def responder_conversacion(texto, user_id="default"):

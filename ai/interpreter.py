@@ -301,6 +301,26 @@ TIPOS DE ACCIONES
      - "quita 2h" o "resta 2h" → horas: -2 (NEGATIVO), modo: "sumar"
      - "suma 3h" o "añade 3h" → horas: 3 (POSITIVO), modo: "sumar"
      - "pon 5h" o "establece 5h" → horas: 5, modo: "establecer"
+     
+     🚫 REGLA CRÍTICA - NO ADIVINAR PROYECTOS:
+     Si el usuario dice "quita/suma/establece X horas" SIN mencionar explícitamente el proyecto,
+     NO incluyas 'seleccionar_proyecto'. El sistema preguntará automáticamente.
+     
+     Ejemplos de CUÁNDO NO incluir seleccionar_proyecto:
+     - "quita 2h el viernes" → NO proyecto (usuario no lo mencionó)
+     - "suma 3h hoy" → NO proyecto
+     - "establece 5h el lunes" → NO proyecto
+     - "quitale media hora" → NO proyecto
+     - "quitale 6 horas el viernes" → NO proyecto
+     
+     Ejemplos de CUÁNDO SÍ incluir seleccionar_proyecto:
+     - "quita 2h A Desarrollo" → SÍ proyecto ("A Desarrollo" = explícito)
+     - "suma 3h EN Formación" → SÍ proyecto ("EN Formación" = explícito)
+     - "quita 2h DE Estudio" → SÍ proyecto ("DE Estudio" = explícito)
+     - "quitale 2h A Estudio" → SÍ proyecto ("A Estudio" = explícito)
+     - "establece Desarrollo a 5h" → SÍ proyecto ("Desarrollo" mencionado)
+     
+     ⚠️ Si hay duda: si el proyecto NO está en el texto del usuario, NO lo incluyas.
    
    - imputar_horas_semana: Para TODA LA SEMANA (L-V). NO requiere parámetros.
      🚨 CRÍTICO: SIEMPRE debe ir precedida de seleccionar_fecha con el LUNES de la semana
@@ -365,6 +385,13 @@ EJEMPLOS
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-13", "horas": 1.5, "modo": "sumar"}}}},
   {{"accion": "guardar_linea"}}
 ]
+
+"Quita 6 horas el viernes" (SIN proyecto explícito)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-16"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-16", "horas": -6, "modo": "sumar"}}}}
+]
+NOTA: NO incluye seleccionar_proyecto porque el usuario NO mencionó ningún proyecto.
 
 "3h en staff en permiso"
 [
