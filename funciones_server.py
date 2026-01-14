@@ -28,34 +28,16 @@ def detectar_tipo_accion(ordenes: List[dict], indice_actual: int) -> str:
     Busca en las órdenes siguientes para determinar si es eliminación, imputación, etc.
     
     Returns:
-        'eliminar' | 'imputar' | 'borrar_horas' | 'modificar' | 'otro'
+        'eliminar' | 'imputar' | 'modificar' | 'otro'
     """
     for idx in range(indice_actual, len(ordenes)):
         accion = ordenes[idx].get("accion", "")
-        parametros = ordenes[idx].get("parametros", {})
-        
         if accion == "eliminar_linea":
             return "eliminar"
+        elif accion in ["imputar_horas_dia", "imputar_horas_semana"]:
+            return "imputar"
         elif accion == "borrar_todas_horas_dia":
             return "borrar_horas"
-        elif accion == "imputar_horas_dia":
-            horas = parametros.get("horas", 0)
-            modo = parametros.get("modo", "sumar")
-            
-            # 🔥 Detectar si es borrado (horas=0 con modo=establecer)
-            if horas == 0 and modo == "establecer":
-                return "borrar_horas"
-            # 🔥 Detectar si es ESTABLECER (modo=establecer con horas > 0)
-            elif modo == "establecer" and horas > 0:
-                return "establecer_horas"
-            # 🔥 Detectar si es RESTAR (horas negativas)
-            elif horas < 0:
-                return "restar_horas"
-            # Sumar/Añadir (por defecto)
-            else:
-                return "imputar"
-        elif accion == "imputar_horas_semana":
-            return "imputar"
     return "modificar"
 
 
@@ -274,95 +256,7 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
     info_parcial = estado['info_parcial']
     que_falta = estado['que_falta']
     
-    # 🔥 NUEVO: Manejo de confirmación y selección de proyecto del flujo inteligente
-    if que_falta in ["confirmacion_proyecto", "seleccion_proyecto"]:
-        proyectos = estado.get("proyectos", [])
-        
-        if que_falta == "confirmacion_proyecto":
-            # Un solo proyecto, espera sí/no
-            if texto_lower in ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep', '1']:
-                proyecto_seleccionado = proyectos[0]
-            elif texto_lower in ['no', 'nop', 'nope', 'n', 'nel', 'negativo']:
-                conversation_state_manager.limpiar_estado(user_id)
-                respuesta = "👍 Vale, cancelado."
-                registrar_peticion(db, usuario.id, texto, "confirmacion_rechazada", 
-                                 canal=canal, respuesta=respuesta)
-                session.update_activity()
-                return respuesta
-            else:
-                return "❌ No he entendido. Responde 'sí' o 'no'."
-        else:
-            # Múltiples proyectos, espera número
-            try:
-                indice = int(texto.strip()) - 1
-                if 0 <= indice < len(proyectos):
-                    proyecto_seleccionado = proyectos[indice]
-                else:
-                    return f"❌ Número inválido. Por favor, elige entre 1 y {len(proyectos)}."
-            except ValueError:
-                return "❌ Por favor, responde con el número del proyecto (1, 2, 3...)."
-        
-        # 🔥 Construir comando completo con el proyecto seleccionado
-        horas = info_parcial.get('horas')
-        dia = info_parcial.get('dia')
-        nombre_proyecto = proyecto_seleccionado['nombre']
-        
-        # Extraer nodo_padre del path completo
-        path_completo = proyecto_seleccionado['path_completo']
-        partes = path_completo.split(' - ')
-        nodo_padre = ' - '.join(partes[:-1]) if len(partes) > 1 else None
-        
-        print(f"[DEBUG] ✅ Proyecto seleccionado: {nombre_proyecto}")
-        print(f"[DEBUG] 📂 Nodo padre: {nodo_padre}")
-        print(f"[DEBUG] ⏱️ Horas: {horas}, Día: {dia}")
-        
-        # Limpiar estado
-        conversation_state_manager.limpiar_estado(user_id)
-        
-        # 🔥 EJECUTAR DIRECTAMENTE sin volver a interpretar con GPT
-        # Ya tenemos toda la información, construir las órdenes manualmente
-        ordenes = []
-        
-        # Agregar seleccionar_fecha
-        ordenes.append({
-            "accion": "seleccionar_fecha",
-            "parametros": {"fecha": dia}
-        })
-        
-        # Agregar seleccionar_proyecto
-        proyecto_params = {"nombre": nombre_proyecto}
-        if nodo_padre:
-            proyecto_params["nodo_padre"] = nodo_padre
-        
-        ordenes.append({
-            "accion": "seleccionar_proyecto",
-            "parametros": proyecto_params
-        })
-        
-        # Agregar imputar_horas_dia
-        ordenes.append({
-            "accion": "imputar_horas_dia",
-            "parametros": {
-                "dia": dia,
-                "horas": horas
-            }
-        })
-        
-        # Agregar guardar_linea
-        ordenes.append({
-            "accion": "guardar_linea"
-        })
-        
-        print(f"[DEBUG] 🛠️ Órdenes construidas: {ordenes}")
-        
-        # Ejecutar órdenes
-        texto_original = f"{'Quitar' if horas < 0 else 'Sumar'} {abs(horas)}h {'de' if horas < 0 else 'a'} {nombre_proyecto}"
-        return ejecutar_ordenes_y_generar_respuesta(
-            ordenes, texto_original, session, contexto, 
-            db, usuario, user_id, canal, texto_original=texto_original
-        )
-    
-    # Construir comando completo (flujo antiguo)
+    # Construir comando completo
     comando_completo = None
     
     if que_falta == "proyecto":
@@ -378,6 +272,55 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
     elif que_falta == "horas_y_dia":
         proyecto = info_parcial.get('proyecto')
         comando_completo = f"{texto} en {proyecto}"
+    
+    # 🆕 Manejar selección de proyecto por número o nombre
+    elif que_falta == "seleccion_proyecto":
+        proyectos = estado.get('proyectos', [])
+        horas = info_parcial.get('horas', 0)
+        dia = info_parcial.get('dia', 'hoy')
+        
+        # Intentar interpretar como número
+        try:
+            numero = int(texto_lower.strip())
+            if 1 <= numero <= len(proyectos):
+                proyecto_seleccionado = proyectos[numero - 1]
+                nombre_proyecto = proyecto_seleccionado['nombre']
+                
+                # Construir comando con horas (pueden ser negativas para quitar)
+                if horas < 0:
+                    comando_completo = f"quita {abs(horas)} horas de {nombre_proyecto}"
+                else:
+                    comando_completo = f"pon {horas} horas en {nombre_proyecto}"
+            else:
+                conversation_state_manager.limpiar_estado(user_id)
+                respuesta = f"❌ El número debe estar entre 1 y {len(proyectos)}."
+                registrar_peticion(db, usuario.id, texto, "seleccion_invalida", 
+                                 canal=canal, respuesta=respuesta)
+                session.update_activity()
+                return respuesta
+        except ValueError:
+            # No es número, buscar por nombre
+            texto_busqueda = texto_lower.strip()
+            proyecto_encontrado = None
+            
+            for p in proyectos:
+                if texto_busqueda in p['nombre'].lower():
+                    proyecto_encontrado = p
+                    break
+            
+            if proyecto_encontrado:
+                nombre_proyecto = proyecto_encontrado['nombre']
+                if horas < 0:
+                    comando_completo = f"quita {abs(horas)} horas de {nombre_proyecto}"
+                else:
+                    comando_completo = f"pon {horas} horas en {nombre_proyecto}"
+            else:
+                conversation_state_manager.limpiar_estado(user_id)
+                respuesta = "❌ No he encontrado ese proyecto. Indica el número o el nombre exacto."
+                registrar_peticion(db, usuario.id, texto, "proyecto_no_encontrado", 
+                                 canal=canal, respuesta=respuesta)
+                session.update_activity()
+                return respuesta
     
     print(f"[DEBUG] ✅ Comando completo generado: '{comando_completo}'")
     conversation_state_manager.limpiar_estado(user_id)
@@ -409,10 +352,6 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
     except Exception as e:
         print(f"[DEBUG] ⚠️ No se pudo leer la tabla: {e}")
     
-    # 🔥 Pasar la tabla al contexto para que el validador la use
-    if tabla_actual:
-        contexto["tabla_actual"] = tabla_actual
-    
     ordenes = interpretar_con_gpt(comando, contexto, tabla_actual)
     
     if not ordenes:
@@ -421,52 +360,13 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
         session.update_activity()
         return respuesta
     
-    # 🔥 Verificar si necesita leer la tabla (nueva acción)
-    if len(ordenes) == 1 and ordenes[0].get('accion') == 'necesita_tabla':
-        print(f"[DEBUG] 📊 GPT indica que necesita leer la tabla")
-        
-        # Leer tabla si no la tenemos
-        if not tabla_actual:
-            try:
-                with session.lock:
-                    tabla_actual = leer_tabla_imputacion(session.driver)
-                    contexto["tabla_actual"] = tabla_actual
-            except Exception as e:
-                print(f"[DEBUG] ⚠️ Error al leer tabla: {e}")
-                respuesta = "⚠️ No he podido leer la tabla de imputación."
-                registrar_peticion(db, usuario.id, texto_original, "error", canal=canal, respuesta=respuesta)
-                session.update_activity()
-                return respuesta
-        
-        # Volver a interpretar CON la tabla
-        texto_original_guardado = ordenes[0].get('texto_original', comando)
-        ordenes = interpretar_con_gpt(texto_original_guardado, contexto, tabla_actual)
-        
-        if not ordenes:
-            respuesta = "🤔 No he entendido qué quieres que haga."
-            registrar_peticion(db, usuario.id, texto_original, "comando", canal=canal, respuesta=respuesta)
-            session.update_activity()
-            return respuesta
-    
-    # Verificar errores de validación o info incompleta
+    # Verificar errores de validación
     if len(ordenes) == 1 and ordenes[0].get('accion') in ['error_validacion', 'info_incompleta']:
-        mensaje_respuesta = ordenes[0].get('mensaje', '🤔 No he entendido qué quieres que haga.')
-        
-        # 🔥 Si es info_incompleta, guardar el estado
-        if ordenes[0].get('accion') == 'info_incompleta':
-            que_falta = ordenes[0].get('que_falta')
-            info_parcial = ordenes[0].get('info_parcial', {})
-            proyectos = ordenes[0].get('proyectos', [])
-            
-            print(f"[DEBUG] 📦 Guardando info_incompleta: que_falta={que_falta}")
-            conversation_state_manager.guardar_info_incompleta(
-                user_id, info_parcial, que_falta, proyectos=proyectos
-            )
-        
+        mensaje_error = ordenes[0].get('mensaje', '🤔 No he entendido qué quieres que haga.')
         registrar_peticion(db, usuario.id, texto_original, "comando_invalido", 
-                         canal=canal, respuesta=mensaje_respuesta)
+                         canal=canal, respuesta=mensaje_error)
         session.update_activity()
-        return mensaje_respuesta
+        return mensaje_error
     
     # Ejecutar órdenes
     return ejecutar_ordenes_y_generar_respuesta(ordenes, comando, session, contexto, 
@@ -490,15 +390,8 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
     
     respuestas = []
     
-    # 🔥 Limpiar contexto de proyectos al inicio de cada comando
-    contexto["proyectos_comando_actual"] = []  # Lista de proyectos usados en este comando
-    contexto["proyecto_actual"] = None  # Último proyecto usado (se actualiza durante ejecución)
-    
     # Pre-procesar: detectar si es "borrar horas de proyecto específico"
     # (seleccionar_proyecto seguido de imputar_horas_dia con horas=0 y modo=establecer)
-    # 🔥 IMPORTANTE: marcar SOLO las órdenes específicas, no todo el contexto
-    ordenes_borrar = set()  # Índices de las órdenes que son borrado de horas
-    
     for i, orden in enumerate(ordenes):
         if orden.get("accion") == "seleccionar_proyecto":
             if i + 1 < len(ordenes):
@@ -507,15 +400,13 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
                     horas = siguiente.get("parametros", {}).get("horas", 0)
                     modo = siguiente.get("parametros", {}).get("modo", "sumar")
                     if horas == 0 and modo == "establecer":
-                        ordenes_borrar.add(i)  # Marcar el seleccionar_proyecto
-                        ordenes_borrar.add(i + 1)  # Marcar el imputar_horas_dia
-                        print(f"[DEBUG] 🧹 Detectado borrado en órdenes {i} y {i+1}")
+                        contexto["es_borrado_horas"] = True
+                        print(f"[DEBUG] 🧹 Detectado: seleccionar_proyecto + imputar(0, establecer) → modo borrar horas")
+                        break
     
     for idx, orden in enumerate(ordenes):
-        # 🔥 Activar flag de borrado SOLO si esta orden específica es de borrado
-        if idx in ordenes_borrar:
-            contexto["es_borrado_horas"] = True
-        else:
+        # Limpiar flag después de usarlo
+        if orden.get("accion") == "imputar_horas_dia":
             contexto["es_borrado_horas"] = False
         
         with session.lock:
@@ -563,8 +454,6 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
     
     # Desambiguación
     if tipo == "desambiguacion":
-        print(f"[DEBUG] ⏸️ DESAMBIGUACIÓN DETECTADA en funciones_server.py")
-        
         # Detectar tipo de acción para personalizar el mensaje
         tipo_accion = detectar_tipo_accion(ordenes, indice_orden)
         
@@ -575,7 +464,6 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
             tipo_accion=tipo_accion
         )
         
-        print(f"[DEBUG] 💾 Guardando estado de desambiguación")
         conversation_state_manager.guardar_desambiguacion(
             user_id,
             mensaje["proyecto"],
@@ -589,11 +477,8 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
         registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", 
                          canal=canal, respuesta=mensaje_pregunta)
         session.update_activity()
-        
-        print(f"[DEBUG] 🛑 RETORNANDO mensaje de desambiguación: {mensaje_pregunta[:100]}...")
         return mensaje_pregunta
     
-    print(f"[DEBUG] ⚠️ Tipo de mensaje NO es desambiguación: {tipo}")
     return None
 
 
@@ -604,36 +489,29 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
 def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session, 
                                usuario, user_id: str, canal: str, contexto: dict) -> str:
     """
-    Maneja confirmación de proyecto existente (sí/no/otro)
+    Maneja confirmación de proyecto existente (sí/no)
     """
     texto_lower = texto.lower().strip()
     
     # Detectar "sí"
-    if texto_lower in ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep', '1']:
+    if texto_lower in ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep']:
         print(f"[DEBUG] ✅ Usuario confirmó usar el proyecto existente")
         coincidencia = estado["coincidencias"][0]
         return ejecutar_con_coincidencia(coincidencia, estado, session, db, usuario, 
                                         user_id, canal, contexto, texto)
     
-    # Detectar "otro" → buscar en el sistema
-    elif any(palabra in texto_lower for palabra in ['otro', 'otra', 'diferente', 'busca', 
-                                                     'buscar', 'otro proyecto', 'uno diferente', 'distinto']):
-        print(f"[DEBUG] 🔄 Usuario quiere buscar otro proyecto diferente")
-        print(f"[DEBUG] 📂 Proyectos existentes rechazados, buscando en sistema...")
-        return buscar_en_sistema(estado, session, db, usuario, user_id, canal, contexto, texto)
-    
-    # Detectar "no" o cancelación
+    # Detectar "no"
     elif any(palabra in texto_lower for palabra in ['no', 'nop', 'nope', 'n', 'nel', 
-                                                     'negativo', 'ninguno', 'cancelar', 'cancel']):
-        print(f"[DEBUG] ❌ Usuario rechazó/canceló el proyecto existente")
+                                                     'negativo', 'ninguno', 'otro', 'busca', 'diferente']):
+        print(f"[DEBUG] ❌ Usuario rechazó el proyecto existente")
         
         # 🔥 LIMPIAR EL ESTADO - el usuario canceló la confirmación
         conversation_state_manager.limpiar_estado(user_id)
         
         # 🔥 Responder que debe volver a intentar con el comando completo
         respuesta = (
-            "👍 Vale, cancelado.\n\n"
-            "💡 Si quieres, vuelve a escribir tu comando con el proyecto correcto.\n"
+            "👍 Vale, no usaré ese proyecto.\n\n"
+            "💡 Por favor, vuelve a escribir tu comando con el proyecto correcto.\n"
             "Ejemplo: *Pon 3 horas en [nombre del proyecto]*"
         )
         registrar_peticion(db, usuario.id, texto, "confirmacion_rechazada", 
@@ -642,7 +520,7 @@ def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session,
         return respuesta
     
     else:
-        return "❌ No he entendido. Responde:\n• **'1'** o **'sí'** para usar este proyecto\n• **'otro'** para buscar un proyecto diferente\n• **'cancelar'** para abandonar"
+        return "❌ No he entendido. Responde 'sí' para usar este proyecto o 'no' para cancelar."
 
 
 def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Session,
