@@ -151,23 +151,8 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
     
-    # 🆕 Extraer información del contexto
-    proyecto_actual = contexto.get("proyecto_actual") if contexto else None
-    nodo_padre_actual = contexto.get("nodo_padre_actual") if contexto else None
-    dia_actual = contexto.get("dia_actual") if contexto else None  # 🆕 NUEVO
-    
-    # Construir información de contexto para GPT
-    info_contexto = ""
-    if proyecto_actual:
-        info_contexto = f"\n\n📦 CONTEXTO ACTUAL:\n"
-        info_contexto += f"- Último proyecto usado: '{proyecto_actual}'"
-        if nodo_padre_actual:
-            info_contexto += f" (del área/departamento: '{nodo_padre_actual}')"
-        if dia_actual:  # 🆕 NUEVO
-            info_contexto += f"\n- Último día imputado: '{dia_actual}'"
-        # 🔥 SOLO usar contexto si usa palabras EXPLÍCITAS de continuación
-        info_contexto += "\n- ⚠️ Este contexto SOLO se usa si el usuario dice explícitamente: 'más', 'añade', 'suma', 'quita', 'reduce' (indicando continuación del proyecto anterior).\n"
-        info_contexto += "\n- ❌ Si dice 'pon X horas' genérico SIN proyecto → NO uses este contexto, genera info_incompleta para preguntar por el proyecto.\n"
+    # 🔥 YA NO USAMOS CONTEXTO PERSISTENTE - Solo flujos conversacionales
+    # El contexto se usa solo durante la ejecución de órdenes, no para generar nuevas órdenes
     
     # 🆕 Añadir información de la tabla actual si está disponible
     info_tabla = ""
@@ -191,6 +176,11 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
         info_tabla += "  - Duplicar/triplicar horas\n"
         info_tabla += "  - Sumar o restar basándote en datos existentes\n"
         info_tabla += "  - Distribuir horas proporcionalmente\n"
+        info_tabla += "\n🔥 FLUJO INTELIGENTE (Suma/Resta/Quita/Añade SIN proyecto):\n"
+        info_tabla += "  - Si el usuario dice 'quita 2h', 'suma 3h', 'resta 1h' SIN mencionar proyecto:\n"
+        info_tabla += "    * Si hay 1 SOLO proyecto en la tabla → Usar ese proyecto automáticamente\n"
+        info_tabla += "    * Si hay MÚLTIPLES proyectos → Generar 'info_incompleta' con mensaje especial de flujo\n"
+        info_tabla += "    * Si NO hay proyectos → Generar 'info_incompleta' pidiendo proyecto\n"
 
     # 🆕 HISTORIAL DE CONVERSACIÓN
     info_historial = ""
@@ -220,7 +210,7 @@ extra, sin markdown, sin explicaciones.
 CONTEXTO
 ====================================================
 Hoy es {hoy} ({dia_semana}).
-{info_contexto}{info_tabla}{info_historial}
+{info_tabla}{info_historial}
 
 ====================================================
 REGLAS GENERALES
