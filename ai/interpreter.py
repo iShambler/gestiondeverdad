@@ -165,7 +165,9 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
             info_contexto += f" (del área/departamento: '{nodo_padre_actual}')"
         if dia_actual:  # 🆕 NUEVO
             info_contexto += f"\n- Último día imputado: '{dia_actual}'"
-        info_contexto += "\n- Si el usuario dice 'ponme X horas más', 'añade X', 'suma X', 'quita X' SIN mencionar proyecto ni día, usa este proyecto y este día.\n"
+        # 🔥 SOLO usar contexto si usa palabras EXPLÍCITAS de continuación
+        info_contexto += "\n- ⚠️ Este contexto SOLO se usa si el usuario dice explícitamente: 'más', 'añade', 'suma', 'quita', 'reduce' (indicando continuación del proyecto anterior).\n"
+        info_contexto += "\n- ❌ Si dice 'pon X horas' genérico SIN proyecto → NO uses este contexto, genera info_incompleta para preguntar por el proyecto.\n"
     
     # 🆕 Añadir información de la tabla actual si está disponible
     info_tabla = ""
