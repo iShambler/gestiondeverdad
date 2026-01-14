@@ -84,6 +84,84 @@ def generar_mensaje_confirmacion_proyecto(texto_completo: str, tipo_accion: str,
         )
 
 
+def manejar_pregunta_modificacion(mensaje_dict: dict, texto: str, user_id: str, 
+                                  db: Session, usuario, canal: str, session) -> str:
+    """
+    Genera el mensaje de pregunta al usuario sobre qué proyecto modificar
+    
+    Args:
+        mensaje_dict: Dict con tipo="pregunta_modificacion" y los proyectos
+        texto: Texto original del usuario
+        user_id: ID del usuario
+        db: Sesión de base de datos
+        usuario: Objeto Usuario
+        canal: Canal de comunicación
+        session: BrowserSession
+        
+    Returns:
+        Mensaje formateado para el usuario
+    """
+    proyectos = mensaje_dict["proyectos"]
+    dia = mensaje_dict["dia"]
+    horas = mensaje_dict["horas"]
+    modo = mensaje_dict["modo"]
+    fecha = mensaje_dict["fecha"]
+    
+    # Determinar texto de acción
+    if horas < 0:
+        accion_texto = f"quitar {abs(horas)}h"
+        emoji = "➖"
+    elif modo == "establecer":
+        accion_texto = f"establecer en {horas}h"
+        emoji = "🎯"
+    else:
+        accion_texto = f"añadir {horas}h"
+        emoji = "➕"
+    
+    # Construir mensaje
+    num_proyectos = len(proyectos)
+    
+    if canal == "webapp":
+        mensaje = f"📊 Tienes **{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}** el {dia}:\n\n"
+        
+        for i, proyecto in enumerate(proyectos, 1):
+            mensaje += f"  **{i}.** {proyecto['nombre']}: **{proyecto['horas']}h**\n"
+        
+        mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto}?\n\n"
+        mensaje += "💡 Responde con:\n"
+        mensaje += "- El **número** (1, 2, 3...)\n"
+        mensaje += "- El **nombre del proyecto**\n"
+        mensaje += "- **'cancelar'** para salir"
+    else:
+        # WhatsApp / Slack
+        mensaje = f"📊 Tienes *{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}* el {dia}:\n\n"
+        
+        for i, proyecto in enumerate(proyectos, 1):
+            mensaje += f"  *{i}.* {proyecto['nombre']}: *{proyecto['horas']}h*\n"
+        
+        mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto}?\n\n"
+        mensaje += "Responde con el número (1, 2...) o el nombre"
+    
+    # 🆕 Guardar estado en conversation_state_manager
+    conversation_state_manager.guardar_info_incompleta(
+        user_id,
+        {
+            "proyectos": proyectos,
+            "fecha": fecha,
+            "dia": dia,
+            "horas": horas,
+            "modo": modo
+        },
+        "seleccion_proyecto_modificacion"
+    )
+    
+    registrar_peticion(db, usuario.id, texto, "pregunta_modificacion", 
+                      canal=canal, respuesta=mensaje)
+    session.update_activity()
+    
+    return mensaje
+
+
 # ============================================================================
 # AUTENTICACIÓN Y LOGIN
 # ============================================================================
@@ -322,6 +400,47 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
                 session.update_activity()
                 return respuesta
     
+    # 🆕 Manejar selección de proyecto para modificar horas
+    elif que_falta == "seleccion_proyecto_modificacion":
+        proyectos = info_parcial.get('proyectos', [])
+        horas = info_parcial.get('horas', 0)
+        modo = info_parcial.get('modo', 'sumar')
+        fecha = info_parcial.get('fecha')
+        dia = info_parcial.get('dia', 'hoy')
+        
+        # Intentar interpretar como número
+        proyecto_seleccionado = None
+        
+        try:
+            numero = int(texto_lower.strip())
+            if 1 <= numero <= len(proyectos):
+                proyecto_seleccionado = proyectos[numero - 1]
+        except:
+            # No es número, buscar por nombre
+            for proyecto in proyectos:
+                if texto_lower in proyecto['nombre'].lower():
+                    proyecto_seleccionado = proyecto
+                    break
+        
+        if not proyecto_seleccionado:
+            conversation_state_manager.limpiar_estado(user_id)
+            respuesta = f"❌ No he encontrado ese proyecto. Por favor, responde con el número (1-{len(proyectos)}) o el nombre exacto."
+            registrar_peticion(db, usuario.id, texto, "seleccion_invalida", 
+                             canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
+        
+        # Proyecto seleccionado → construir comando completo
+        nombre_proyecto = proyecto_seleccionado['nombre']
+        
+        # Determinar si es "quitar", "sumar" o "establecer"
+        if horas < 0:
+            comando_completo = f"quita {abs(horas)} horas de {nombre_proyecto} el {dia}"
+        elif modo == "establecer":
+            comando_completo = f"establece {nombre_proyecto} a {horas} horas el {dia}"
+        else:
+            comando_completo = f"suma {horas} horas a {nombre_proyecto} el {dia}"
+    
     print(f"[DEBUG] ✅ Comando completo generado: '{comando_completo}'")
     conversation_state_manager.limpiar_estado(user_id)
     
@@ -438,7 +557,7 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
                                session, db: Session, usuario, user_id: str, canal: str, 
                                indice_orden: int = 0, respuestas_acumuladas: list = None) -> Optional[str]:
     """
-    Maneja respuestas especiales (desambiguación)
+    Maneja respuestas especiales (desambiguación, pregunta_modificacion, error)
     
     Args:
         indice_orden: Índice de la orden actual en la lista (para continuar después)
@@ -452,8 +571,21 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
     if respuestas_acumuladas is None:
         respuestas_acumuladas = []
     
+    # 🆕 Pregunta de modificación de horas
+    if tipo == "pregunta_modificacion":
+        return manejar_pregunta_modificacion(mensaje, texto_original, user_id, 
+                                            db, usuario, canal, session)
+    
+    # ❌ Error
+    elif tipo == "error":
+        respuesta_final = mensaje.get("mensaje", "❌ Ha ocurrido un error")
+        registrar_peticion(db, usuario.id, texto_original, "error", 
+                         canal=canal, respuesta=respuesta_final)
+        session.update_activity()
+        return respuesta_final
+    
     # Desambiguación
-    if tipo == "desambiguacion":
+    elif tipo == "desambiguacion":
         # Detectar tipo de acción para personalizar el mensaje
         tipo_accion = detectar_tipo_accion(ordenes, indice_orden)
         

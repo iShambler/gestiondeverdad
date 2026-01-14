@@ -83,58 +83,30 @@ def validar_ordenes(ordenes, texto, contexto=None):
         }]
 
     # ----------------------------------------------------------------------
-    # 🧩 3. Imputación sin proyecto → FLUJO INTELIGENTE con tabla
+    # 🧩 3. Imputación sin proyecto → FLUJO DE LECTURA PREVIA
     # ----------------------------------------------------------------------
     if tiene_imputacion and not tiene_proyecto:
-        print(f"[DEBUG] 🧩 Detectado: imputación SIN proyecto - iniciando flujo inteligente")
+        print(f"[DEBUG] 🧩 Detectado: imputación SIN proyecto - requiere lectura previa")
         
         # Extraer información de la imputación
-        info = {}
         horas_a_modificar = 0
         modo = "sumar"
         dia_objetivo = None
         
         for orden in ordenes:
             if orden.get("accion") == "imputar_horas_dia":
-                info["horas"] = orden["parametros"]["horas"]
-                info["dia"] = orden["parametros"]["dia"]
                 horas_a_modificar = orden["parametros"]["horas"]
                 modo = orden["parametros"].get("modo", "sumar")
                 dia_objetivo = orden["parametros"]["dia"]
                 break
             if orden.get("accion") == "imputar_horas_semana":
-                info["horas"] = "toda_la_semana"
-                info["dia"] = "semana"
-                break
+                # Para semana completa, no tiene sentido modificar sin proyecto
+                return [{
+                    "accion": "error_validacion",
+                    "mensaje": "🤔 ¿A qué proyecto quieres imputar toda la semana?"
+                }]
         
-        # 🔥 Obtener la tabla del contexto
-        tabla = None
-        if contexto and "tabla_actual" in contexto:
-            tabla = contexto["tabla_actual"]
-        
-        # Si no hay tabla o está vacía, pedir el proyecto
-        if not tabla or len(tabla) == 0:
-            # Determinar mensaje según acción
-            if horas_a_modificar < 0:
-                accion_texto = f"quitar {abs(horas_a_modificar)}h"
-            elif modo == "establecer":
-                accion_texto = f"establecer {abs(horas_a_modificar)}h"
-            else:
-                accion_texto = f"añadir {horas_a_modificar}h"
-            
-            return [{
-                "accion": "info_incompleta",
-                "info_parcial": info,
-                "que_falta": "proyecto",
-                "mensaje": (
-                    f"🤔 No tienes proyectos imputados.\n\n"
-                    f"¿A qué proyecto quieres {accion_texto}?\n\n"
-                    "💡 Ejemplo: 'en Desarrollo' o 'en Estudio'"
-                )
-            }]
-        
-        # 📊 Hay tabla, procesar
-        # Extraer el día de la semana de la fecha
+        # 🆕 Convertir fecha ISO a nombre de día
         dia_nombre = None
         if dia_objetivo:
             try:
@@ -155,56 +127,16 @@ def validar_ordenes(ordenes, texto, contexto=None):
         else:
             dia_nombre = "lunes"
         
-        # Construir lista de proyectos con sus horas en ese día
-        proyectos_relevantes = []
-        for proyecto_info in tabla:
-            nombre_corto = proyecto_info['proyecto'].split(' - ')[-1]
-            horas_dia = proyecto_info['horas'].get(dia_nombre, 0)
-            
-            proyectos_relevantes.append({
-                "nombre": nombre_corto,
-                "path_completo": proyecto_info['proyecto'],
-                "horas": horas_dia,
-                "dia": dia_nombre
-            })
-        
-        # 🔥 Si quiere QUITAR, solo mostrar proyectos con horas > 0
-        if horas_a_modificar < 0:
-            proyectos_con_horas = [p for p in proyectos_relevantes if p["horas"] > 0]
-            
-            if len(proyectos_con_horas) == 0:
-                return [{
-                    "accion": "error_validacion",
-                    "mensaje": f"❌ No tienes horas imputadas el {dia_nombre}. No hay nada que quitar."
-                }]
-            
-            proyectos_relevantes = proyectos_con_horas
-        
-        # Determinar texto de acción
-        if horas_a_modificar < 0:
-            accion_texto = f"quitar {abs(horas_a_modificar)}h"
-        elif modo == "establecer":
-            accion_texto = f"establecer en {horas_a_modificar}h"
-        else:
-            accion_texto = f"añadir {horas_a_modificar}h"
-        
-        num_proyectos = len(proyectos_relevantes)
-        
-        # 🆕 Generar mensaje con lista de proyectos para elegir
-        mensaje = f"📊 Tienes {num_proyectos} proyecto{'s' if num_proyectos > 1 else ''} el {dia_nombre}:\n\n"
-        
-        for i, proyecto in enumerate(proyectos_relevantes, 1):
-            mensaje += f"  **{i}.** {proyecto['nombre']}: {proyecto['horas']}h\n"
-        
-        mensaje += f"\n¿A cuál quieres {accion_texto}?\n\n"
-        mensaje += "💡 Responde con el número (1, 2, 3...) o el nombre del proyecto"
-        
+        # 🆕 DEVOLVER ACCIÓN ESPECIAL: leer_tabla_y_preguntar
+        # Esta acción le dirá al ejecutor que lea la tabla y pregunte al usuario
         return [{
-            "accion": "info_incompleta",
-            "info_parcial": info,
-            "que_falta": "seleccion_proyecto",
-            "proyectos": proyectos_relevantes,
-            "mensaje": mensaje
+            "accion": "leer_tabla_y_preguntar",
+            "parametros": {
+                "fecha": dia_objetivo,
+                "dia": dia_nombre,
+                "horas": horas_a_modificar,
+                "modo": modo
+            }
         }]
 
     # ----------------------------------------------------------------------
