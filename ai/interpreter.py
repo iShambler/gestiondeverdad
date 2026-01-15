@@ -1,6 +1,9 @@
 """
 Intérprete de comandos en lenguaje natural.
 Traduce instrucciones del usuario a comandos JSON estructurados.
+
+CORRECCIÓN APLICADA:
+- ✅ Validación post-GPT: SIEMPRE añadir 'dia' a imputar_horas_dia si GPT lo omite (usar hoy por defecto)
 """
 
 import json
@@ -257,6 +260,7 @@ REGLAS GENERALES
    - "la semana pasada" sin día específico → lunes de la semana anterior
    - "próxima semana" sin día específico → lunes de la semana siguiente
    - 🚨 TANTO seleccionar_fecha COMO imputar_horas_dia deben usar LA MISMA FECHA EXACTA del día mencionado
+   - 🚨 CRÍTICO: Si el usuario NO menciona un día específico, SIEMPRE usar {hoy}
 
 3. Proyectos múltiples del MISMO día → INTERCALAR sin guardar_linea entre ellos:
    "3h en X y 2h en Y" (mismo día) → seleccionar_fecha → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2) → guardar_linea (UNA VEZ AL FINAL)
@@ -301,6 +305,13 @@ TIPOS DE ACCIONES
      - "quita 2h" o "resta 2h" → horas: -2 (NEGATIVO), modo: "sumar"
      - "suma 3h" o "añade 3h" → horas: 3 (POSITIVO), modo: "sumar"
      - "pon 5h" o "establece 5h" → horas: 5, modo: "establecer"
+     
+     🚨 CRÍTICO - DÍA OBLIGATORIO:
+     - SIEMPRE incluir el parámetro "dia" en imputar_horas_dia
+     - Si el usuario NO menciona un día → usar {hoy}
+     - Ejemplos:
+       * "quita 2h" → {{"dia": "{hoy}", "horas": -2}}
+       * "suma 3h el viernes" → {{"dia": "2026-01-17", "horas": 3}}
      
      🚫 REGLA CRÍTICA - NO ADIVINAR PROYECTOS:
      Si el usuario dice "quita/suma/establece X horas" SIN mencionar explícitamente el proyecto,
@@ -392,6 +403,12 @@ EJEMPLOS
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-16", "horas": -6, "modo": "sumar"}}}}
 ]
 NOTA: NO incluye seleccionar_proyecto porque el usuario NO mencionó ningún proyecto.
+
+"Quitale media hora" (SIN día ni proyecto)
+[
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "{hoy}", "horas": -0.5, "modo": "sumar"}}}}
+]
+NOTA: Usa hoy por defecto porque no mencionó día. NO incluye proyecto porque no lo mencionó.
 
 "3h en staff en permiso"
 [
@@ -554,6 +571,16 @@ Frase del usuario: "{texto}"
         # Si devuelve un solo objeto, lo convertimos a lista
         if isinstance(data, dict):
             data = [data]
+
+        # 🆕 VALIDACIÓN POST-GPT: Asegurar que imputar_horas_dia SIEMPRE tenga 'dia'
+        for orden in data:
+            if orden.get("accion") == "imputar_horas_dia":
+                parametros = orden.get("parametros", {})
+                # Si no tiene 'dia', usar hoy por defecto
+                if "dia" not in parametros or not parametros.get("dia"):
+                    parametros["dia"] = hoy
+                    orden["parametros"] = parametros
+                    print(f"[DEBUG] ⚠️ GPT omitió 'dia' en imputar_horas_dia, usando hoy: {hoy}")
 
         # 🆕 VALIDAR que las órdenes tengan sentido
         resultado_validacion = validar_ordenes(data, texto, contexto)
