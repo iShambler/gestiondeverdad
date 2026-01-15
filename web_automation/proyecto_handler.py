@@ -5,6 +5,12 @@ Funciones para el manejo específico de proyectos:
 - Eliminación de líneas de proyectos
 - Borrado de horas
 - Lectura de tabla de imputación
+
+CORRECCIONES APLICADAS:
+1. ✅ Eliminada lógica compleja de contexto (proyecto_actual_contexto, inferido_contexto)
+2. ✅ SIEMPRE preguntar cuando hay coincidencias en tabla (sin importar si es 1 o más)
+3. ✅ Para modificar/borrar: si NO existe en tabla → ERROR (no buscar en sistema)
+4. ✅ Para imputar nuevo: si NO existe en tabla → buscar en sistema
 """
 
 import time
@@ -139,7 +145,11 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     "fila_idx": idx
                 })
         
-        # 🆕 Si YA especificó nodo_padre (está confirmando)
+        # ============================================================================
+        # LÓGICA SIMPLIFICADA - SIN CONTEXTO
+        # ============================================================================
+        
+        # 🆕 Si YA especificó nodo_padre (está confirmando después de desambiguación)
         if coincidencias_encontradas and nodo_padre:
             # Buscar la coincidencia que match con el nodo_padre
             for coincidencia in coincidencias_encontradas:
@@ -151,37 +161,22 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     time.sleep(0.3)
                     return (fila, f"Usando '{coincidencia['proyecto']}' de '{coincidencia['nodo_padre']}'", False, [])
         
-        # 🆕 Si NO especificó nodo_padre Y hay coincidencias → Verificar si debe usar contexto
-        # Esto permite al usuario elegir entre:
-        # - Usar un proyecto existente en la tabla
-        # - Buscar otro proyecto diferente en el sistema
+        # 🆕 Si NO especificó nodo_padre Y hay coincidencias → SIEMPRE preguntar
         if coincidencias_encontradas and not nodo_padre:
-            # 🔥 Verificar si es el MISMO proyecto que acabamos de usar
-            proyecto_actual_contexto = contexto.get("proyecto_actual") if contexto else None
-            
-            if proyecto_actual_contexto and normalizar(proyecto_actual_contexto) == normalizar(nombre_proyecto):
-                # ✅ Es el MISMO proyecto que ya usamos antes en este comando
-                print(f"[DEBUG] ✅ Mismo proyecto '{nombre_proyecto}' usado en este comando, reutilizando directamente")
-                fila = selects[coincidencias_encontradas[0]["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
-                time.sleep(0.3)
-                # Actualizar contexto
-                if contexto:
-                    contexto["fila_actual"] = fila
-                return (fila, f"Usando '{coincidencias_encontradas[0]['proyecto']}'", False, [])
-            else:
-                # ❌ Proyecto DIFERENTE o primera vez → Preguntar
-                print(f"[DEBUG] 💬 Proyecto '{nombre_proyecto}' mencionado por usuario, preguntando...")
-                print(f"[DEBUG] 💬 {len(coincidencias_encontradas)} coincidencia(s) encontrada(s)")
-                return (None, "", "desambiguacion", coincidencias_encontradas)
+            print(f"[DEBUG] 💬 Encontradas {len(coincidencias_encontradas)} coincidencia(s) para '{nombre_proyecto}', preguntando al usuario...")
+            return (None, "", "desambiguacion", coincidencias_encontradas)
 
-        # Si no existe → añadimos nueva línea
-        # PERO si solo_existente=True, NO crear y devolver error
+        # ============================================================================
+        # NO HAY COINCIDENCIAS EN TABLA
+        # ============================================================================
+        
+        # Si solo_existente=True (modificar/borrar) → ERROR, no buscar en sistema
         if solo_existente:
             print(f"[DEBUG] ⚠️ Proyecto '{nombre_proyecto}' NO encontrado en tabla y solo_existente=True")
-            return (None, f"❌ No hay horas de '{nombre_proyecto}' en esta semana. No hay nada que borrar.", False, [])
+            return (None, f"❌ No tienes '{nombre_proyecto}' imputado esta semana. No puedo modificar horas de un proyecto que no existe.", False, [])
         
-        print(f"[DEBUG] ➕ Proyecto '{nombre_proyecto}' NO encontrado, añadiendo nueva línea...")
+        # Si no existe → añadimos nueva línea y buscamos en sistema
+        print(f"[DEBUG] ➕ Proyecto '{nombre_proyecto}' NO encontrado en tabla, añadiendo nueva línea y buscando en sistema...")
         try:
             btn_nueva_linea = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BTN_NUEVA_LINEA)))
             btn_nueva_linea.click()
