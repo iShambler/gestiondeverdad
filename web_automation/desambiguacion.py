@@ -241,7 +241,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
                 f"✅ *Ya tienes 1 proyecto con horas:*\n\n"
                 f"1. {path} - *{horas}h*\n\n"
                 f"{emoji} *{pregunta}*\n\n"
-                f"Responde '1' o 'sí' para continuar, 'otro' para buscar diferente, 'cancelar' para salir"
+                f"Responde 'sí' para continuar, 'otro' para buscar diferente, 'cancelar' para salir"
             )
     
     # Detectar si son proyectos existentes (tienen horas) o del sistema
