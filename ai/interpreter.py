@@ -86,7 +86,64 @@ def validar_ordenes(ordenes, texto, contexto=None):
         }]
 
     # ----------------------------------------------------------------------
-    # 🚫 3. Comandos vacíos o sin sentido
+    # 🧩 3. Imputación sin proyecto → FLUJO DE LECTURA PREVIA
+    # ----------------------------------------------------------------------
+    if tiene_imputacion and not tiene_proyecto:
+        print(f"[DEBUG] 🧩 Detectado: imputación SIN proyecto - requiere lectura previa")
+
+        # Extraer información de la imputación
+        horas_a_modificar = 0
+        modo = "sumar"
+        dia_objetivo = None
+
+        for orden in ordenes:
+            if orden.get("accion") == "imputar_horas_dia":
+                horas_a_modificar = orden["parametros"]["horas"]
+                modo = orden["parametros"].get("modo", "sumar")
+                dia_objetivo = orden["parametros"]["dia"]
+                break
+            if orden.get("accion") == "imputar_horas_semana":
+                # Para semana completa, no tiene sentido modificar sin proyecto
+                return [{
+                    "accion": "error_validacion",
+                    "mensaje": "🤔 ¿A qué proyecto quieres imputar toda la semana?"
+                }]
+
+        # 🆕 Convertir fecha ISO a nombre de día
+        dia_nombre = None
+        if dia_objetivo:
+            try:
+                fecha_obj = datetime.strptime(dia_objetivo, "%Y-%m-%d")
+                dia_nombre_en = fecha_obj.strftime("%A").lower()
+                dias_map = {
+                    "monday": "lunes",
+                    "tuesday": "martes",
+                    "wednesday": "miércoles",
+                    "thursday": "jueves",
+                    "friday": "viernes",
+                    "saturday": "sábado",
+                    "sunday": "domingo"
+                }
+                dia_nombre = dias_map.get(dia_nombre_en, dia_nombre_en)
+            except:
+                dia_nombre = "lunes"  # fallback
+        else:
+            dia_nombre = "lunes"
+
+        # 🆕 DEVOLVER ACCIÓN ESPECIAL: leer_tabla_y_preguntar
+        # Esta acción le dirá al ejecutor que lea la tabla y pregunte al usuario
+        return [{
+            "accion": "leer_tabla_y_preguntar",
+            "parametros": {
+                "fecha": dia_objetivo,
+                "dia": dia_nombre,
+                "horas": horas_a_modificar,
+                "modo": modo
+            }
+        }]
+
+    # ----------------------------------------------------------------------
+    # 🚫 4. Comandos vacíos o sin sentido
     # ----------------------------------------------------------------------
     if len(ordenes) == 2 and ordenes[0].get("accion") == "seleccionar_fecha":
         if ordenes[1].get("accion") in ["guardar_linea", "emitir_linea"]:
