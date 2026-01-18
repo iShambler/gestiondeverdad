@@ -90,6 +90,27 @@ Si es TIPO B (consulta de horas), extrae la fecha y tipo:
 }}
 
 Reglas para TIPO B:
+
+🚨 FECHAS ABSOLUTAS (día + mes especificado):
+- Si menciona día y mes específico (ej: "19 de diciembre", "15 de enero", "semana del 23 de noviembre"):
+  * PRIMERO determina el año correcto:
+    - Hoy es {hoy} (año actual: {hoy_obj.year}, mes actual: {hoy_obj.month})
+    - Si el mes mencionado es ANTERIOR al mes actual → usar AÑO ANTERIOR ({hoy_obj.year - 1})
+      Ejemplo: Hoy es enero 2026, pide "diciembre" → usar diciembre {hoy_obj.year - 1} (2025)
+    - Si el mes mencionado es IGUAL O POSTERIOR al mes actual → usar AÑO ACTUAL ({hoy_obj.year})
+      Ejemplo: Hoy es enero 2026, pide "enero" → usar enero {hoy_obj.year} (2026)
+      Ejemplo: Hoy es enero 2026, pide "marzo" → usar marzo {hoy_obj.year} (2026)
+  * SEGUNDO calcula la fecha en formato YYYY-MM-DD
+  * TERCERO determina el tipo:
+    - Si dice "semana del [fecha]" → tipo: "semana", fecha: esa fecha específica
+    - Si solo menciona la fecha → tipo: "dia", fecha: esa fecha específica
+  * Ejemplos (suponiendo hoy={hoy}):
+    - "resumen de la semana del 19 de diciembre" → diciembre < enero → año=2025 → {{"fecha": "2025-12-19", "tipo": "semana"}}
+    - "qué tengo el 23 de noviembre" → noviembre < enero → año=2025 → {{"fecha": "2025-11-23", "tipo": "dia"}}
+    - "semana del 5 de marzo" → marzo > enero → año=2026 → {{"fecha": "2026-03-05", "tipo": "semana"}}
+    - "resumen del 15 de enero" → enero = enero → año=2026 → {{"fecha": "2026-01-15", "tipo": "dia"}}
+
+FECHAS RELATIVAS (sin mes específico):
 - Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: HOY (NO el lunes, sino la fecha actual)
 - Si pregunta por "la semana pasada" → tipo: "semana", fecha: LUNES DE LA SEMANA ANTERIOR
 - Si pregunta por "próxima semana" / "siguiente semana" / "next week" / "la semana que viene" → tipo: "semana", fecha: LUNES DE LA SEMANA SIGUIENTE
