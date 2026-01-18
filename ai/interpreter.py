@@ -18,19 +18,19 @@ def validar_ordenes(ordenes, texto, contexto=None):
     - comandos incompletos
     - falta de horas o proyecto
     - uso correcto del proyecto del contexto
-    
+
     Sin listas de palabras clave: validación 100% semántica.
     """
 
     texto_lower = texto.lower()
-    
+
     # Contexto
     proyecto_actual = (contexto or {}).get("proyecto_actual")
     proyecto_actual_lower = proyecto_actual.lower() if proyecto_actual else None
 
     # Identificar si hay proyecto y/o imputación
     tiene_proyecto = any(o.get("accion") == "seleccionar_proyecto" for o in ordenes)
-    
+
     # Imputación válida = tiene acción de imputar CON horas != 0 O con modo establecer
     tiene_imputacion = False
     for o in ordenes:
@@ -44,11 +44,11 @@ def validar_ordenes(ordenes, texto, contexto=None):
         elif o.get("accion") == "imputar_horas_semana":
             tiene_imputacion = True
             break
-    
+
     tiene_eliminacion = any(o.get("accion") == "eliminar_linea" for o in ordenes)
     tiene_borrado_horas = any(o.get("accion") == "borrar_todas_horas_dia" for o in ordenes)
     tiene_copiar_semana = any(o.get("accion") == "copiar_semana_anterior" for o in ordenes)
-    
+
     print(f"[DEBUG] 🔍 Validación - proyecto:{tiene_proyecto} imputacion:{tiene_imputacion} eliminacion:{tiene_eliminacion} borrado:{tiene_borrado_horas} copiar:{tiene_copiar_semana}")
 
     # 🔥 Si hay eliminación, borrado de horas o copiar semana → NO VALIDAR (son acciones válidas sin imputación)
@@ -79,7 +79,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
                     "💡 Ejemplos:\n- \"Pon 8 horas hoy\"\n- \"5 horas el lunes\"\n- \"Toda la semana\""
                 )
             }]
-        
+
         return [{
             "accion": "error_validacion",
             "mensaje": "📝 ¿Cuántas horas quieres imputar y para qué día?"
@@ -90,12 +90,12 @@ def validar_ordenes(ordenes, texto, contexto=None):
     # ----------------------------------------------------------------------
     if tiene_imputacion and not tiene_proyecto:
         print(f"[DEBUG] 🧩 Detectado: imputación SIN proyecto - requiere lectura previa")
-        
+
         # Extraer información de la imputación
         horas_a_modificar = 0
         modo = "sumar"
         dia_objetivo = None
-        
+
         for orden in ordenes:
             if orden.get("accion") == "imputar_horas_dia":
                 horas_a_modificar = orden["parametros"]["horas"]
@@ -108,7 +108,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
                     "accion": "error_validacion",
                     "mensaje": "🤔 ¿A qué proyecto quieres imputar toda la semana?"
                 }]
-        
+
         # 🆕 Convertir fecha ISO a nombre de día
         dia_nombre = None
         if dia_objetivo:
@@ -129,7 +129,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
                 dia_nombre = "lunes"  # fallback
         else:
             dia_nombre = "lunes"
-        
+
         # 🆕 DEVOLVER ACCIÓN ESPECIAL: leer_tabla_y_preguntar
         # Esta acción le dirá al ejecutor que lea la tabla y pregunte al usuario
         return [{
@@ -171,13 +171,13 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
 
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
-    
+
     # 🆕 Pasar tabla al contexto para que validar_ordenes pueda usarla
     if contexto is None:
         contexto = {}
     if tabla_actual:
         contexto["tabla_actual"] = tabla_actual
-    
+
     # 🆕 Añadir información de la tabla actual si está disponible
     info_tabla = ""
     if tabla_actual and len(tabla_actual) > 0:
@@ -185,16 +185,16 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
         for proyecto_info in tabla_actual:
             nombre_proyecto = proyecto_info['proyecto'].split(' - ')[-1]  # Solo último nombre
             horas = proyecto_info['horas']
-            
+
             # Mostrar solo días con horas > 0
             dias_con_horas = []
             for dia, valor in horas.items():
                 if valor > 0:
                     dias_con_horas.append(f"{dia.capitalize()}: {valor}h")
-            
+
             if dias_con_horas:
                 info_tabla += f"  • {nombre_proyecto}: {', '.join(dias_con_horas)}\n"
-        
+
         info_tabla += "\n⚠️ IMPORTANTE: Puedes usar esta información para:\n"
         info_tabla += "  - Copiar horas de un proyecto a otro\n"
         info_tabla += "  - Duplicar/triplicar horas\n"
@@ -265,13 +265,19 @@ REGLAS GENERALES
 3. Proyectos múltiples del MISMO día → INTERCALAR sin guardar_linea entre ellos:
    "3h en X y 2h en Y" (mismo día) → seleccionar_fecha → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2) → guardar_linea (UNA VEZ AL FINAL)
 
-4. Múltiples días de la MISMA SEMANA → NO guardar entre días, solo al FINAL:
+4. Múltiples días de la MISMA SEMANA con DIFERENTES proyectos → NO guardar entre días, solo al FINAL:
    Ejemplo: "3h en X el lunes, 5h en Y el miércoles" (ambos semana 16-20 dic) → fecha(lunes) → proyecto(X) → imputar(3) → fecha(miércoles) → proyecto(Y) → imputar(5) → guardar_linea (UNA VEZ AL FINAL)
-   
-5. Cambio de SEMANA → guardar antes de cambiar:
+
+5. 🚨 CRÍTICO - MISMO proyecto en MÚLTIPLES días de la MISMA SEMANA:
+   - seleccionar_proyecto UNA SOLA VEZ al inicio
+   - Luego múltiples imputar_horas_dia (uno por cada día)
+   - NO repetir seleccionar_proyecto entre días del mismo proyecto
+   - Ejemplo: "4h en Estudio lunes, martes, jueves" → seleccionar_fecha(primera_fecha) + seleccionar_proyecto(Estudio) + imputar(lunes) + imputar(martes) + imputar(jueves) + guardar_linea
+
+6. Cambio de SEMANA → guardar antes de cambiar:
    Ejemplo: "3h el lunes 16, 5h el lunes 23" (semanas diferentes) → fecha(16) → proyecto(X) → imputar(3) → guardar_linea → fecha(23) → proyecto(Y) → imputar(5) → guardar_linea
-   
-6. REGLA CLAVE: guardar_linea solo cuando:
+
+7. REGLA CLAVE: guardar_linea solo cuando:
    - Vas a cambiar de semana (antes del cambio)
    - Al final de TODAS las órdenes
 
@@ -300,39 +306,39 @@ TIPOS DE ACCIONES
 1) IMPUTAR HORAS:
    - imputar_horas_dia: Para UN día específico. Requiere día y horas.
      Modo: "sumar" (default) o "establecer" (si dice "totales", "cambia a", "exactamente")
-     
+
      🚨 QUITAR / RESTAR / SUMAR:
      - "quita 2h" o "resta 2h" → horas: -2 (NEGATIVO), modo: "sumar"
      - "suma 3h" o "añade 3h" → horas: 3 (POSITIVO), modo: "sumar"
      - "pon 5h" o "establece 5h" → horas: 5, modo: "establecer"
-     
+
      🚨 CRÍTICO - DÍA OBLIGATORIO:
      - SIEMPRE incluir el parámetro "dia" en imputar_horas_dia
      - Si el usuario NO menciona un día → usar {hoy}
      - Ejemplos:
        * "quita 2h" → {{"dia": "{hoy}", "horas": -2}}
        * "suma 3h el viernes" → {{"dia": "2026-01-17", "horas": 3}}
-     
+
      🚫 REGLA CRÍTICA - NO ADIVINAR PROYECTOS:
      Si el usuario dice "quita/suma/establece X horas" SIN mencionar explícitamente el proyecto,
      NO incluyas 'seleccionar_proyecto'. El sistema preguntará automáticamente.
-     
+
      Ejemplos de CUÁNDO NO incluir seleccionar_proyecto:
      - "quita 2h el viernes" → NO proyecto (usuario no lo mencionó)
      - "suma 3h hoy" → NO proyecto
      - "establece 5h el lunes" → NO proyecto
      - "quitale media hora" → NO proyecto
      - "quitale 6 horas el viernes" → NO proyecto
-     
+
      Ejemplos de CUÁNDO SÍ incluir seleccionar_proyecto:
      - "quita 2h A Desarrollo" → SÍ proyecto ("A Desarrollo" = explícito)
      - "suma 3h EN Formación" → SÍ proyecto ("EN Formación" = explícito)
      - "quita 2h DE Estudio" → SÍ proyecto ("DE Estudio" = explícito)
      - "quitale 2h A Estudio" → SÍ proyecto ("A Estudio" = explícito)
      - "establece Desarrollo a 5h" → SÍ proyecto ("Desarrollo" mencionado)
-     
+
      ⚠️ Si hay duda: si el proyecto NO está en el texto del usuario, NO lo incluyas.
-   
+
    - imputar_horas_semana: Para TODA LA SEMANA (L-V). NO requiere parámetros.
      🚨 CRÍTICO: SIEMPRE debe ir precedida de seleccionar_fecha con el LUNES de la semana
      🚨 Si el usuario NO especifica semana → calcular el lunes de la semana ACTUAL
@@ -342,7 +348,7 @@ TIPOS DE ACCIONES
         - "imputa la semana", "rellena la semana"
      El sistema automáticamente usa las horas correctas (8.5h L-J, 6.5h V)
      y omite días que ya tengan horas (festivos, vacaciones, etc.)
-     
+
      Ejemplos:
      - "pon toda la semana en Desarrollo" → seleccionar_fecha(lunes_semana_actual) + seleccionar_proyecto + imputar_horas_semana
      - "imputa la semana en Formación" → seleccionar_fecha(lunes_semana_actual) + seleccionar_proyecto + imputar_horas_semana
@@ -446,15 +452,6 @@ NOTA: Usa hoy por defecto porque no mencionó día. NO incluye proyecto porque n
   {{"accion": "guardar_linea"}}
 ]
 
-"3 horas en Formación el jueves de la semana pasada" (si hoy es miércoles 8 enero 2025, jueves semana pasada = 2 enero 2025)
-[
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-01-02"}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Formación"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-01-02", "horas": 3}}}},
-  {{"accion": "guardar_linea"}}
-]
-NOTA IMPORTANTE: El JUEVES de la semana pasada es 2025-01-02, NO el lunes 2024-12-30. Usar siempre la fecha del día específico.
-
 "Ponme 3h en Eventos el lunes, 2h en Desarrollo el martes y 4h en Formación el jueves"
 [
   {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-16"}}}},
@@ -468,6 +465,17 @@ NOTA IMPORTANTE: El JUEVES de la semana pasada es 2025-01-02, NO el lunes 2024-1
   {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-19", "horas": 4}}}},
   {{"accion": "guardar_linea"}}
 ]
+
+"Ponme 4h en Estudio el lunes, el martes y el jueves" (MISMO proyecto, MÚLTIPLES días)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-20"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Estudio"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-20", "horas": 4}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-21", "horas": 4}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-23", "horas": 4}}}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA CRÍTICA: MISMO proyecto → seleccionar_proyecto UNA SOLA VEZ al principio. NO repetir entre días
 
 "3h el lunes 16 y 5h el lunes 23"
 [
@@ -558,14 +566,14 @@ Frase del usuario: "{texto}"
 
         raw = response.choices[0].message.content.strip()
         print(f"[DEBUG] 🧠 GPT generó: {raw}")
-        
+
         # 🧹 Limpiar markdown si GPT-4o lo añade (```json ... ```)
         if raw.startswith("```"):
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1])  # Quitar primera y última línea
             raw = raw.strip()
             print(f"[DEBUG] 🧹 JSON limpio: {raw}")
-        
+
         data = json.loads(raw)
 
         # Si devuelve un solo objeto, lo convertimos a lista
