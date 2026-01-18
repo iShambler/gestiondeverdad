@@ -122,25 +122,35 @@ def manejar_pregunta_modificacion(mensaje_dict: dict, texto: str, user_id: str,
     num_proyectos = len(proyectos)
     
     if canal == "webapp":
-        mensaje = f"📊 Tienes **{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}** el {dia}:\n\n"
+        mensaje = f"📊 Esta semana tienes **{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}**:\n\n"
         
         for i, proyecto in enumerate(proyectos, 1):
-            mensaje += f"  **{i}.** {proyecto['nombre']}: **{proyecto['horas']}h**\n"
+            # Mostrar horas del día específico si hay
+            horas_dia = proyecto.get('horas_dia', 0)
+            if horas_dia > 0:
+                mensaje += f"  **{i}.** {proyecto['proyecto']}: **{horas_dia}h** el {dia}\n"
+            else:
+                mensaje += f"  **{i}.** {proyecto['proyecto']} (imputado esta semana)\n"
         
-        mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto}?\n\n"
+        mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto} el {dia}?\n\n"
         mensaje += "💡 Responde con:\n"
         mensaje += "- El **número** (1, 2, 3...)\n"
         mensaje += "- El **nombre del proyecto**\n"
+        mensaje += "- **Otro nombre** para buscar un proyecto diferente\n"
         mensaje += "- **'cancelar'** para salir"
     else:
         # WhatsApp / Slack
-        mensaje = f"📊 Tienes *{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}* el {dia}:\n\n"
+        mensaje = f"📊 Esta semana tienes *{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}*:\n\n"
         
         for i, proyecto in enumerate(proyectos, 1):
-            mensaje += f"  *{i}.* {proyecto['nombre']}: *{proyecto['horas']}h*\n"
+            horas_dia = proyecto.get('horas_dia', 0)
+            if horas_dia > 0:
+                mensaje += f"  *{i}.* {proyecto['proyecto']}: *{horas_dia}h* el {dia}\n"
+            else:
+                mensaje += f"  *{i}.* {proyecto['proyecto']} (imputado esta semana)\n"
         
-        mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto}?\n\n"
-        mensaje += "Responde con el número (1, 2...) o el nombre"
+        mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto} el {dia}?\n\n"
+        mensaje += "Responde con el número, nombre, u otro proyecto"
     
     # 🆕 Guardar estado en conversation_state_manager
     conversation_state_manager.guardar_info_incompleta(
@@ -416,30 +426,44 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
             if 1 <= numero <= len(proyectos):
                 proyecto_seleccionado = proyectos[numero - 1]
         except:
-            # No es número, buscar por nombre
+            # No es número, buscar por nombre en la lista
             for proyecto in proyectos:
-                if texto_lower in proyecto['nombre'].lower():
+                if texto_lower in proyecto.get('proyecto', '').lower():
                     proyecto_seleccionado = proyecto
                     break
         
-        if not proyecto_seleccionado:
-            conversation_state_manager.limpiar_estado(user_id)
-            respuesta = f"❌ No he encontrado ese proyecto. Por favor, responde con el número (1-{len(proyectos)}) o el nombre exacto."
-            registrar_peticion(db, usuario.id, texto, "seleccion_invalida", 
-                             canal=canal, respuesta=respuesta)
-            session.update_activity()
-            return respuesta
-        
-        # Proyecto seleccionado → construir comando completo
-        nombre_proyecto = proyecto_seleccionado['nombre']
-        
-        # Determinar si es "quitar", "sumar" o "establecer"
-        if horas < 0:
-            comando_completo = f"quita {abs(horas)} horas de {nombre_proyecto} el {dia}"
-        elif modo == "establecer":
-            comando_completo = f"establece {nombre_proyecto} a {horas} horas el {dia}"
+        if proyecto_seleccionado:
+            # Proyecto de la lista seleccionado → construir comando CON jerarquía
+            nombre_proyecto = proyecto_seleccionado['proyecto']
+            nodo_padre = proyecto_seleccionado.get('nodo_padre', '')
+            
+            # Determinar si es "quitar", "sumar" o "establecer"
+            if horas < 0:
+                if nodo_padre:
+                    comando_completo = f"quita {abs(horas)} horas de {nodo_padre} {nombre_proyecto} el {dia}"
+                else:
+                    comando_completo = f"quita {abs(horas)} horas de {nombre_proyecto} el {dia}"
+            elif modo == "establecer":
+                if nodo_padre:
+                    comando_completo = f"establece {nodo_padre} {nombre_proyecto} a {horas} horas el {dia}"
+                else:
+                    comando_completo = f"establece {nombre_proyecto} a {horas} horas el {dia}"
+            else:
+                if nodo_padre:
+                    comando_completo = f"suma {horas} horas a {nodo_padre} {nombre_proyecto} el {dia}"
+                else:
+                    comando_completo = f"suma {horas} horas a {nombre_proyecto} el {dia}"
         else:
-            comando_completo = f"suma {horas} horas a {nombre_proyecto} el {dia}"
+            # NO encontrado en lista → usuario dijo OTRO proyecto
+            # Construir comando para buscar en sistema
+            nombre_nuevo = texto.strip()
+            
+            if horas < 0:
+                comando_completo = f"quita {abs(horas)} horas de {nombre_nuevo} el {dia}"
+            elif modo == "establecer":
+                comando_completo = f"establece {nombre_nuevo} a {horas} horas el {dia}"
+            else:
+                comando_completo = f"suma {horas} horas a {nombre_nuevo} el {dia}"
     
     print(f"[DEBUG] ✅ Comando completo generado: '{comando_completo}'")
     conversation_state_manager.limpiar_estado(user_id)
@@ -463,6 +487,8 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
     """
     Ejecuta un comando completo y retorna la respuesta
     """
+    from core import ejecutar_lista_acciones
+    
     # Leer tabla actual
     tabla_actual = None
     try:
@@ -487,10 +513,56 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
         session.update_activity()
         return mensaje_error
     
-    # Ejecutar órdenes
-    return ejecutar_ordenes_y_generar_respuesta(ordenes, comando, session, contexto, 
-                                                db, usuario, user_id, canal,
-                                                texto_original=texto_original)
+    # 🆕 Ejecutar usando ejecutar_lista_acciones (maneja pre-procesamiento)
+    with session.lock:
+        respuestas = ejecutar_lista_acciones(session.driver, session.wait, ordenes, contexto)
+    
+    # 🆕 Manejar respuestas especiales (dict)
+    if len(respuestas) == 1 and isinstance(respuestas[0], dict):
+        mensaje_dict = respuestas[0]
+        tipo = mensaje_dict.get("tipo")
+        
+        if tipo == "pregunta_modificacion":
+            return manejar_pregunta_modificacion(mensaje_dict, texto_original, user_id, 
+                                                db, usuario, canal, session)
+        elif tipo == "error":
+            respuesta_final = mensaje_dict.get("mensaje", "❌ Ha ocurrido un error")
+            registrar_peticion(db, usuario.id, texto_original, "error", 
+                             canal=canal, respuesta=respuesta_final)
+            session.update_activity()
+            return respuesta_final
+        elif tipo == "desambiguacion":
+            tipo_accion = detectar_tipo_accion(ordenes, 0)
+            mensaje_pregunta = generar_mensaje_desambiguacion(
+                mensaje_dict["proyecto"],
+                mensaje_dict["coincidencias"],
+                canal=canal,
+                tipo_accion=tipo_accion
+            )
+            conversation_state_manager.guardar_desambiguacion(
+                user_id,
+                mensaje_dict["proyecto"],
+                mensaje_dict["coincidencias"],
+                ordenes,
+                0,
+                respuestas_acumuladas=[],
+                texto_original=texto_original
+            )
+            registrar_peticion(db, usuario.id, texto_original, "desambiguacion_pendiente", 
+                             canal=canal, respuesta=mensaje_pregunta)
+            session.update_activity()
+            return mensaje_pregunta
+    
+    # Generar respuesta natural
+    if respuestas:
+        respuesta_natural = generar_respuesta_natural(respuestas, texto_original, contexto)
+    else:
+        respuesta_natural = "He procesado la instrucción, pero no hubo mensajes de salida."
+    
+    registrar_peticion(db, usuario.id, texto_original, "comando", canal=canal, 
+                     respuesta=respuesta_natural, acciones=ordenes)
+    session.update_activity()
+    return respuesta_natural
 
 
 def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, contexto: dict,
