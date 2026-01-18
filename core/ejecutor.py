@@ -78,13 +78,10 @@ def ejecutar_accion(driver, wait, orden, contexto):
             if inferido_contexto:
                 print(f"[DEBUG] 🧠 Proyecto '{nombre}' inferido del contexto (no mencionado por usuario)")
             
-            # Detectar si es para "borrar horas" O "eliminar línea" (no tiene sentido crear proyecto)
-            solo_existente = contexto.get("es_borrado_horas", False) or contexto.get("es_eliminacion", False)
+            # Detectar si es para "borrar horas" (no tiene sentido crear proyecto para borrarlo)
+            solo_existente = contexto.get("es_borrado_horas", False)
             if solo_existente:
-                if contexto.get("es_eliminacion"):
-                    print(f"[DEBUG] 🗑️ Modo eliminar línea: solo buscar proyecto existente en tabla")
-                else:
-                    print(f"[DEBUG] 🧹 Modo borrar horas: solo buscar proyecto existente")
+                print(f"[DEBUG] 🧹 Modo borrar horas: solo buscar proyecto existente")
             
             # Desempaquetar 4 valores
             fila, mensaje, necesita_desambiguacion, coincidencias = seleccionar_proyecto(
@@ -399,106 +396,7 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
     respuestas = []
     
     # ==========================================================================
-    # PRE-PROCESAMIENTO: Detectar imputación SIN proyecto
-    # ==========================================================================
-    tiene_imputacion_sin_proyecto = False
-    indice_imputacion = -1
-    
-    for i, orden in enumerate(ordenes):
-        if orden.get("accion") == "imputar_horas_dia":
-            # Verificar si hay seleccionar_proyecto ANTES
-            tiene_proyecto_antes = any(
-                ordenes[j].get("accion") == "seleccionar_proyecto" 
-                for j in range(i)
-            )
-            if not tiene_proyecto_antes:
-                tiene_imputacion_sin_proyecto = True
-                indice_imputacion = i
-                print(f"[DEBUG] 🔍 Detectado: imputar_horas_dia SIN seleccionar_proyecto")
-                break
-    
-    # Si hay imputación sin proyecto → leer tabla y generar desambiguación
-    if tiene_imputacion_sin_proyecto:
-        from web_automation import leer_tabla_imputacion
-        
-        orden_imputacion = ordenes[indice_imputacion]
-        parametros = orden_imputacion.get("parametros", {})
-        dia_param = parametros.get("dia")
-        horas = parametros.get("horas", 0)
-        modo = parametros.get("modo", "sumar")
-        
-        # Convertir fecha ISO a nombre de día
-        try:
-            fecha_obj = datetime.fromisoformat(dia_param)
-            dia_nombre_en = fecha_obj.strftime("%A").lower()
-            dias_map = {
-                "monday": "lunes",
-                "tuesday": "martes",
-                "wednesday": "miércoles",
-                "thursday": "jueves",
-                "friday": "viernes"
-            }
-            dia_nombre = dias_map.get(dia_nombre_en, dia_nombre_en)
-        except:
-            dia_nombre = "lunes"
-        
-        print(f"[DEBUG] 📊 Leyendo tabla de la semana para generar desambiguación...")
-        
-        # Leer la tabla de imputación
-        try:
-            tabla = leer_tabla_imputacion(driver)
-            print(f"[DEBUG] 📋 Tabla leída: {len(tabla)} proyectos")
-        except Exception as e:
-            print(f"[DEBUG] ⚠️ Error al leer tabla: {e}")
-            tabla = []
-        
-        # Filtrar proyectos de TODA LA SEMANA (no solo el día)
-        proyectos_semana = []
-        for proyecto_info in tabla:
-            nombre_corto = proyecto_info['proyecto'].split(' - ')[-1]
-            path_completo = proyecto_info['proyecto']
-            total_horas = proyecto_info['total']
-            
-            # Incluir si tiene horas en algún día de la semana
-            if total_horas > 0:
-                # Obtener horas del día específico para mostrar
-                horas_dia_especifico = proyecto_info['horas'].get(dia_nombre, 0)
-                
-                proyectos_semana.append({
-                    "proyecto": nombre_corto,
-                    "path_completo": path_completo,
-                    "nodo_padre": path_completo.split(' - ')[-2] if len(path_completo.split(' - ')) >= 2 else "",
-                    "total_horas": total_horas,
-                    "horas_dia": horas_dia_especifico
-                })
-        
-        # Si es QUITAR horas, solo mostrar proyectos con horas > 0 ese día
-        if horas < 0:
-            proyectos_con_horas = [p for p in proyectos_semana if p["horas_dia"] > 0]
-            
-            if len(proyectos_con_horas) == 0:
-                # No hay horas que quitar
-                return [{
-                    "tipo": "error",
-                    "mensaje": f"❌ No tienes horas imputadas el {dia_nombre}. No hay nada que quitar."
-                }]
-            
-            proyectos_semana = proyectos_con_horas
-        
-        # Generar estructura de desambiguación
-        return [{
-            "tipo": "pregunta_modificacion",
-            "proyectos": proyectos_semana,
-            "dia": dia_nombre,
-            "horas": horas,
-            "modo": modo,
-            "fecha": dia_param,
-            "ordenes_originales": ordenes,
-            "indice_imputacion": indice_imputacion
-        }]
-    
-    # ==========================================================================
-    # PRE-PROCESAMIENTO: Detectar si GPT generó "toda la semana" como 5 imputar_horas_dia
+    # 🆕 PRE-PROCESAMIENTO: Detectar si GPT generó "toda la semana" como 5 imputar_horas_dia
     # Si es así, convertir a una sola acción imputar_horas_semana
     # ==========================================================================
     ordenes_procesadas = []
@@ -547,20 +445,12 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
     ordenes = ordenes_procesadas
     
     # ==========================================================================
-    # PRE-PROCESAMIENTO: Detectar acciones especiales
+    # PRE-PROCESAMIENTO: Detectar si es "borrar horas de proyecto específico"
     # ==========================================================================
     for i, orden in enumerate(ordenes):
         if orden.get("accion") == "seleccionar_proyecto":
             if i + 1 < len(ordenes):
                 siguiente = ordenes[i + 1]
-                
-                # 🆕 DETECTAR ELIMINAR LÍNEA
-                if siguiente.get("accion") == "eliminar_linea":
-                    contexto["es_eliminacion"] = True
-                    print(f"[DEBUG] 🗑️ Detectado: seleccionar_proyecto + eliminar_linea → solo buscar en tabla")
-                    break
-                
-                # DETECTAR BORRAR HORAS
                 if siguiente.get("accion") == "imputar_horas_dia":
                     horas = siguiente.get("parametros", {}).get("horas", 0)
                     modo = siguiente.get("parametros", {}).get("modo", "sumar")
@@ -580,8 +470,6 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
         # Limpiar flag después de usarlo
         if orden.get("accion") == "imputar_horas_dia":
             contexto["es_borrado_horas"] = False
-        if orden.get("accion") == "eliminar_linea":
-            contexto["es_eliminacion"] = False
             
         mensaje = ejecutar_accion(driver, wait, orden, contexto)
         
