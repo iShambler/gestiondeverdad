@@ -161,10 +161,26 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     time.sleep(0.3)
                     return (fila, f"Usando '{coincidencia['proyecto']}' de '{coincidencia['nodo_padre']}'", False, [])
         
-        # 🆕 Si NO especificó nodo_padre Y hay coincidencias → SIEMPRE preguntar
         if coincidencias_encontradas and not nodo_padre:
-            print(f"[DEBUG] 💬 Encontradas {len(coincidencias_encontradas)} coincidencia(s) para '{nombre_proyecto}', preguntando al usuario...")
-            return (None, "", "desambiguacion", coincidencias_encontradas)
+                # Verificar si este proyecto YA fue usado en este comando
+                proyectos_comando = contexto.get("proyectos_comando_actual", []) if contexto else []
+                ya_usado = any(
+                    normalizar(p.get("nombre", "")) == normalizar(nombre_proyecto) 
+                    for p in proyectos_comando
+                )
+                
+                if ya_usado:
+                    # ✅ Ya fue usado en este comando: usar directamente SIN preguntar
+                    print(f"[DEBUG] ✅ Proyecto '{nombre_proyecto}' ya usado en este comando, usando directamente")
+                    coincidencia = coincidencias_encontradas[0]
+                    fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
+                    time.sleep(0.3)
+                    return (fila, f"Usando '{coincidencia['proyecto']}'", False, [])
+                else:
+                    # ❓ Primera vez en este comando: preguntar al usuario
+                    print(f"[DEBUG] 💬 Encontradas {len(coincidencias_encontradas)} coincidencias, preguntando al usuario...")
+                    return (None, "", "desambiguacion", coincidencias_encontradas)
 
         # ============================================================================
         # NO HAY COINCIDENCIAS EN TABLA
@@ -473,6 +489,15 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 else:
                     # No encontró ni proyectos ni nodos padre
                     raise Exception(f"No se encontró ninguna coincidencia para '{nombre_proyecto}'")
+            
+ # ✅ Si hay 1 ÚNICO proyecto → usar automáticamente SIN preguntar
+            if len(elementos) == 1 and not elemento_preseleccionado:
+                print(f"[DEBUG] ✅ 1 único proyecto encontrado en sistema, usando automáticamente")
+                elemento = elementos[0]
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
+                elemento.click()
+                time.sleep(1)
+                return (fila, f"He abierto el proyecto '{nombre_proyecto}'", False, [])
             
             # 🆕 DESAMBIGUACIÓN INTERACTIVA: Si hay múltiples coincidencias SIN nodo padre
             # O si el nodo_padre es "__buscar__" (usuario rechazó proyecto existente)
