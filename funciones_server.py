@@ -28,14 +28,27 @@ def detectar_tipo_accion(ordenes: List[dict], indice_actual: int) -> str:
     Busca en las órdenes siguientes para determinar si es eliminación, imputación, etc.
     
     Returns:
-        'eliminar' | 'imputar' | 'modificar' | 'otro'
+        'eliminar' | 'imputar' | 'restar_horas' | 'establecer_horas' | 'borrar_horas' | 'modificar' | 'otro'
     """
     for idx in range(indice_actual, len(ordenes)):
         accion = ordenes[idx].get("accion", "")
         if accion == "eliminar_linea":
             return "eliminar"
         elif accion in ["imputar_horas_dia", "imputar_horas_semana"]:
-            return "imputar"
+            # 🆕 Verificar si las horas son negativas o si el modo es "establecer"
+            parametros = ordenes[idx].get("parametros", {})
+            horas = parametros.get("horas", 0)
+            modo = parametros.get("modo", "sumar")
+            
+            # Si las horas son negativas → restar
+            if horas < 0:
+                return "restar_horas"
+            # Si el modo es establecer → establecer
+            elif modo == "establecer":
+                return "establecer_horas"
+            # Si no, es una imputación normal (sumar)
+            else:
+                return "imputar"
         elif accion == "borrar_todas_horas_dia":
             return "borrar_horas"
     return "modificar"
