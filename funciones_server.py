@@ -907,4 +907,4 @@ def manejar_desambiguacion_multiple(texto: str, estado: dict, session, db: Sessi
         return ejecutar_con_coincidencia(coincidencia, estado, session, db, usuario, 
                                         user_id, canal, contexto, texto)
     else:
-        return "❌ No he entendido tu respuesta. Por favor:\n• Indica el **número** (1, 2, 3...)\n• El **nombre del departamento/área**\n• Escribe **'otro'** si ninguno es el correcto\n• Escribe **'cancelar'** para salir"
+        return "❌ No he entendido tu respuesta. Por favor:\n• Indica el **número** (1, 2, 3...)\n• El **nombre del departamento/área**\n• Escribe **'cancelar'** para salir"

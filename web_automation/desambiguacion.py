@@ -277,7 +277,6 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
                 mensaje += f"{idx}. `{coin['path_completo']}`\n"
         mensaje += f"\n{emoji} *{pregunta_accion}*\n"
         mensaje += f"• Responde con el *número* o *nombre del departamento*\n"
-        mensaje += f"• Escribe *'ninguno'* o *'otro'* si quieres un proyecto diferente\n"
         mensaje += f"• Escribe *'cancelar'* para abandonar"
     
     elif canal == "whatsapp":
@@ -292,7 +291,6 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
                 mensaje += f"{idx}. {coin['path_completo']}\n"
         mensaje += f"\n{emoji} *{pregunta_accion}*\n"
         mensaje += f"• Número o nombre del departamento\n"
-        mensaje += f"• 'ninguno' o 'otro' para buscar diferente\n"
         mensaje += f"• 'cancelar' para salir"
     
     else:  # webapp
@@ -307,7 +305,6 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
                 mensaje += f"**{idx}.** {coin['path_completo']}\n"
         mensaje += f"\n{emoji} **{pregunta_accion}**\n"
         mensaje += f"• Responde con el **número** o **nombre del departamento**\n"
-        mensaje += f"• Escribe **'ninguno'** o **'otro'** si quieres un proyecto diferente\n"
         mensaje += f"• Escribe **'cancelar'** para abandonar"
     
     return mensaje
