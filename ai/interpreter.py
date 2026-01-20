@@ -234,6 +234,15 @@ Hoy es {hoy} ({dia_semana}).
 ====================================================
 REGLAS GENERALES
 ====================================================
+🚨 REGLA CRÍTICA - "LA SEMANA PASADA":
+Antes de continuar, IMPORTANTE distinguir:
+- "COPIA/DUPLICA/REPITE la semana pasada" → copiar_semana_anterior (trae datos a semana actual)
+- "EMITE/GUARDA/BORRA la semana pasada" → seleccionar_fecha(lunes_sem_pasada) + acción (trabaja EN semana pasada)
+
+Ejemplos:
+- "Copia la semana pasada" → [{{"accion": "copiar_semana_anterior"}}]
+- "Emite la semana pasada" → [{{"accion": "seleccionar_fecha", ...}}, {{"accion": "emitir_linea"}}]
+
 1. Orden de acciones:
    a) seleccionar_fecha:
       - SIEMPRE cuando uses imputar_horas_semana (calcular lunes de la semana)
@@ -369,12 +378,30 @@ TIPOS DE ACCIONES
    - "emitir", "expide", "envía" → emitir_linea
    - Resto → guardar_linea
 
-5) COPIAR SEMANA ANTERIOR:
-   - "copia la semana pasada", "igual que la semana pasada", "lo mismo que la semana anterior"
-   - "carga el horario de la semana pasada", "repite la semana pasada"
-   - → copiar_semana_anterior (SIN PARÁMETROS, es una acción atómica)
-   - Esta acción va SOLA, no necesita seleccionar_fecha ni guardar_linea
-   - Lee los proyectos/horas de la semana pasada y los copia a la actual automáticamente
+5) COPIAR SEMANA ANTERIOR vs TRABAJAR EN SEMANA PASADA:
+   🚨 IMPORTANTE: "la semana pasada" tiene dos interpretaciones según el verbo:
+   
+   A) COPIAR (traer datos a semana actual):
+      - "copia la semana pasada", "igual que la semana pasada", "lo mismo que la semana anterior"
+      - "carga el horario de la semana pasada", "repite la semana pasada"
+      - "duplica la semana anterior", "clona la semana pasada"
+      - → copiar_semana_anterior (SIN PARÁMETROS, es una acción atómica)
+      - Esta acción va SOLA, no necesita seleccionar_fecha ni guardar_linea
+      - Lee los proyectos/horas de la semana pasada y los copia a la actual automáticamente
+   
+   B) TRABAJAR EN SEMANA PASADA (navegar a ella):
+      - "emite la semana pasada", "guarda la semana pasada"
+      - "consulta la semana pasada", "ve a la semana pasada"
+      - "imputa X horas en la semana pasada", "borra la semana pasada"
+      - → seleccionar_fecha (lunes de semana pasada) + [acción correspondiente]
+      - Ejemplos:
+        * "Emite la semana pasada" → seleccionar_fecha(lunes_sem_pasada) + emitir_linea
+        * "Guarda la semana pasada" → seleccionar_fecha(lunes_sem_pasada) + guardar_linea
+        * "Borra la semana pasada" → seleccionar_fecha(lunes_sem_pasada) + borrar_todas_horas... + guardar_linea
+   
+   🔑 REGLA CLAVE: 
+   - Si el verbo es COPIAR/CLONAR/DUPLICAR/REPETIR → copiar_semana_anterior
+   - Si el verbo es EMITIR/GUARDAR/BORRAR/IMPUTAR/VER → seleccionar_fecha + acción
 
 ====================================================
 EJEMPLOS
@@ -516,6 +543,31 @@ NOTA CRÍTICA: MISMO proyecto → seleccionar_proyecto UNA SOLA VEZ al principio
 "Copia la semana pasada" / "Igual que la semana anterior" / "Carga el horario de la semana pasada"
 [
   {{"accion": "copiar_semana_anterior"}}
+]
+NOTA: Estos verbos (copiar, igual, cargar) indican COPIAR datos a la semana actual.
+
+"Emite la semana pasada" (hoy es {hoy}, semana pasada = lunes 2026-01-13)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-13"}}}},
+  {{"accion": "emitir_linea"}}
+]
+NOTA: "Emite" NO es copiar, es trabajar EN la semana pasada. Calcular lunes de semana anterior.
+
+"Guarda la semana pasada" (hoy es {hoy}, semana pasada = lunes 2026-01-13)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-13"}}}},
+  {{"accion": "guardar_linea"}}
+]
+
+"Borra las horas de la semana pasada" (hoy es {hoy}, semana pasada = lunes 2026-01-13)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-13"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "lunes"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "martes"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "miércoles"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "jueves"}}}},
+  {{"accion": "borrar_todas_horas_dia", "parametros": {{"dia": "viernes"}}}},
+  {{"accion": "guardar_linea"}}
 ]
 
 "Pon 4 horas en desarrollo en subvenciones" (doble "en" = nodo_padre + proyecto)
