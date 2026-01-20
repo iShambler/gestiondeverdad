@@ -59,36 +59,12 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
             proyecto = contexto.get("proyecto_actual", "proyecto")
             info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Puedes mencionar esto en tu respuesta."
     
-    # 🆕 CALCULAR RANGO DE SEMANA si hay acción de emitir/guardar
-    tiene_emitir_o_guardar = any("emitido" in acc.lower() or "guardado" in acc.lower() for acc in acciones_ejecutadas)
-    rango_semana = ""
-    
-    if tiene_emitir_o_guardar:
-        from datetime import timedelta
-        
-        # Obtener fecha del contexto o usar hoy
-        if contexto and "fecha_seleccionada" in contexto:
-            fecha = contexto["fecha_seleccionada"]
-        else:
-            fecha = datetime.now()
-        
-        # Calcular lunes y viernes de esa semana
-        dias_desde_lunes = fecha.weekday()  # 0=lunes, 6=domingo
-        lunes = fecha - timedelta(days=dias_desde_lunes)
-        viernes = lunes + timedelta(days=4)
-        
-        # Formatear como DD/MM/YYYY
-        lunes_str = lunes.strftime("%d/%m/%Y")
-        viernes_str = viernes.strftime("%d/%m/%Y")
-        
-        rango_semana = f"\n\n✅ RANGO DE SEMANA: del {lunes_str} al {viernes_str}\nDebes incluir este rango en tu respuesta cuando menciones emitir o guardar."
-    
     prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
 
 El usuario te dijo: "{entrada_usuario}"
 
 Has ejecutado las siguientes acciones:
-{resumen_acciones}{info_adicional}{rango_semana}
+{resumen_acciones}{info_adicional}
 
 Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando lo que has hecho.
 
