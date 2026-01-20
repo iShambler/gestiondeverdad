@@ -143,23 +143,20 @@ def validar_ordenes(ordenes, texto, contexto=None):
         }]
 
     # ----------------------------------------------------------------------
-    # 🚫 4. Comandos vacíos o sin sentido
+    # 🚫 4. Comandos realmente vacíos (solo seleccionar_fecha sin más acciones)
     # ----------------------------------------------------------------------
-    if len(ordenes) == 2 and ordenes[0].get("accion") == "seleccionar_fecha":
-        if ordenes[1].get("accion") in ["guardar_linea", "emitir_linea"]:
-            return [{
-                "accion": "error_validacion",
-                "mensaje": (
-                    "🤔 **Necesito más información.**\n\n"
-                    "¿Qué proyecto? ¿Cuántas horas?\n"
-                )
-            }]
-
-    if len(ordenes) == 1 and ordenes[0].get("accion") in ["guardar_linea", "emitir_linea"]:
+    # ✅ PERMITIR: emitir_linea / guardar_linea (con o sin seleccionar_fecha)
+    # ❌ RECHAZAR: solo seleccionar_fecha sin ninguna acción después
+    
+    # Caso: SOLO seleccionar_fecha, nada más
+    if len(ordenes) == 1 and ordenes[0].get("accion") == "seleccionar_fecha":
         return [{
             "accion": "error_validacion",
-            "mensaje": "🤔 ¿Qué quieres hacer exactamente?"
+            "mensaje": "🤔 ¿Qué quieres hacer en esa fecha?"
         }]
+    
+    # NOTA: emitir_linea y guardar_linea SOLAS son válidas (trabajan sobre la tabla actual)
+    # NOTA: seleccionar_fecha + emitir_linea/guardar_linea es válido (trabaja sobre otra fecha)
 
     # ----------------------------------------------------------------------
     # TODO LO DEMÁS ES VÁLIDO
