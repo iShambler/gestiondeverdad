@@ -634,7 +634,7 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
 def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session, 
                                usuario, user_id: str, canal: str, contexto: dict) -> str:
     """
-    Maneja confirmación de proyecto existente (sí/no)
+    Maneja confirmación de proyecto existente (sí/no/otro)
     """
     texto_lower = texto.lower().strip()
     
@@ -645,18 +645,26 @@ def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session,
         return ejecutar_con_coincidencia(coincidencia, estado, session, db, usuario, 
                                         user_id, canal, contexto, texto)
     
-    # Detectar "no"
-    elif any(palabra in texto_lower for palabra in ['no', 'nop', 'nope', 'n', 'nel', 
-                                                     'negativo', 'ninguno', 'otro', 'busca', 'diferente']):
-        print(f"[DEBUG] ❌ Usuario rechazó el proyecto existente")
+    # 🆕 Detectar "otro" / "busca" / "diferente" → Buscar en el árbol del sistema
+    palabras_buscar_otro = ['otro', 'otra', 'busca', 'buscar', 'diferente', 'distinto', 
+                           'uno diferente', 'otro proyecto', 'no ese']
+    
+    if any(palabra in texto_lower for palabra in palabras_buscar_otro):
+        print(f"[DEBUG] 🔄 Usuario quiere buscar otro proyecto en el sistema")
+        return buscar_en_sistema(estado, session, db, usuario, user_id, canal, contexto, texto)
+    
+    # Detectar "no" → Cancelar la operación
+    palabras_cancelar = ['no', 'nop', 'nope', 'n', 'nel', 'negativo', 'cancelar', 'cancel']
+    
+    if any(palabra == texto_lower or (palabra in texto_lower and len(texto_lower) < 15) 
+           for palabra in palabras_cancelar):
+        print(f"[DEBUG] ❌ Usuario canceló la operación")
         
-        # 🔥 LIMPIAR EL ESTADO - el usuario canceló la confirmación
         conversation_state_manager.limpiar_estado(user_id)
         
-        # 🔥 Responder que debe volver a intentar con el comando completo
         respuesta = (
-            "👍 Vale, no usaré ese proyecto.\n\n"
-            "💡 Por favor, vuelve a escribir tu comando con el proyecto correcto.\n"
+            "👍 Vale, operación cancelada.\n\n"
+            "💡 Si quieres usar otro proyecto, escribe tu comando de nuevo.\n"
             "Ejemplo: *Pon 3 horas en [nombre del proyecto]*"
         )
         registrar_peticion(db, usuario.id, texto, "confirmacion_rechazada", 
@@ -665,7 +673,7 @@ def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session,
         return respuesta
     
     else:
-        return "❌ No he entendido. Responde 'sí' para usar este proyecto o 'no' para cancelar."
+        return "❌ No he entendido. Responde:\n• *'sí'* para usar este proyecto\n• *'otro'* para buscar uno diferente\n• *'no'* para cancelar"
 
 
 def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Session,
