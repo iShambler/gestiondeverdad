@@ -52,7 +52,13 @@ def cifrar(texto: str) -> str:
 
 def descifrar(texto: str) -> str:
     """Descifra texto cifrado."""
-    return fernet.decrypt(texto.encode()).decode() if texto else ""
+    if not texto:
+        return ""
+    try:
+        return fernet.decrypt(texto.encode()).decode()
+    except Exception as e:
+        print(f"[DB] ⚠️ Error descifrando contraseña: {e}")
+        return None  # Devolverá None y el sistema pedirá credenciales de nuevo
 
 
 # ==============================================================
