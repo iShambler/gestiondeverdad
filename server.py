@@ -19,7 +19,7 @@ import traceback
 
 # Importaciones de módulos
 from ai import clasificar_mensaje, interpretar_con_gpt, responder_conversacion, interpretar_consulta
-from core import consultar_dia, consultar_semana, mostrar_comandos
+from core import consultar_dia, consultar_semana, consultar_mes, mostrar_comandos
 from web_automation import leer_tabla_imputacion
 from db import get_db, registrar_peticion, obtener_usuario_por_origen, crear_usuario
 from auth_handler import verificar_y_solicitar_credenciales, obtener_credenciales, extraer_credenciales_con_gpt
@@ -197,7 +197,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                 session.update_activity()
                 return respuesta
             
-            # 🆕 CASO 2: Consulta de horas (día o semana)
+        # 🆕 CASO 2: Consulta de horas (día, semana o mes)
             if consulta_info:
                 fecha = datetime.fromisoformat(consulta_info["fecha"])
                 
@@ -212,6 +212,16 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                     with session.lock:
                         resumen = consultar_semana(session.driver, session.wait, fecha, canal=canal)
                     registrar_peticion(db, usuario.id, texto, "consulta_semana", canal=canal, respuesta=resumen)
+                    session.update_activity()
+                    return resumen
+                
+                elif consulta_info.get("tipo") == "mes":
+                    # 🆕 Consulta de un mes completo
+                    mes = fecha.month
+                    anio = fecha.year
+                    with session.lock:
+                        resumen = consultar_mes(session.driver, session.wait, mes, anio, canal=canal)
+                    registrar_peticion(db, usuario.id, texto, "consulta_mes", canal=canal, respuesta=resumen)
                     session.update_activity()
                     return resumen
             

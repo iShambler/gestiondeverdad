@@ -1,6 +1,8 @@
 """
 Analizador de consultas sobre horas imputadas.
-Extrae fechas y tipo de consulta (día o semana).
+Extrae fechas y tipo de consulta (día, semana o mes).
+
+🆕 MODIFICADO: Añadido soporte para consultas de mes
 """
 
 import json
@@ -16,7 +18,8 @@ def interpretar_consulta(texto):
         texto: Consulta del usuario
         
     Returns:
-        dict: {'fecha': 'YYYY-MM-DD', 'tipo': 'dia'|'semana'|'listar_proyectos'} o None
+        dict: {'fecha': 'YYYY-MM-DD', 'tipo': 'dia'|'semana'|'mes'|'listar_proyectos'} o None
+              Para tipo='mes', fecha es el primer día del mes consultado
     """
     hoy = datetime.now().strftime("%Y-%m-%d")
     hoy_obj = datetime.now()
@@ -64,9 +67,23 @@ def interpretar_consulta(texto):
         dias_atras_martes = 7 - (weekday_martes - weekday_hoy)
     martes_pasado = (hoy_obj - timedelta(days=dias_atras_martes)).strftime("%Y-%m-%d")
     
+    # 🆕 Calcular primer día del mes actual y mes anterior
+    primer_dia_mes_actual = hoy_obj.replace(day=1).strftime("%Y-%m-%d")
+    mes_anterior = (hoy_obj.replace(day=1) - timedelta(days=1)).replace(day=1)
+    primer_dia_mes_anterior = mes_anterior.strftime("%Y-%m-%d")
+    
+    # Nombres de meses en español
+    meses_es = {
+        1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
+        5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
+        9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+    }
+    mes_actual_nombre = meses_es[hoy_obj.month]
+    mes_anterior_nombre = meses_es[mes_anterior.month]
+    
     prompt = f"""Eres un asistente que interpreta consultas sobre horas laborales y proyectos disponibles.
 
-Hoy es {hoy} ({dia_semana}).
+Hoy es {hoy} ({dia_semana}). Mes actual: {mes_actual_nombre} {hoy_obj.year}.
 
 El usuario pregunta: "{texto}"
 
@@ -76,87 +93,77 @@ TIPO A: "listar_proyectos" - Pide lista de proyectos disponibles
 - Ejemplos: "qué proyectos hay", "lista de proyectos", "muéstrame los proyectos", "dime en qué proyectos puedo imputar"
 - Devuelve: {{"tipo": "listar_proyectos"}}
 
-TIPO B: "dia" o "semana" - Consulta sobre horas imputadas
-- Ejemplos: "qué tengo hoy", "resumen de la semana"
-- Devuelve: {{"fecha": "YYYY-MM-DD", "tipo": "dia" o "semana"}}
+TIPO B: "dia" - Consulta de un día específico
+- Ejemplos: "qué tengo hoy", "resumen del martes", "horas del 15 de enero"
+- Devuelve: {{"fecha": "YYYY-MM-DD", "tipo": "dia"}}
 
-Si es TIPO A (listar_proyectos):
-{{"tipo": "listar_proyectos"}}
+TIPO C: "semana" - Consulta de una semana
+- Ejemplos: "resumen de la semana", "qué tengo esta semana", "semana del 15 de enero"
+- Devuelve: {{"fecha": "YYYY-MM-DD", "tipo": "semana"}}
 
-Si es TIPO B (consulta de horas), extrae la fecha y tipo:
-{{
-  "fecha": "YYYY-MM-DD",
-  "tipo": "semana" | "dia"  
-}}
+🆕 TIPO D: "mes" - Consulta de un mes completo
+- Ejemplos: "resumen del mes", "qué tengo este mes", "resumen de enero", "horas de diciembre", "mes pasado", "mes de febrero"
+- Palabras clave: "mes", "mensual", nombre de mes (enero, febrero, etc.)
+- Devuelve: {{"fecha": "YYYY-MM-01", "tipo": "mes"}} (siempre día 01 del mes)
+- Si dice "este mes" o "el mes" → usar mes actual: {primer_dia_mes_actual}
+- Si dice "mes pasado" o "mes anterior" → usar mes anterior: {primer_dia_mes_anterior}
+- Si menciona un mes específico (ej: "enero", "diciembre"):
+  * Si el mes es POSTERIOR al actual en el mismo año → usar año actual
+  * Si el mes es ANTERIOR o IGUAL al actual → determinar si es este año o el anterior:
+    - Si el mes mencionado < mes actual → podría ser año pasado o este año
+    - Usar sentido común: "diciembre" en enero 2026 → diciembre 2025
+    - "febrero" en enero 2026 → febrero 2026 (futuro cercano)
 
-Reglas para TIPO B:
+REGLAS PARA TIPO D (MES):
+
+Mapeo de meses (español → número):
+- enero=1, febrero=2, marzo=3, abril=4, mayo=5, junio=6
+- julio=7, agosto=8, septiembre=9, octubre=10, noviembre=11, diciembre=12
+
+Ejemplos de consulta de MES:
+- "resumen del mes" → {{"fecha": "{primer_dia_mes_actual}", "tipo": "mes"}}
+- "qué tengo este mes" → {{"fecha": "{primer_dia_mes_actual}", "tipo": "mes"}}
+- "resumen del mes pasado" → {{"fecha": "{primer_dia_mes_anterior}", "tipo": "mes"}}
+- "horas de {mes_anterior_nombre}" → {{"fecha": "{primer_dia_mes_anterior}", "tipo": "mes"}}
+- "resumen de enero" (estamos en enero 2026) → {{"fecha": "2026-01-01", "tipo": "mes"}}
+- "resumen de diciembre" (estamos en enero 2026) → {{"fecha": "2025-12-01", "tipo": "mes"}}
+- "qué imputé en noviembre" (estamos en enero 2026) → {{"fecha": "2025-11-01", "tipo": "mes"}}
+
+REGLAS PARA TIPO B y C (DIA y SEMANA):
 
 🚨 FECHAS ABSOLUTAS (día + mes especificado):
 - Si menciona día y mes específico (ej: "19 de diciembre", "15 de enero", "semana del 23 de noviembre"):
   * PRIMERO determina el año correcto:
     - Hoy es {hoy} (año actual: {hoy_obj.year}, mes actual: {hoy_obj.month})
     - Si el mes mencionado es ANTERIOR al mes actual → usar AÑO ANTERIOR ({hoy_obj.year - 1})
-      Ejemplo: Hoy es enero 2026, pide "diciembre" → usar diciembre {hoy_obj.year - 1} (2025)
     - Si el mes mencionado es IGUAL O POSTERIOR al mes actual → usar AÑO ACTUAL ({hoy_obj.year})
-      Ejemplo: Hoy es enero 2026, pide "enero" → usar enero {hoy_obj.year} (2026)
-      Ejemplo: Hoy es enero 2026, pide "marzo" → usar marzo {hoy_obj.year} (2026)
   * SEGUNDO calcula la fecha en formato YYYY-MM-DD
   * TERCERO determina el tipo:
     - Si dice "semana del [fecha]" → tipo: "semana", fecha: esa fecha específica
     - Si solo menciona la fecha → tipo: "dia", fecha: esa fecha específica
-  * Ejemplos (suponiendo hoy={hoy}):
-    - "resumen de la semana del 19 de diciembre" → diciembre < enero → año=2025 → {{"fecha": "2025-12-19", "tipo": "semana"}}
-    - "qué tengo el 23 de noviembre" → noviembre < enero → año=2025 → {{"fecha": "2025-11-23", "tipo": "dia"}}
-    - "semana del 5 de marzo" → marzo > enero → año=2026 → {{"fecha": "2026-03-05", "tipo": "semana"}}
-    - "resumen del 15 de enero" → enero = enero → año=2026 → {{"fecha": "2026-01-15", "tipo": "dia"}}
 
 FECHAS RELATIVAS (sin mes específico):
-- Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: HOY (NO el lunes, sino la fecha actual)
+- Si pregunta por "esta semana" o "la semana" (sin especificar otra) → tipo: "semana", fecha: HOY
 - Si pregunta por "la semana pasada" → tipo: "semana", fecha: LUNES DE LA SEMANA ANTERIOR
-- Si pregunta por "próxima semana" / "siguiente semana" / "next week" / "la semana que viene" → tipo: "semana", fecha: LUNES DE LA SEMANA SIGUIENTE
+- Si pregunta por "próxima semana" / "siguiente semana" → tipo: "semana", fecha: LUNES DE LA SEMANA SIGUIENTE
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
-- Si pregunta por un día específico futuro (ej: "el viernes", "mañana") → tipo: "dia", fecha: ese día exacto
-- Si pregunta por un día específico PASADO (ej: "jueves pasado", "el martes pasado", "ayer"):
-  * CRÍTICO: Calcula desde HOY ({hoy}) hacia ATRÁS
-  * Encuentra el día más reciente en el PASADO con ese nombre
-  * Hoy es {dia_semana} ({hoy})
-  * Mapeo de días: Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4, Saturday=5, Sunday=6
-  * ALGORITMO:
-    1. Obtener weekday de hoy: {dia_semana} = [número del 0-6]
-    2. Obtener weekday objetivo (ej: "jueves"=Thursday=3)
-    3. Calcular días atrás:
-       - Si weekday_hoy > weekday_objetivo: días_atrás = weekday_hoy - weekday_objetivo
-       - Si weekday_hoy <= weekday_objetivo: días_atrás = 7 - (weekday_objetivo - weekday_hoy)
-    4. Fecha = {hoy} - días_atrás días
-  * Ejemplo concreto HOY ({hoy}={dia_semana}):
-    - Si piden "jueves pasado" y hoy es Sunday(6): días_atrás = 7-(3-6) = 7-(-3) = 10? NO
-    - CORRECTO: Si hoy es Sunday(6) y quieren Thursday(3): hoy(6) > objetivo(3) → días_atrás = 6-3 = 3 días
-    - Fecha = {hoy} - 3 días = jueves pasado
-  * tipo: "dia", fecha: ese día específico calculado
+- Si pregunta por un día específico PASADO (ej: "jueves pasado", "ayer") → tipo: "dia", fecha: ese día calculado
 
 🚨 CÁLCULO DEL LUNES DE LA SEMANA ACTUAL:
 Hoy es {hoy} ({dia_semana})
 - Si {dia_semana} = Monday → lunes = {hoy}
 - Si {dia_semana} = Tuesday → lunes = {hoy} - 1 día
-- Si {dia_semana} = Wednesday → lunes = {hoy} - 2 días
-- Si {dia_semana} = Thursday → lunes = {hoy} - 3 días
-- Si {dia_semana} = Friday → lunes = {hoy} - 4 días
-- Si {dia_semana} = Saturday → lunes = {hoy} - 5 días
-- Si {dia_semana} = Sunday → lunes = {hoy} - 6 días (lunes anterior)
+- etc.
 
-🚨 CRÍTICO: "resumen de la semana" SIN especificar = ESTA SEMANA (calcular lunes actual según tabla arriba)
-🚨 SOLO si dice "semana pasada", "semana anterior", "last week" → usar lunes anterior menos 7 días
-
-Ejemplos:
-- "resumen de la semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "{hoy}", "tipo": "semana"}} (usa HOY, NO el lunes)
-- "qué tengo esta semana" (hoy={hoy} que es {dia_semana}) → {{"fecha": "{hoy}", "tipo": "semana"}}
+Ejemplos completos:
+- "resumen de la semana" → {{"fecha": "{hoy}", "tipo": "semana"}}
+- "qué tengo esta semana" → {{"fecha": "{hoy}", "tipo": "semana"}}
 - "resumen de la semana pasada" → {{"fecha": "{lunes_semana_pasada}", "tipo": "semana"}}
 - "resumen de la próxima semana" → {{"fecha": "{lunes_semana_siguiente}", "tipo": "semana"}}
-- "qué tengo la siguiente semana" → {{"fecha": "{lunes_semana_siguiente}", "tipo": "semana"}}
-- "resumen de la semana que viene" → {{"fecha": "{lunes_semana_siguiente}", "tipo": "semana"}}
-- "dame las horas del jueves pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{jueves_pasado}", "tipo": "dia"}} (jueves fue hace {dias_atras_jueves} días)
-- "qué tenía el martes pasado" (hoy={hoy}={dia_semana}) → {{"fecha": "{martes_pasado}", "tipo": "dia"}} (martes fue hace {dias_atras_martes} días)
+- "dame las horas del jueves pasado" → {{"fecha": "{jueves_pasado}", "tipo": "dia"}}
 - "resumen de ayer" → {{"fecha": "{ayer}", "tipo": "dia"}}
+- "resumen del mes" → {{"fecha": "{primer_dia_mes_actual}", "tipo": "mes"}}
+- "horas de diciembre" → {{"fecha": "2025-12-01", "tipo": "mes"}}
 
 Devuelve SOLO el JSON, sin texto adicional.
 
@@ -185,11 +192,6 @@ Respuesta:"""
             raw = raw.replace("```", "").strip()
         
         data = json.loads(raw)
-        
-        # ✅ NO forzar al lunes para tipo="semana"
-        # GestiónITT muestra la semana completa desde cualquier día
-        # Si el usuario pide "resumen de la semana" y hoy es martes,
-        # debe navegar al martes (que carga toda la semana L-V)
         
         return data
     

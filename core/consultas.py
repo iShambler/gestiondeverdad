@@ -447,7 +447,251 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         import traceback
         traceback.print_exc()
         return f"No he podido consultar la semana: {e}"
+def calcular_semanas_del_mes(anio: int, mes: int) -> list:
+    """
+    Calcula todas las semanas laborales (lunes a viernes) de un mes.
+    
+    Args:
+        anio: Año (ej: 2026)
+        mes: Mes (1-12)
+    
+    Returns:
+        Lista de tuplas (lunes, viernes) para cada semana del mes.
+        Solo incluye semanas que tienen al menos un día laboral en el mes.
+    """
+    from datetime import datetime, timedelta
+    from web_automation import lunes_de_semana
+    
+    # Primer día del mes
+    primer_dia = datetime(anio, mes, 1)
+    
+    # Último día del mes
+    if mes == 12:
+        ultimo_dia = datetime(anio + 1, 1, 1) - timedelta(days=1)
+    else:
+        ultimo_dia = datetime(anio, mes + 1, 1) - timedelta(days=1)
+    
+    # Hoy (para no ir más allá de la semana actual)
+    hoy = datetime.now()
+    
+    semanas = []
+    
+    # Empezar desde el lunes de la semana que contiene el primer día del mes
+    lunes_actual = lunes_de_semana(primer_dia)
+    
+    while lunes_actual <= ultimo_dia:
+        viernes_actual = lunes_actual + timedelta(days=4)
+        
+        # Verificar que la semana tiene al menos un día dentro del mes
+        lunes_en_mes = lunes_actual.month == mes
+        viernes_en_mes = viernes_actual.month == mes
+        algun_dia_en_mes = lunes_en_mes or viernes_en_mes
+        
+        if algun_dia_en_mes:
+            # No ir más allá de la semana actual si es el mes actual
+            if lunes_actual <= hoy:
+                semanas.append((lunes_actual, viernes_actual))
+        
+        # Siguiente semana
+        lunes_actual += timedelta(days=7)
+    
+    return semanas
 
+
+def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
+    """
+    Consulta la información de todas las semanas de un mes.
+    
+    🆕 NUEVA FUNCIONALIDAD: Resumen mensual de horas imputadas.
+    
+    Args:
+        driver: WebDriver de Selenium
+        wait: WebDriverWait configurado
+        mes: Número del mes (1-12)
+        anio: Año (ej: 2026)
+        canal: Canal de origen ("webapp" o "slack")
+        
+    Returns:
+        str: Resumen formateado con las horas del mes por semana
+    """
+    from datetime import datetime
+    from web_automation import lunes_de_semana, seleccionar_fecha, leer_tabla_imputacion
+    
+    # Nombres de meses en español
+    MESES_NOMBRES = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+        5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+        9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    
+    nombre_mes = MESES_NOMBRES.get(mes, f"Mes {mes}")
+    hoy = datetime.now()
+    
+    print(f"[DEBUG] 📅 consultar_mes - {nombre_mes} {anio}")
+    
+    try:
+        # Calcular semanas del mes
+        semanas = calcular_semanas_del_mes(anio, mes)
+        
+        if not semanas:
+            return f"📅 {nombre_mes} {anio}\n\n⚪ No hay semanas disponibles para consultar."
+        
+        print(f"[DEBUG] 📊 Semanas a consultar: {len(semanas)}")
+        
+        # =====================================================
+        # RECOPILAR DATOS DE CADA SEMANA
+        # =====================================================
+        datos_semanas = []  # Lista de {lunes, viernes, total_horas, proyectos}
+        total_mes = 0
+        proyectos_mes = {}  # Acumulado de horas por proyecto en todo el mes
+        
+        for i, (lunes, viernes) in enumerate(semanas, 1):
+            print(f"[DEBUG] 📊 Consultando semana {i}/{len(semanas)}: {lunes.strftime('%d/%m')} - {viernes.strftime('%d/%m')}...")
+            
+            # Navegar al lunes de esta semana
+            seleccionar_fecha(driver, lunes)
+            time.sleep(1.5)  # Esperar carga
+            
+            # Leer tabla de imputación
+            proyectos = leer_tabla_imputacion(driver)
+            
+            # Calcular total de la semana
+            total_semana = 0
+            for proyecto in proyectos:
+                horas = proyecto['horas']
+                total_proyecto = (
+                    horas.get('lunes', 0) + 
+                    horas.get('martes', 0) + 
+                    horas.get('miércoles', 0) + 
+                    horas.get('jueves', 0) + 
+                    horas.get('viernes', 0)
+                )
+                
+                if total_proyecto > 0:
+                    total_semana += total_proyecto
+                    
+                    # Acumular en el total del mes por proyecto
+                    nombre_proyecto = proyecto['proyecto']
+                    if nombre_proyecto not in proyectos_mes:
+                        proyectos_mes[nombre_proyecto] = 0
+                    proyectos_mes[nombre_proyecto] += total_proyecto
+            
+            datos_semanas.append({
+                'lunes': lunes,
+                'viernes': viernes,
+                'total': total_semana
+            })
+            
+            total_mes += total_semana
+            print(f"[DEBUG]   ✅ Semana {i}: {total_semana}h")
+        
+        print(f"[DEBUG] 📊 Total mes: {total_mes}h")
+        
+        # =====================================================
+        # FORMATEAR RESULTADO
+        # =====================================================
+        
+        if canal == "webapp":
+            # ==================== FORMATO HTML ====================
+            resumen = f"<h3 style='margin: 0 0 10px 0;'>📅 {nombre_mes} {anio}</h3>\n"
+            
+            # Tabla de semanas
+            resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; margin-bottom: 15px;'>\n"
+            resumen += "<thead><tr style='background-color: #f0f0f0;'>"
+            resumen += "<th>Semana</th><th>Período</th><th>Horas</th>"
+            resumen += "</tr></thead>\n"
+            resumen += "<tbody>\n"
+            
+            for i, datos in enumerate(datos_semanas, 1):
+                lunes = datos['lunes']
+                viernes = datos['viernes']
+                total = datos['total']
+                
+                # Color según si tiene horas o no
+                if total == 0:
+                    color = '#f0f0f0'  # Gris - Sin horas
+                elif total < 40:
+                    color = '#fff8dc'  # Amarillo - Pocas horas
+                else:
+                    color = '#d4edda'  # Verde - Bien
+                
+                periodo = f"{lunes.strftime('%d/%m')} - {viernes.strftime('%d/%m')}"
+                resumen += f"<tr>"
+                resumen += f"<td style='text-align: center;'>Semana {i}</td>"
+                resumen += f"<td style='text-align: center;'>{periodo}</td>"
+                resumen += f"<td style='text-align: center; background-color: {color}; font-weight: bold;'>{total}h</td>"
+                resumen += f"</tr>\n"
+            
+            # Fila de total
+            resumen += f"<tr style='background-color: #e8f4f8; font-weight: bold;'>"
+            resumen += f"<td colspan='2' style='text-align: right;'>Total {nombre_mes}:</td>"
+            resumen += f"<td style='text-align: center;'>{total_mes}h</td>"
+            resumen += f"</tr>\n"
+            
+            resumen += "</tbody></table>\n"
+            
+            # Desglose por proyecto (si hay proyectos)
+            if proyectos_mes:
+                resumen += "<h4 style='margin: 15px 0 5px 0;'>📊 Desglose por proyecto:</h4>\n"
+                resumen += "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
+                resumen += "<thead><tr style='background-color: #f0f0f0;'>"
+                resumen += "<th>Proyecto</th><th>Horas</th><th>%</th>"
+                resumen += "</tr></thead>\n"
+                resumen += "<tbody>\n"
+                
+                # Ordenar por horas (mayor a menor)
+                proyectos_ordenados = sorted(proyectos_mes.items(), key=lambda x: x[1], reverse=True)
+                
+                for nombre_proyecto, horas_proyecto in proyectos_ordenados:
+                    if horas_proyecto > 0:
+                        nombre_formateado = formatear_proyecto_con_jerarquia(nombre_proyecto, "corto")
+                        porcentaje = round((horas_proyecto / total_mes) * 100, 1) if total_mes > 0 else 0
+                        
+                        resumen += f"<tr>"
+                        resumen += f"<td>{nombre_formateado}</td>"
+                        resumen += f"<td style='text-align: center;'>{horas_proyecto}h</td>"
+                        resumen += f"<td style='text-align: center;'>{porcentaje}%</td>"
+                        resumen += f"</tr>\n"
+                
+                resumen += "</tbody></table>\n"
+            
+            # Nota informativa
+            es_mes_actual = (mes == hoy.month and anio == hoy.year)
+            if es_mes_actual:
+                resumen += f"<p style='margin-top: 10px; font-size: 0.85em; color: #666;'>"
+                resumen += f"ℹ️ Datos hasta la semana actual ({hoy.strftime('%d/%m/%Y')})"
+                resumen += f"</p>\n"
+        
+        else:
+            # ==================== FORMATO TEXTO (Slack/WhatsApp) ====================
+            resumen = f"📅 **{nombre_mes} {anio}**\n\n"
+            
+            for i, datos in enumerate(datos_semanas, 1):
+                lunes = datos['lunes']
+                viernes = datos['viernes']
+                total = datos['total']
+                periodo = f"{lunes.strftime('%d/%m')} - {viernes.strftime('%d/%m')}"
+                resumen += f"📆 Semana {i} ({periodo}): {total}h\n"
+            
+            resumen += f"\n📊 **Total {nombre_mes}: {total_mes}h**\n"
+            
+            # Desglose por proyecto
+            if proyectos_mes:
+                resumen += f"\n📋 Desglose por proyecto:\n"
+                proyectos_ordenados = sorted(proyectos_mes.items(), key=lambda x: x[1], reverse=True)
+                
+                for nombre_proyecto, horas_proyecto in proyectos_ordenados[:5]:  # Top 5
+                    if horas_proyecto > 0:
+                        nombre_corto = nombre_proyecto.split(' - ')[-1]
+                        porcentaje = round((horas_proyecto / total_mes) * 100, 1) if total_mes > 0 else 0
+                        resumen += f"  • {nombre_corto}: {horas_proyecto}h ({porcentaje}%)\n"
+        
+        return resumen
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"No he podido consultar el mes: {e}"
 
 def mostrar_comandos():
     """

@@ -1,6 +1,8 @@
 """
 Lógica principal de imputación.
 Coordina el flujo completo: clasificar → interpretar → ejecutar → responder.
+
+🆕 MODIFICADO: Añadido soporte para consultas de mes
 """
 
 from datetime import datetime
@@ -14,7 +16,7 @@ from ai import (
     generar_resumen_natural
 )
 from core.ejecutor import ejecutar_lista_acciones
-from core.consultas import consultar_dia, consultar_semana
+from core.consultas import consultar_dia, consultar_semana, consultar_mes
 
 
 def procesar_mensaje(driver, wait, texto, contexto=None, user_id="local_user"):
@@ -64,8 +66,16 @@ def procesar_mensaje(driver, wait, texto, contexto=None, user_id="local_user"):
                     # Consulta de una semana completa
                     info_bruta = consultar_semana(driver, wait, fecha)
                     return generar_resumen_natural(info_bruta, texto)
+                
+                elif consulta_info.get("tipo") == "mes":
+                    # 🆕 Consulta de un mes completo
+                    mes = fecha.month
+                    anio = fecha.year
+                    info_bruta = consultar_mes(driver, wait, mes, anio)
+                    return generar_resumen_natural(info_bruta, texto)
+                    
                 else:
-                    return "No he entendido si preguntas por un día o una semana."
+                    return "No he entendido si preguntas por un día, semana o mes."
                     
             except Exception as e:
                 return f"No he podido consultar: {e}"
@@ -127,6 +137,7 @@ def mostrar_mensaje_bienvenida():
     print("  • 'Añade 2.5 horas en Dirección el lunes y emítelo'")
     print("  • 'Inicia la jornada'")
     print("  • 'Resumen de esta semana'")
+    print("  • 'Resumen de este mes'")
     print("  • 'Cuántas horas tengo hoy'")
     print("\nEscribe 'salir' cuando quieras terminar.\n")
     print("="*60 + "\n")
