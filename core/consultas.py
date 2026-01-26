@@ -682,9 +682,9 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
                 
                 for nombre_proyecto, horas_proyecto in proyectos_ordenados[:5]:  # Top 5
                     if horas_proyecto > 0:
-                        nombre_corto = nombre_proyecto.split(' - ')[-1]
+                        nombre_formateado = formatear_proyecto_con_jerarquia(nombre_proyecto, "corto")
                         porcentaje = round((horas_proyecto / total_mes) * 100, 1) if total_mes > 0 else 0
-                        resumen += f"  • {nombre_corto}: {horas_proyecto}h ({porcentaje}%)\n"
+                        resumen += f"  • {nombre_formateado}: {horas_proyecto}h ({porcentaje}%)\n"
         
         return resumen
     
