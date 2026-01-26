@@ -1,6 +1,8 @@
 """
 Ejecutor de acciones.
 Coordina la ejecución de comandos interpretados por la IA.
+
+🆕 MODIFICADO: Guarda path_completo_actual para mostrar jerarquía en respuestas
 """
 
 import time
@@ -67,7 +69,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
         try:
             nombre = orden["parametros"].get("nombre")
             nodo_padre = orden["parametros"].get("nodo_padre")
-            inferido_contexto = orden["parametros"].get("inferido_contexto", False)  # 🔥 NUEVO
+            inferido_contexto = orden["parametros"].get("inferido_contexto", False)
             
             # 🔥 Pasar flag al contexto para que proyecto_handler lo use
             contexto["inferido_contexto"] = inferido_contexto
@@ -105,6 +107,20 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 contexto["proyecto_actual"] = nombre
                 contexto["nodo_padre_actual"] = nodo_padre
                 
+                # 🆕 NUEVO: Obtener y guardar el path completo del proyecto para las respuestas
+                try:
+                    select_fila = fila.find_element(By.CSS_SELECTOR, "select[name*='subproyecto'], select[id*='subproyecto']")
+                    path_completo = driver.execute_script("""
+                        var select = arguments[0];
+                        var selectedOption = select.options[select.selectedIndex];
+                        return selectedOption ? selectedOption.text : '';
+                    """, select_fila)
+                    contexto["path_completo_actual"] = path_completo
+                    print(f"[DEBUG] 📁 Path completo guardado: {path_completo}")
+                except Exception as e:
+                    print(f"[DEBUG] ⚠️ No se pudo obtener path completo: {e}")
+                    contexto["path_completo_actual"] = None
+                
                 # 🔥 Guardar en lista de proyectos del comando actual
                 if "proyectos_comando_actual" in contexto:
                     fecha_actual = contexto.get("fecha_seleccionada")
@@ -127,6 +143,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 # ❌ Proyecto NO encontrado - DETENER ejecución
                 contexto["fila_actual"] = None
                 contexto["proyecto_actual"] = None
+                contexto["path_completo_actual"] = None
                 contexto["error_critico"] = True
                 return mensaje
                 
@@ -154,6 +171,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
             # 🆕 Limpiar el contexto después de eliminar
             contexto["fila_actual"] = None
             contexto["proyecto_actual"] = None
+            contexto["path_completo_actual"] = None
             
             # El flujo normal incluye guardar_linea después de eliminar_linea
             return resultado
@@ -291,7 +309,8 @@ def ejecutar_accion(driver, wait, orden, contexto):
             return mensaje
         except Exception as e:
             return f"❌ Error al copiar la semana anterior: {e}"
-        # 📊 Leer tabla y preguntar qué proyecto modificar
+    
+    # 📊 Leer tabla y preguntar qué proyecto modificar
     elif accion == "leer_tabla_y_preguntar":
         try:
             from web_automation import leer_tabla_imputacion
@@ -321,13 +340,16 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 tabla = []
             
             # 3. Filtrar proyectos del día especificado
+            from utils.proyecto_utils import formatear_proyecto_con_jerarquia
             proyectos_del_dia = []
             for proyecto_info in tabla:
-                nombre_corto = proyecto_info['proyecto'].split(' - ')[-1]
+                # 🆕 Usar formateo con jerarquía
+                nombre_formateado = formatear_proyecto_con_jerarquia(proyecto_info['proyecto'], "corto")
                 horas_dia = proyecto_info['horas'].get(dia_nombre, 0)
                 
                 proyectos_del_dia.append({
-                    "nombre": nombre_corto,
+                    "nombre": nombre_formateado,
+                    "nombre_corto": proyecto_info['proyecto'].split(' - ')[-1],
                     "path_completo": proyecto_info['proyecto'],
                     "horas": horas_dia,
                     "dia": dia_nombre
@@ -372,6 +394,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
             
         except Exception as e:
             return f"❌ Error al leer la tabla: {e}"
+    
     # ❓ Desconocido
     else:
         return "No he entendido esa instrucción"
@@ -391,7 +414,7 @@ def ejecutar_lista_acciones(driver, wait, ordenes, contexto=None):
         list: Lista de mensajes de respuesta de cada acción
     """
     if contexto is None:
-        contexto = {"fila_actual": None, "proyecto_actual": None, "error_critico": False}
+        contexto = {"fila_actual": None, "proyecto_actual": None, "error_critico": False, "path_completo_actual": None}
     
     respuestas = []
     

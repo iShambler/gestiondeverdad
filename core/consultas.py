@@ -1,10 +1,13 @@
 """
 Funciones de consulta de información sobre horas imputadas.
 Incluye consultas de días y semanas específicas.
+
+🆕 MODIFICADO: Ahora muestra departamento y cliente en los resúmenes
 """
 
 import time
 from datetime import timedelta
+from utils.proyecto_utils import formatear_proyecto_con_jerarquia
 
 
 def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
@@ -56,12 +59,13 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
         proyectos_con_horas = []
         
         for proyecto in proyectos:
-            nombre_corto = proyecto['proyecto'].split(' - ')[-1]  # Solo la última parte
+            # 🆕 CAMBIO: Usar formateo con jerarquía en vez de solo nombre corto
+            nombre_formateado = formatear_proyecto_con_jerarquia(proyecto['proyecto'], "corto")
             horas_dia = proyecto['horas'][dia_nombre]
             
             # 🆕 CONDICIÓN: Solo mostrar proyectos con horas > 0
             if horas_dia > 0:
-                proyectos_con_horas.append((nombre_corto, horas_dia))
+                proyectos_con_horas.append((nombre_formateado, horas_dia))
                 total_dia += horas_dia
         
         if not proyectos_con_horas:
@@ -89,7 +93,7 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
             resumen += f"<tr style='background-color: {color_fondo}; font-weight: bold;'><td>Total</td><td style='text-align: center;'>{total_dia}h</td></tr>\n"
             resumen += "</tbody></table>\n"
         else:
-            # 💬 Formato texto para Slack
+            # 💬 Formato texto para Slack/WhatsApp
             for nombre, horas in proyectos_con_horas:
                 resumen += f"🔹 {nombre}: {horas}h\n"
             
@@ -260,7 +264,8 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
             resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n"
             
         for proyecto in proyectos:
-            nombre_corto = proyecto['proyecto'].split(' - ')[-1]  # Solo la última parte
+            # 🆕 CAMBIO: Usar formateo con jerarquía en vez de solo nombre corto
+            nombre_formateado = formatear_proyecto_con_jerarquia(proyecto['proyecto'], "corto")
             horas = proyecto['horas']
             
             # 🆕 Calcular el total del proyecto sumando solo L-V (no confiar en proyecto['total'])
@@ -279,7 +284,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
             # 🌐 Mostrar proyecto según canal
             if canal == "webapp":
                 # Tabla HTML - NO colorear celdas individuales de proyectos
-                resumen += f"<tr><td>{nombre_corto}</td><td style='text-align: center; font-weight: bold;'>{total_proyecto}h</td>"
+                resumen += f"<tr><td>{nombre_formateado}</td><td style='text-align: center; font-weight: bold;'>{total_proyecto}h</td>"
                 
                 # Mostrar valores SIN color en las celdas de proyectos individuales
                 for dia_key in ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']:
@@ -294,7 +299,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                 
                 resumen += "</tr>\n"
             else:
-                # Formato texto para Slack - SOLO DÍAS CON HORAS > 0
+                # Formato texto para Slack/WhatsApp - SOLO DÍAS CON HORAS > 0
                 dias_con_horas = []
                 if horas['lunes'] > 0:
                     dias_con_horas.append(f"L:{horas['lunes']}")
@@ -309,7 +314,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                 
                 if dias_con_horas:
                     dias_str = ", ".join(dias_con_horas)
-                    resumen += f"🔹 {nombre_corto}: {total_proyecto}h ({dias_str})\n"
+                    resumen += f"🔹 {nombre_formateado}: {total_proyecto}h ({dias_str})\n"
         
         if total_semana == 0:
             return f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n⚪ No hay horas imputadas en esta semana"

@@ -1,10 +1,13 @@
 """
 Generador de respuestas naturales usando GPT.
 Incluye conversación general y confirmación de acciones ejecutadas.
+
+🆕 MODIFICADO: Ahora incluye departamento y cliente en las respuestas
 """
 
 from datetime import datetime
 from config import settings
+from utils.proyecto_utils import parsear_path_proyecto
 
 
 # 🆕 Historial conversacional POR USUARIO (antes era global)
@@ -50,14 +53,28 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
     # Crear resumen de acciones
     resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_con_fecha])
     
-    # 🆕 Si hay nodo_padre en el contexto (Y NO es __buscar__), añadirlo a la información
+    # 🆕 MEJORADO: Extraer información de jerarquía completa del proyecto
     info_adicional = ""
-    if contexto and contexto.get("nodo_padre_actual"):
-        nodo_padre = contexto.get("nodo_padre_actual")
-        # 🚫 Ignorar si es la señal interna __buscar__
-        if nodo_padre != "__buscar__":
+    if contexto:
+        # Intentar obtener path completo primero (más información)
+        path_completo = contexto.get("path_completo_actual")
+        if path_completo:
+            info = parsear_path_proyecto(path_completo)
+            partes_jerarquia = []
+            if info["departamento"]:
+                partes_jerarquia.append(f"departamento '{info['departamento']}'")
+            if info["cliente"]:
+                partes_jerarquia.append(f"cliente '{info['cliente']}'")
+            
+            if partes_jerarquia:
+                jerarquia_texto = " del ".join(partes_jerarquia)
+                info_adicional = f"\n\n⚠️ IMPORTANTE - JERARQUÍA DEL PROYECTO:\nEl proyecto '{info['nombre']}' pertenece al {jerarquia_texto}.\n🚨 SIEMPRE incluye el departamento y cliente en tu respuesta. Ejemplo: 'He imputado X horas en {info['nombre']} del {info['departamento'] or 'departamento'}" + (f" ({info['cliente']})" if info['cliente'] else "") + "'"
+        
+        # Fallback al método anterior si no hay path_completo
+        elif contexto.get("nodo_padre_actual") and contexto.get("nodo_padre_actual") != "__buscar__":
+            nodo_padre = contexto.get("nodo_padre_actual")
             proyecto = contexto.get("proyecto_actual", "proyecto")
-            info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. Puedes mencionar esto en tu respuesta."
+            info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. SIEMPRE menciona el departamento en tu respuesta."
     
     prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
 
@@ -77,6 +94,7 @@ Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando
 - Usa formato de fecha legible (ej: "el 12/01" o "el lunes 12/01").
 - Si no estás seguro de una fecha, NO la menciones, di solo "el lunes/martes/etc."
 - Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.
+- 🚨 SIEMPRE incluye el departamento/área del proyecto en la respuesta si está disponible en la información.
 - 🚨 RESPETA LA OPERACIÓN EXACTA: Si la acción dice "restado" o "quitado", usa ESE verbo. Si dice "sumado" o "añadido", usa ESE verbo. NO los confundas.
   Ejemplos CORRECTOS:
   - Acción: "Restado 2 horas" → Respuesta: "He restado/quitado 2 horas" ✅
@@ -86,12 +104,11 @@ Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando
   - Acción: "Restado 2 horas" → Respuesta: "He añadido 2 horas" ❌ (confunde restar con añadir)
   - Acción: "Sumado 3 horas" → Respuesta: "He quitado 3 horas" ❌ (confunde sumar con quitar)
 
-Ejemplos de buen estilo completo:
-- "¡Listo! He imputado 8 horas en Desarrollo para hoy y lo he guardado todo."
-- "Perfecto, he puesto 3h en Boda para el 17/12 y 2h en Formación para el 19/12. ¡Guardado! ✅"
-- "¡Hecho! He restado 4 horas del proyecto Estudio el lunes 12/01, dejando un total de 7 horas."
-- "Perfecto, he quitado 2 horas de Desarrollo el viernes 16/01. ✅"
-- Si la acción dice "(fecha: 12/01/2026)" y "el lunes", di: "el lunes 12/01" o "el lunes 12 de enero"
+Ejemplos de buen estilo completo (CON JERARQUÍA):
+- "¡Listo! He imputado 8 horas en Desarrollo del Dpto. Comercial (Arelance) para hoy y lo he guardado todo."
+- "Perfecto, he puesto 3h en Estudio del Departamento IDI para el 17/12. ¡Guardado! ✅"
+- "¡Hecho! He restado 4 horas del proyecto Formación (Staff) el lunes 12/01, dejando un total de 7 horas."
+- "Perfecto, he quitado 2 horas de Eventos del Dpto. Marketing el viernes 16/01. ✅"
 
 Respuesta:"""
     
@@ -100,7 +117,7 @@ Respuesta:"""
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL_MINI,
             messages=[
-                {"role": "system", "content": "Eres un asistente virtual amigable y profesional que confirma tareas completadas de forma natural."},
+                {"role": "system", "content": "Eres un asistente virtual amigable y profesional que confirma tareas completadas de forma natural. SIEMPRE incluyes el departamento/área del proyecto en tus respuestas."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
