@@ -18,14 +18,14 @@ if __name__ == "__main__":
         # Las demás esperarán en cola (FastAPI las gestiona eficientemente)
         limit_concurrency=500,
         
-        # 📊 Sin límite de peticiones (para alto tráfico)
+        #  Sin límite de peticiones (para alto tráfico)
         limit_max_requests=None,
         
         # ⏱️ Timeouts generosos para operaciones de scraping
         timeout_keep_alive=300,  # 5 minutos para mantener conexiones vivas
         timeout_graceful_shutdown=30,  # 30 segundos para shutdown ordenado
         
-        # 📝 Logs detallados
+        #  Logs detallados
         log_level="info",
         access_log=True,  # Ver todas las peticiones
         

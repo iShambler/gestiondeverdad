@@ -44,7 +44,7 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
             print(f"[DEBUG]  Error volviendo a inicio: {e}")
         
         fecha_hoy = datetime.now()
-        print(f"[DEBUG] 📅 Seleccionando fecha: {fecha_hoy.strftime('%d/%m/%Y')}")
+        print(f"[DEBUG]  Seleccionando fecha: {fecha_hoy.strftime('%d/%m/%Y')}")
         
         try:
             mensaje = seleccionar_fecha(driver, fecha_hoy)
@@ -53,7 +53,7 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
         except Exception as e:
             print(f"[DEBUG]  Error seleccionando fecha: {e}")
         
-        # 🆕 PASO 2: Crear nueva línea para abrir el buscador
+        #  PASO 2: Crear nueva línea para abrir el buscador
         try:
             btn_nueva_linea = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BTN_NUEVA_LINEA)))
             btn_nueva_linea.click()
@@ -91,12 +91,12 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
         print("[DEBUG] 🌳 Expandiendo árbol completo...")
         time.sleep(2)
         
-        # 📊 PASO 5: Buscar todos los nodos con JERARQUÍA COMPLETA
+        #  PASO 5: Buscar todos los nodos con JERARQUÍA COMPLETA
         proyectos_por_nodo = {}
         
         nodos_padre = driver.find_elements(By.XPATH, "//li[contains(@class, 'jstree')]//li[@rel='subproyectos']/parent::ul/parent::li")
         
-        print(f"[DEBUG] 📊 Encontrados {len(nodos_padre)} nodos padre")
+        print(f"[DEBUG]  Encontrados {len(nodos_padre)} nodos padre")
         
         if len(nodos_padre) == 0:
             print(f"[DEBUG]  No se encontraron nodos padre en el árbol")
@@ -110,7 +110,7 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
                 link_nodo = nodo.find_element(By.XPATH, "./a")
                 nombre_nodo = link_nodo.text.strip()
                 
-                print(f"[DEBUG]   📝 Nombre nodo: '{nombre_nodo}'")
+                print(f"[DEBUG]    Nombre nodo: '{nombre_nodo}'")
                 
                 if not nombre_nodo:
                     print(f"[DEBUG]    Nodo vacío, saltando...")
@@ -135,7 +135,7 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
                         link_padre = nodo_padre_superior.find_element(By.XPATH, "./a")
                         nombre_padre = link_padre.text.strip()
                         
-                        print(f"[DEBUG]   📂 Padre encontrado: '{nombre_padre}'")
+                        print(f"[DEBUG]    Padre encontrado: '{nombre_padre}'")
                         
                         if nombre_padre and nombre_padre not in ruta_completa:
                             ruta_completa.insert(0, nombre_padre)
@@ -190,9 +190,9 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
                 traceback.print_exc()
                 continue
         
-        # 🧹 PASO 6: Cerrar el overlay
+        #  PASO 6: Cerrar el overlay
         try:
-            print("[DEBUG] 🧹 Cerrando buscador...")
+            print("[DEBUG]  Cerrando buscador...")
             driver.execute_script("""
                 document.getElementById('textoBusqueda').value='Introduzca proyecto/tipologia';
                 document.getElementById('textoBusqueda').style.color='gray';
@@ -240,7 +240,7 @@ def listar_todos_proyectos(driver, wait, filtro_nodo=None):
             print(f"[DEBUG]  Error eliminando línea: {e}")
         
         print(f"[DEBUG]  Listado completo: {len(proyectos_por_nodo)} nodos padre con proyectos")
-        print(f"[DEBUG] 📊 Total proyectos encontrados: {sum(len(p) for p in proyectos_por_nodo.values())}")
+        print(f"[DEBUG]  Total proyectos encontrados: {sum(len(p) for p in proyectos_por_nodo.values())}")
         
         if len(proyectos_por_nodo) == 0:
             print(f"[DEBUG]  DICT VACÍO - No se agregaron proyectos al diccionario")

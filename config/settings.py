@@ -20,7 +20,7 @@ class Settings:
     INTRA_PASS = os.getenv("INTRA_PASS")
     
     # ========================================
-    # 🤖 OPENAI
+    #  OPENAI
     # ========================================
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     OPENAI_MODEL_MAIN = "gpt-4o"

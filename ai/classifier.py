@@ -28,7 +28,7 @@ def clasificar_mensaje(texto):
     
     texto_lower = texto.lower().strip()
     
-    # 🆕 OPTIMIZACIÓN: Casos ultra-obvios sin GPT (opcional, pero ahorra latencia)
+    #  OPTIMIZACIÓN: Casos ultra-obvios sin GPT (opcional, pero ahorra latencia)
     # Solo los casos 100% seguros que no tienen ambigüedad
     if texto_lower in ["ayuda", "help", "comandos"]:
         print(f"[DEBUG]  Clasificación rápida: ayuda")
@@ -133,7 +133,7 @@ Respuesta:"""
             print(f"[DEBUG] GPT devolvió clasificación inválida: '{clasificacion}', usando 'conversacion' por defecto")
             clasificacion = "conversacion"
         
-        print(f"[DEBUG] 🧠 GPT clasificó '{texto[:50]}...' como: {clasificacion}")
+        print(f"[DEBUG]  GPT clasificó '{texto[:50]}...' como: {clasificacion}")
         return clasificacion
 
     except Exception as e:

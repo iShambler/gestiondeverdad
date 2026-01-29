@@ -67,7 +67,7 @@ def buscar_proyectos_duplicados(driver, wait, nombre_proyecto):
         )
         
         elementos = driver.find_elements(By.XPATH, xpath)
-        print(f"[DEBUG] 📊 Encontradas {len(elementos)} coincidencias")
+        print(f"[DEBUG]  Encontradas {len(elementos)} coincidencias")
         
         if not elementos:
             return []
@@ -79,11 +79,11 @@ def buscar_proyectos_duplicados(driver, wait, nombre_proyecto):
                 # Obtener el nombre del proyecto
                 nombre_elem = elemento.text.strip()
                 
-                # 🔥 FILTRO: Verificar que sea un proyecto FINAL (nodo hoja con rel='subproyectos')
+                #  FILTRO: Verificar que sea un proyecto FINAL (nodo hoja con rel='subproyectos')
                 # Los nodos intermedios (departamentos, áreas) NO deberían estar en la lista
                 li_proyecto = elemento.find_element(By.XPATH, "./ancestor::li[@rel='subproyectos'][1]")
                 
-                # 🔥 VERIFICACIÓN ADICIONAL: Comprobar que NO tenga hijos con rel='subproyectos'
+                #  VERIFICACIÓN ADICIONAL: Comprobar que NO tenga hijos con rel='subproyectos'
                 # Si tiene hijos, es un nodo intermedio (departamento), no un proyecto final
                 try:
                     hijos_subproyectos = li_proyecto.find_elements(By.XPATH, ".//li[@rel='subproyectos']")
@@ -203,7 +203,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     if len(coincidencias) == 0:
         return f" No he encontrado ningún proyecto llamado '{nombre_proyecto}'"
     
-    # 🆕 Caso especial: 1 coincidencia (proyecto existente) → preguntar si quiere usarlo
+    #  Caso especial: 1 coincidencia (proyecto existente) → preguntar si quiere usarlo
     if len(coincidencias) == 1:
         coin = coincidencias[0]
         horas = coin.get('total_horas', 0)
@@ -215,13 +215,13 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
             emoji = "🗑️"
         elif tipo_accion in ["borrar_horas", "borrar"]:
             pregunta = "¿Quieres borrar las horas de este proyecto?"
-            emoji = "🧹"
+            emoji = ""
         elif tipo_accion == "restar_horas":
             pregunta = "¿Quieres restar horas a este proyecto?"
             emoji = "➖"
         elif tipo_accion == "establecer_horas":
             pregunta = "¿Quieres establecer las horas de este proyecto?"
-            emoji = "📝"
+            emoji = ""
         else:  # imputar o modificar (sumar)
             pregunta = "¿Quieres añadir horas a este proyecto?"
             emoji = "⏱️"
@@ -253,13 +253,13 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
         emoji = "🗑️"
     elif tipo_accion == "borrar_horas":
         pregunta_accion = "¿De cuál quieres borrar las horas?"
-        emoji = "🧹"
+        emoji = ""
     elif tipo_accion == "restar_horas":
         pregunta_accion = "¿A cuál quieres restar horas?"
         emoji = "➖"
     elif tipo_accion == "establecer_horas":
         pregunta_accion = "¿En cuál quieres establecer las horas?"
-        emoji = "📝"
+        emoji = ""
     else:  # imputar o modificar (sumar)
         pregunta_accion = "¿En cuál quieres añadir horas?" if son_existentes else "¿En cuál quieres imputar?"
         emoji = "💬"

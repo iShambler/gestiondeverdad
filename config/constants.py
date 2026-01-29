@@ -8,7 +8,7 @@ class Constants:
     """Constantes del negocio y mapeos"""
     
     # ========================================
-    # 📅 MAPEO DE DÍAS
+    #  MAPEO DE DÍAS
     # ========================================
     DIAS_KEYS = {
         "lunes": "h1",
@@ -41,7 +41,7 @@ class Constants:
     }
     
     # ========================================
-    # 📆 MESES
+    #  MESES
     # ========================================
     MESES_ESPANOL = {
         "enero": 1,
@@ -59,7 +59,7 @@ class Constants:
     }
     
     # ========================================
-    # 🤖 CLASIFICACIÓN DE MENSAJES
+    #  CLASIFICACIÓN DE MENSAJES
     # ========================================
     TIPO_COMANDO = "comando"
     TIPO_CONSULTA = "consulta"
@@ -68,7 +68,7 @@ class Constants:
     TIPO_LISTAR_PROYECTOS = "listar_proyectos"
     
     # ========================================
-    # 📊 ESTADOS Y MODOS
+    #  ESTADOS Y MODOS
     # ========================================
     MODO_SUMAR = "sumar"
     MODO_ESTABLECER = "establecer"

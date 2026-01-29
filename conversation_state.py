@@ -36,7 +36,7 @@ class ConversationStateManager:
         
         estado = self.estados[user_id]
         
-        # 🆕 Usar .get() para evitar KeyError si no hay timestamp
+        #  Usar .get() para evitar KeyError si no hay timestamp
         timestamp = estado.get("timestamp")
         if not timestamp:
             # Si no hay timestamp, el estado es inválido, limpiar
@@ -71,8 +71,8 @@ class ConversationStateManager:
             "coincidencias": coincidencias,
             "comando_original": comando_original,
             "indice_orden": indice_orden,
-            "respuestas_acumuladas": respuestas_acumuladas or [],  # 🆕 Guardar respuestas previas
-            "texto_original": texto_original,  # 🆕 Guardar texto original completo
+            "respuestas_acumuladas": respuestas_acumuladas or [],  #  Guardar respuestas previas
+            "texto_original": texto_original,  #  Guardar texto original completo
             "timestamp": datetime.now()
         }
         
@@ -154,7 +154,7 @@ class ConversationStateManager:
         self.estados[user_id]["ultimo_proyecto"] = {
             "nombre": nombre_proyecto,
             "nodo_padre": nodo_padre,
-            "dia": dia,  # 🆕 NUEVO
+            "dia": dia,  #  NUEVO
             "timestamp": datetime.now()
         }
         
@@ -179,7 +179,7 @@ class ConversationStateManager:
         if not ultimo:
             return None
         
-        # 🆕 Verificar que tenga timestamp antes de comparar
+        #  Verificar que tenga timestamp antes de comparar
         timestamp = ultimo.get("timestamp")
         if not timestamp:
             print(f"[CONVERSACION]  Último proyecto sin timestamp para {user_id}")
@@ -200,7 +200,7 @@ class ConversationStateManager:
             user_id: ID del usuario
         """
         if user_id in self.estados:
-            print(f"[CONVERSACION] 🧹 Limpiando estado de usuario: {user_id}")
+            print(f"[CONVERSACION]  Limpiando estado de usuario: {user_id}")
             del self.estados[user_id]
     
     def limpiar_expirados(self):
@@ -214,7 +214,7 @@ class ConversationStateManager:
         ]
         
         for user_id in usuarios_expirados:
-            print(f"[CONVERSACION] 🧹 Limpiando estado expirado: {user_id}")
+            print(f"[CONVERSACION]  Limpiando estado expirado: {user_id}")
             del self.estados[user_id]
     
     def get_stats(self):

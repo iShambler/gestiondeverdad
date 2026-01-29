@@ -51,16 +51,16 @@ def validar_ordenes(ordenes, texto, contexto=None):
 
     print(f"[DEBUG]  Validación - proyecto:{tiene_proyecto} imputacion:{tiene_imputacion} eliminacion:{tiene_eliminacion} borrado:{tiene_borrado_horas} copiar:{tiene_copiar_semana}")
 
-    # 🔥 Si hay eliminación, borrado de horas o copiar semana → NO VALIDAR (son acciones válidas sin imputación)
+    #  Si hay eliminación, borrado de horas o copiar semana → NO VALIDAR (son acciones válidas sin imputación)
     if tiene_eliminacion or tiene_borrado_horas or tiene_copiar_semana:
         print(f"[DEBUG]  Acción especial detectada, omitiendo validación")
         return None
 
     # ----------------------------------------------------------------------
-    # 🧩 2. Proyecto sin imputación → Falta horas y día
+    #  2. Proyecto sin imputación → Falta horas y día
     # ----------------------------------------------------------------------
     if tiene_proyecto and not tiene_imputacion:
-        print(f"[DEBUG] 📝 Detectado: proyecto SIN imputación - preguntando horas")
+        print(f"[DEBUG]  Detectado: proyecto SIN imputación - preguntando horas")
         for orden in ordenes:
             if orden.get("accion") == "seleccionar_proyecto":
                 nombre_proyecto = orden.get("parametros", {}).get("nombre")
@@ -69,27 +69,27 @@ def validar_ordenes(ordenes, texto, contexto=None):
             nombre_proyecto = None
 
         if nombre_proyecto:
-            print(f"[DEBUG] 📝 Proyecto encontrado: {nombre_proyecto}")
+            print(f"[DEBUG]  Proyecto encontrado: {nombre_proyecto}")
             return [{
                 "accion": "info_incompleta",
                 "info_parcial": {"proyecto": nombre_proyecto},
                 "que_falta": "horas_y_dia",
                 "mensaje": (
-                    f"📝 Vale, **{nombre_proyecto}**. ¿Cuántas horas y para qué día?\n\n"
+                    f" Vale, **{nombre_proyecto}**. ¿Cuántas horas y para qué día?\n\n"
                     " Ejemplos:\n- \"Pon 8 horas hoy\"\n- \"5 horas el lunes\"\n- \"Toda la semana\""
                 )
             }]
 
         return [{
             "accion": "error_validacion",
-            "mensaje": "📝 ¿Cuántas horas quieres imputar y para qué día?"
+            "mensaje": " ¿Cuántas horas quieres imputar y para qué día?"
         }]
 
     # ----------------------------------------------------------------------
-    # 🧩 3. Imputación sin proyecto → FLUJO DE LECTURA PREVIA
+    #  3. Imputación sin proyecto → FLUJO DE LECTURA PREVIA
     # ----------------------------------------------------------------------
     if tiene_imputacion and not tiene_proyecto:
-        print(f"[DEBUG] 🧩 Detectado: imputación SIN proyecto - requiere lectura previa")
+        print(f"[DEBUG]  Detectado: imputación SIN proyecto - requiere lectura previa")
 
         # Extraer información de la imputación
         horas_a_modificar = 0
@@ -109,7 +109,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
                     "mensaje": "🤔 ¿A qué proyecto quieres imputar toda la semana?"
                 }]
 
-        # 🆕 Convertir fecha ISO a nombre de día
+        #  Convertir fecha ISO a nombre de día
         dia_nombre = None
         if dia_objetivo:
             try:
@@ -130,7 +130,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
         else:
             dia_nombre = "lunes"
 
-        # 🆕 DEVOLVER ACCIÓN ESPECIAL: leer_tabla_y_preguntar
+        #  DEVOLVER ACCIÓN ESPECIAL: leer_tabla_y_preguntar
         # Esta acción le dirá al ejecutor que lea la tabla y pregunte al usuario
         return [{
             "accion": "leer_tabla_y_preguntar",
@@ -143,7 +143,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
         }]
 
     # ----------------------------------------------------------------------
-    # 🚫 4. Comandos realmente vacíos (solo seleccionar_fecha sin más acciones)
+    #  4. Comandos realmente vacíos (solo seleccionar_fecha sin más acciones)
     # ----------------------------------------------------------------------
     #  PERMITIR: emitir_linea / guardar_linea (con o sin seleccionar_fecha)
     #  RECHAZAR: solo seleccionar_fecha sin ninguna acción después
@@ -169,16 +169,16 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
     hoy = datetime.now().strftime("%Y-%m-%d")
     dia_semana = datetime.now().strftime("%A")
 
-    # 🆕 Pasar tabla al contexto para que validar_ordenes pueda usarla
+    #  Pasar tabla al contexto para que validar_ordenes pueda usarla
     if contexto is None:
         contexto = {}
     if tabla_actual:
         contexto["tabla_actual"] = tabla_actual
 
-    # 🆕 Añadir información de la tabla actual si está disponible
+    #  Añadir información de la tabla actual si está disponible
     info_tabla = ""
     if tabla_actual and len(tabla_actual) > 0:
-        info_tabla = "\n\n📊 ESTADO ACTUAL DE LA TABLA DE IMPUTACIÓN:\n"
+        info_tabla = "\n\n ESTADO ACTUAL DE LA TABLA DE IMPUTACIÓN:\n"
         for proyecto_info in tabla_actual:
             nombre_proyecto = proyecto_info['proyecto'].split(' - ')[-1]  # Solo último nombre
             horas = proyecto_info['horas']
@@ -198,7 +198,7 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
         info_tabla += "  - Sumar o restar basándote en datos existentes\n"
         info_tabla += "  - Distribuir horas proporcionalmente\n"
 
-    # 🆕 HISTORIAL DE CONVERSACIÓN
+    #  HISTORIAL DE CONVERSACIÓN
     info_historial = ""
     if historial and len(historial) > 0:
         info_historial = "\n\n💬 HISTORIAL DE CONVERSACIÓN (últimos mensajes):\n"
@@ -231,7 +231,7 @@ Hoy es {hoy} ({dia_semana}).
 ====================================================
 REGLAS GENERALES
 ====================================================
-🚨 REGLA CRÍTICA - "LA SEMANA PASADA":
+ REGLA CRÍTICA - "LA SEMANA PASADA":
 Antes de continuar, IMPORTANTE distinguir:
 - "COPIA/DUPLICA/REPITE la semana pasada" → copiar_semana_anterior (trae datos a semana actual)
 - "EMITE/GUARDA/BORRA la semana pasada" → seleccionar_fecha(lunes_sem_pasada) + acción (trabaja EN semana pasada)
@@ -254,7 +254,7 @@ Ejemplos:
 2. Fechas:
    - "hoy" = {hoy}. Sin fecha → usar {hoy}
    - "ayer" = hoy -1; "mañana" = hoy +1
-   - 🚨 REGLA CRÍTICA: SIEMPRE usar la FECHA EXACTA del día mencionado, NUNCA el lunes de esa semana
+   -  REGLA CRÍTICA: SIEMPRE usar la FECHA EXACTA del día mencionado, NUNCA el lunes de esa semana
      - Si dice "el jueves de la semana pasada" → calcular la fecha del JUEVES de la semana pasada
      - Si dice "el martes" → calcular la fecha del MARTES de esta semana
      - NUNCA sustituir por el lunes, SIEMPRE el día específico mencionado
@@ -265,8 +265,8 @@ Ejemplos:
      - "el martes de la próxima semana" → martes de la SEMANA SIGUIENTE (calcular fecha exacta)
    - "la semana pasada" sin día específico → lunes de la semana anterior
    - "próxima semana" sin día específico → lunes de la semana siguiente
-   - 🚨 TANTO seleccionar_fecha COMO imputar_horas_dia deben usar LA MISMA FECHA EXACTA del día mencionado
-   - 🚨 CRÍTICO: Si el usuario NO menciona un día específico, SIEMPRE usar {hoy}
+   -  TANTO seleccionar_fecha COMO imputar_horas_dia deben usar LA MISMA FECHA EXACTA del día mencionado
+   -  CRÍTICO: Si el usuario NO menciona un día específico, SIEMPRE usar {hoy}
 
 3. Proyectos múltiples del MISMO día → INTERCALAR sin guardar_linea entre ellos:
    "3h en X y 2h en Y" (mismo día) → seleccionar_fecha → seleccionar_proyecto(X) → imputar(3) → seleccionar_proyecto(Y) → imputar(2) → guardar_linea (UNA VEZ AL FINAL)
@@ -274,7 +274,7 @@ Ejemplos:
 4. Múltiples días de la MISMA SEMANA con DIFERENTES proyectos → NO guardar entre días, solo al FINAL:
    Ejemplo: "3h en X el lunes, 5h en Y el miércoles" (ambos semana 16-20 dic) → fecha(lunes) → proyecto(X) → imputar(3) → fecha(miércoles) → proyecto(Y) → imputar(5) → guardar_linea (UNA VEZ AL FINAL)
 
-5. 🚨 CRÍTICO - MISMO proyecto en MÚLTIPLES días de la MISMA SEMANA:
+5.  CRÍTICO - MISMO proyecto en MÚLTIPLES días de la MISMA SEMANA:
    - seleccionar_proyecto UNA SOLA VEZ al inicio
    - Luego múltiples imputar_horas_dia (uno por cada día)
    - NO repetir seleccionar_proyecto entre días del mismo proyecto
@@ -313,19 +313,19 @@ TIPOS DE ACCIONES
    - imputar_horas_dia: Para UN día específico. Requiere día y horas.
      Modo: "sumar" (default) o "establecer" (si dice "totales", "cambia a", "exactamente")
 
-     🚨 QUITAR / RESTAR / SUMAR:
+      QUITAR / RESTAR / SUMAR:
      - "quita 2h" o "resta 2h" → horas: -2 (NEGATIVO), modo: "sumar"
      - "suma 3h" o "añade 3h" → horas: 3 (POSITIVO), modo: "sumar"
      - "pon 5h" o "establece 5h" → horas: 5, modo: "establecer"
 
-     🚨 CRÍTICO - DÍA OBLIGATORIO:
+      CRÍTICO - DÍA OBLIGATORIO:
      - SIEMPRE incluir el parámetro "dia" en imputar_horas_dia
      - Si el usuario NO menciona un día → usar {hoy}
      - Ejemplos:
        * "quita 2h" → {{"dia": "{hoy}", "horas": -2}}
        * "suma 3h el viernes" → {{"dia": "2026-01-17", "horas": 3}}
 
-     🚫 REGLA CRÍTICA - NO ADIVINAR PROYECTOS:
+      REGLA CRÍTICA - NO ADIVINAR PROYECTOS:
      Si el usuario dice "quita/suma/establece X horas" SIN mencionar explícitamente el proyecto,
      NO incluyas 'seleccionar_proyecto'. El sistema preguntará automáticamente.
 
@@ -346,9 +346,9 @@ TIPOS DE ACCIONES
       Si hay duda: si el proyecto NO está en el texto del usuario, NO lo incluyas.
 
    - imputar_horas_semana: Para TODA LA SEMANA (L-V). NO requiere parámetros.
-     🚨 CRÍTICO: SIEMPRE debe ir precedida de seleccionar_fecha con el LUNES de la semana
-     🚨 Si el usuario NO especifica semana → calcular el lunes de la semana ACTUAL
-     🚨 OBLIGATORIO usar cuando el usuario diga:
+      CRÍTICO: SIEMPRE debe ir precedida de seleccionar_fecha con el LUNES de la semana
+      Si el usuario NO especifica semana → calcular el lunes de la semana ACTUAL
+      OBLIGATORIO usar cuando el usuario diga:
         - "toda la semana", "la semana entera", "semana completa"
         - "de lunes a viernes", "todos los días"
         - "imputa la semana", "rellena la semana"
@@ -376,7 +376,7 @@ TIPOS DE ACCIONES
    - Resto → guardar_linea
 
 5) COPIAR SEMANA ANTERIOR vs TRABAJAR EN SEMANA PASADA:
-   🚨 IMPORTANTE: "la semana pasada" tiene dos interpretaciones según el verbo:
+    IMPORTANTE: "la semana pasada" tiene dos interpretaciones según el verbo:
    
    A) COPIAR (traer datos a semana actual):
       - "copia la semana pasada", "igual que la semana pasada", "lo mismo que la semana anterior"
@@ -396,7 +396,7 @@ TIPOS DE ACCIONES
         * "Guarda la semana pasada" → seleccionar_fecha(lunes_sem_pasada) + guardar_linea
         * "Borra la semana pasada" → seleccionar_fecha(lunes_sem_pasada) + borrar_todas_horas... + guardar_linea
    
-   🔑 REGLA CLAVE: 
+    REGLA CLAVE: 
    - Si el verbo es COPIAR/CLONAR/DUPLICAR/REPETIR → copiar_semana_anterior
    - Si el verbo es EMITIR/GUARDAR/BORRAR/IMPUTAR/VER → seleccionar_fecha + acción
 
@@ -614,14 +614,14 @@ Frase del usuario: "{texto}"
         )
 
         raw = response.choices[0].message.content.strip()
-        print(f"[DEBUG] 🧠 GPT generó: {raw}")
+        print(f"[DEBUG]  GPT generó: {raw}")
 
-        # 🧹 Limpiar markdown si GPT-4o lo añade (```json ... ```)
+        #  Limpiar markdown si GPT-4o lo añade (```json ... ```)
         if raw.startswith("```"):
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1])  # Quitar primera y última línea
             raw = raw.strip()
-            print(f"[DEBUG] 🧹 JSON limpio: {raw}")
+            print(f"[DEBUG]  JSON limpio: {raw}")
 
         data = json.loads(raw)
 
@@ -629,7 +629,7 @@ Frase del usuario: "{texto}"
         if isinstance(data, dict):
             data = [data]
 
-        # 🆕 VALIDACIÓN POST-GPT: Asegurar que imputar_horas_dia SIEMPRE tenga 'dia'
+        #  VALIDACIÓN POST-GPT: Asegurar que imputar_horas_dia SIEMPRE tenga 'dia'
         for orden in data:
             if orden.get("accion") == "imputar_horas_dia":
                 parametros = orden.get("parametros", {})
@@ -639,7 +639,7 @@ Frase del usuario: "{texto}"
                     orden["parametros"] = parametros
                     print(f"[DEBUG]  GPT omitió 'dia' en imputar_horas_dia, usando hoy: {hoy}")
 
-        # 🆕 VALIDAR que las órdenes tengan sentido
+        #  VALIDAR que las órdenes tengan sentido
         resultado_validacion = validar_ordenes(data, texto, contexto)
         if resultado_validacion:
             # Si devuelve algo, es porque hay error o info incompleta

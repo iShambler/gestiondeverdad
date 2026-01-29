@@ -95,20 +95,20 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
     """
     from web_automation.interactions import guardar_linea
     
-    print(f"[DEBUG] 📅 Seleccionando fecha: {fecha_obj.strftime('%d/%m/%Y')}")
+    print(f"[DEBUG]  Seleccionando fecha: {fecha_obj.strftime('%d/%m/%Y')}")
     
     # Calcular lunes de la semana objetivo
     lunes_objetivo = lunes_de_semana(fecha_obj)
-    print(f"[DEBUG] 📅 Lunes objetivo: {lunes_objetivo.strftime('%d/%m/%Y')}")
+    print(f"[DEBUG]  Lunes objetivo: {lunes_objetivo.strftime('%d/%m/%Y')}")
     
     # Obtener la semana actual del contexto
     fecha_actual_contexto = contexto.get("fecha_seleccionada") if contexto else None
     lunes_actual = lunes_de_semana(fecha_actual_contexto) if fecha_actual_contexto else None
     
-    print(f"[DEBUG] 📅 Fecha actual contexto: {fecha_actual_contexto.strftime('%d/%m/%Y') if fecha_actual_contexto else 'None'}")
-    print(f"[DEBUG] 📅 Lunes actual: {lunes_actual.strftime('%d/%m/%Y') if lunes_actual else 'None'}")
+    print(f"[DEBUG]  Fecha actual contexto: {fecha_actual_contexto.strftime('%d/%m/%Y') if fecha_actual_contexto else 'None'}")
+    print(f"[DEBUG]  Lunes actual: {lunes_actual.strftime('%d/%m/%Y') if lunes_actual else 'None'}")
     
-    # 🔥 Verificar si hay botón volver visible (estamos en pantalla de imputación)
+    #  Verificar si hay botón volver visible (estamos en pantalla de imputación)
     try:
         btn_volver = driver.find_element(By.CSS_SELECTOR, Selectors.VOLVER)
         if btn_volver.is_displayed():
@@ -123,7 +123,7 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
                 # Cambiamos de semana
                 print(f"[DEBUG] 🔙 Cambiando de semana ({lunes_actual.strftime('%d/%m')} → {lunes_objetivo.strftime('%d/%m')})")
                 
-                # 🔥 GUARDAR ANTES de volver si hay cambios pendientes
+                #  GUARDAR ANTES de volver si hay cambios pendientes
                 print(f"[DEBUG] 💾 Guardando cambios antes de cambiar de semana...")
                 try:
                     resultado_guardar = guardar_linea(driver, WebDriverWait(driver, 15))
@@ -135,7 +135,7 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
             else:
                 # Misma semana, NO volver
                 print(f"[DEBUG]  Misma semana ({lunes_objetivo.strftime('%d/%m')}), NO volver atrás")
-                # 🔥 RETORNAR INMEDIATAMENTE - No necesitamos hacer nada más
+                #  RETORNAR INMEDIATAMENTE - No necesitamos hacer nada más
                 return f"Ya estás en la semana del {lunes_objetivo.strftime('%d/%m/%Y')}"
             
             if debe_volver:
@@ -145,13 +145,13 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
                 
                 # Limpiar el contexto porque todos los elementos quedan obsoletos
                 if contexto:
-                    print("[DEBUG] 🧹 Limpiando contexto tras volver atrás...")
+                    print("[DEBUG]  Limpiando contexto tras volver atrás...")
                     contexto["fila_actual"] = None
                     contexto["proyecto_actual"] = None
                     contexto["nodo_padre_actual"] = None
     except:
         # No hay botón volver, ya estamos en la pantalla principal
-        print(f"[DEBUG] 📅 No hay botón volver visible, estamos en pantalla principal")
+        print(f"[DEBUG]  No hay botón volver visible, estamos en pantalla principal")
         pass
     
     wait = WebDriverWait(driver, 15)

@@ -41,7 +41,7 @@ def verificar_y_solicitar_credenciales(db: Session, user_id: str, canal: str = "
         if canal == "whatsapp":
             mensaje = (
                 "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
-                "📝 Por favor, envíamelas en este formato:\n\n"
+                " Por favor, envíamelas en este formato:\n\n"
                 "```\n"
                 "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
                 "```\n\n"

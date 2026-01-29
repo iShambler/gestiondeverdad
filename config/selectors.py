@@ -16,7 +16,7 @@ class Selectors:
     BOTON_SALIR = '.botonSalirHtml'
     
     # ========================================
-    # 📅 NAVEGACIÓN Y CALENDARIO
+    #  NAVEGACIÓN Y CALENDARIO
     # ========================================
     CALENDAR_BUTTON = '.ui-datepicker-trigger'
     DATEPICKER_CALENDAR = '.ui-datepicker-calendar'
@@ -26,7 +26,7 @@ class Selectors:
     VOLVER = '#btVolver'
     
     # ========================================
-    # 📊 IMPUTACIÓN DE HORAS
+    #  IMPUTACIÓN DE HORAS
     # ========================================
     # Proyectos
     SELECT_SUBPROYECTO_NAME = "select[name*='subproyecto']"

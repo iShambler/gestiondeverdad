@@ -2,7 +2,7 @@
 Lógica principal de imputación.
 Coordina el flujo completo: clasificar → interpretar → ejecutar → responder.
 
-🆕 MODIFICADO: Añadido soporte para consultas de mes
+ MODIFICADO: Añadido soporte para consultas de mes
 """
 
 from datetime import datetime
@@ -47,7 +47,7 @@ def procesar_mensaje(driver, wait, texto, contexto=None, user_id="local_user"):
     
     # 2️⃣ Conversación general
     if tipo_mensaje == "conversacion":
-        return responder_conversacion(texto, user_id)  # 🆕 Pasar user_id
+        return responder_conversacion(texto, user_id)  #  Pasar user_id
     
     # 3️⃣ Consulta de información
     if tipo_mensaje == "consulta":
@@ -68,7 +68,7 @@ def procesar_mensaje(driver, wait, texto, contexto=None, user_id="local_user"):
                     return generar_resumen_natural(info_bruta, texto)
                 
                 elif consulta_info.get("tipo") == "mes":
-                    # 🆕 Consulta de un mes completo
+                    #  Consulta de un mes completo
                     mes = fecha.month
                     anio = fecha.year
                     info_bruta = consultar_mes(driver, wait, mes, anio)
@@ -164,7 +164,7 @@ def loop_interactivo(driver, wait):
             
             # Procesar mensaje
             respuesta = procesar_mensaje(driver, wait, texto, contexto)
-            print(f"\n🤖 Asistente: {respuesta}\n")
+            print(f"\n Asistente: {respuesta}\n")
             
         except KeyboardInterrupt:
             print("\n\n👋 ¡Hasta pronto! Cerrando el navegador...")

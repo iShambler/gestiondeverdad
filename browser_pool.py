@@ -134,7 +134,7 @@ class BrowserPool:
             session = BrowserSession(user_id)
             if session.initialize():
                 self.sessions[user_id] = session
-                print(f"[BROWSER POOL] 📊 Sesiones activas: {len(self.sessions)}/{self.max_sessions}")
+                print(f"[BROWSER POOL]  Sesiones activas: {len(self.sessions)}/{self.max_sessions}")
                 return session
             else:
                 return None
@@ -145,7 +145,7 @@ class BrowserPool:
             if user_id in self.sessions:
                 self.sessions[user_id].close()
                 del self.sessions[user_id]
-                print(f"[BROWSER POOL] 📊 Sesiones activas: {len(self.sessions)}/{self.max_sessions}")
+                print(f"[BROWSER POOL]  Sesiones activas: {len(self.sessions)}/{self.max_sessions}")
     
     def _force_cleanup(self):
         """Limpia forzosamente sesiones expiradas."""
@@ -155,7 +155,7 @@ class BrowserPool:
         ]
         
         for user_id in expired:
-            print(f"[BROWSER POOL] 🧹 Cerrando sesión expirada: {user_id}")
+            print(f"[BROWSER POOL]  Cerrando sesión expirada: {user_id}")
             self.sessions[user_id].close()
             del self.sessions[user_id]
     
@@ -170,11 +170,11 @@ class BrowserPool:
                 ]
                 
                 if expired:
-                    print(f"[BROWSER POOL] 🧹 Limpiando {len(expired)} sesiones expiradas...")
+                    print(f"[BROWSER POOL]  Limpiando {len(expired)} sesiones expiradas...")
                     for user_id in expired:
                         self.sessions[user_id].close()
                         del self.sessions[user_id]
-                    print(f"[BROWSER POOL] 📊 Sesiones activas: {len(self.sessions)}/{self.max_sessions}")
+                    print(f"[BROWSER POOL]  Sesiones activas: {len(self.sessions)}/{self.max_sessions}")
     
     def close_all(self):
         """Cierra todas las sesiones activas."""
@@ -196,5 +196,5 @@ class BrowserPool:
 
 
 # Instancia global del pool
-# 🔥 Timeout de 30 min para evitar re-logins frecuentes
+#  Timeout de 30 min para evitar re-logins frecuentes
 browser_pool = BrowserPool(max_sessions=50, session_timeout_minutes=30)

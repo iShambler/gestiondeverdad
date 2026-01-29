@@ -103,7 +103,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
             print(f"[DEBUG] 💬 Usuario {user_id} tiene pregunta pendiente")
             estado = conversation_state_manager.obtener_desambiguacion(user_id)
             
-            # 🆕 DETECTAR CANCELACIÓN O NUEVA ORDEN
+            #  DETECTAR CANCELACIÓN O NUEVA ORDEN
             texto_lower = texto.lower().strip()
             
             # 1. Palabras de cancelación
@@ -115,7 +115,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
             ]
             
             if any(palabra in texto_lower for palabra in palabras_cancelar):
-                print(f"[DEBUG] 🚫 Usuario canceló la desambiguación")
+                print(f"[DEBUG]  Usuario canceló la desambiguación")
                 conversation_state_manager.limpiar_estado(user_id)
                 respuesta = "👍 Vale, no pasa nada. ¿En qué puedo ayudarte?"
                 registrar_peticion(db, usuario.id, texto, "cancelacion_desambiguacion", canal=canal, respuesta=respuesta)
@@ -173,7 +173,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
         elif tipo_mensaje == "consulta":
             consulta_info = interpretar_consulta(texto)
             
-            # 🆕 CASO 1: Listar proyectos
+            #  CASO 1: Listar proyectos
             if not consulta_info or consulta_info.get("tipo") == "listar_proyectos":
                 from web_automation.listado_proyectos import listar_todos_proyectos, formatear_lista_proyectos
                 
@@ -197,7 +197,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                 session.update_activity()
                 return respuesta
             
-        # 🆕 CASO 2: Consulta de horas (día, semana o mes)
+        #  CASO 2: Consulta de horas (día, semana o mes)
             if consulta_info:
                 fecha = datetime.fromisoformat(consulta_info["fecha"])
                 
@@ -216,7 +216,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                     return resumen
                 
                 elif consulta_info.get("tipo") == "mes":
-                    # 🆕 Consulta de un mes completo
+                    #  Consulta de un mes completo
                     mes = fecha.month
                     anio = fecha.year
                     with session.lock:
@@ -447,7 +447,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 return JSONResponse({
                     "reply": (
                         "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
-                        "📝 Envíamelas así:\n"
+                        " Envíamelas así:\n"
                         "```\n"
                         "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
                         "```"
@@ -458,7 +458,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         if not session or not session.driver:
             return JSONResponse({"reply": " No he podido iniciar el navegador."})
 
-        # 🆕 VERIFICAR SI ESTÁ CAMBIANDO CREDENCIALES (antes de hacer login con las viejas)
+        #  VERIFICAR SI ESTÁ CAMBIANDO CREDENCIALES (antes de hacer login con las viejas)
         if credential_manager.esta_cambiando_credenciales(wa_id):
             _, mensaje, _ = manejar_cambio_credenciales(texto, wa_id, usuario_wa, db, "whatsapp")
             session.is_logged_in = False
@@ -483,18 +483,18 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         # -----------------------------------------------------
         # ⏳ MENSAJE PREVIO + BACKGROUND TASK (WHATSAPP)
         # -----------------------------------------------------
-        # 🔥 Si tiene pregunta pendiente, procesar respuesta directamente
+        #  Si tiene pregunta pendiente, procesar respuesta directamente
         if conversation_state_manager.tiene_pregunta_pendiente(wa_id):
             respuesta = await procesar_mensaje_usuario(
                 texto, wa_id, db, canal="whatsapp"
             )
             return JSONResponse({"reply": respuesta})
         
-        # 🔥 Si NO tiene pregunta pendiente, clasificar para decidir flujo
-        tipo_mensaje = clasificar_mensaje(texto)  # 🆕 UNA SOLA CLASIFICACIÓN
+        #  Si NO tiene pregunta pendiente, clasificar para decidir flujo
+        tipo_mensaje = clasificar_mensaje(texto)  #  UNA SOLA CLASIFICACIÓN
 
         if tipo_mensaje in ("consulta", "comando"):
-            # 🔥 Lanzar procesamiento en background (SIN db)
+            #  Lanzar procesamiento en background (SIN db)
             asyncio.create_task(
                 procesar_whatsapp_en_background(texto, wa_id)
             )
@@ -504,7 +504,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 "reply": "⏳ *Estoy trabajando en ello…*"
             })
         
-        # 🆕 Para conversación/ayuda, procesar directamente SIN clasificar de nuevo
+        #  Para conversación/ayuda, procesar directamente SIN clasificar de nuevo
         elif tipo_mensaje == "ayuda":
             respuesta = mostrar_comandos()
             registrar_peticion(db, usuario_wa.id, texto, "ayuda", canal="whatsapp", respuesta=respuesta)
@@ -546,7 +546,7 @@ async def procesar_whatsapp_en_background(texto: str, wa_id: str):
 
     except Exception:
         print("[BACKGROUND ERROR]  Excepción en background:")
-        traceback.print_exc()  # 🔥 ESTO ES CLAVE
+        traceback.print_exc()  #  ESTO ES CLAVE
 
         enviar_whatsapp(
             wa_id,
@@ -611,7 +611,7 @@ def shutdown_event():
     executor.shutdown(wait=True)
 
 
-# 🔥 Manejo de señales para cierre limpio (Ctrl+C, kill)
+#  Manejo de señales para cierre limpio (Ctrl+C, kill)
 import signal
 import sys
 import os

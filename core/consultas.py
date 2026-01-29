@@ -2,7 +2,7 @@
 Funciones de consulta de información sobre horas imputadas.
 Incluye consultas de días y semanas específicas.
 
-🆕 MODIFICADO: Ahora muestra departamento y cliente en los resúmenes
+ MODIFICADO: Ahora muestra departamento y cliente en los resúmenes
 """
 
 import time
@@ -26,10 +26,10 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
     """
     from web_automation import lunes_de_semana, seleccionar_fecha, leer_tabla_imputacion
     
-    print(f"[DEBUG] 📅 consultar_dia - Fecha recibida: {fecha_obj.strftime('%Y-%m-%d %A')}")
+    print(f"[DEBUG]  consultar_dia - Fecha recibida: {fecha_obj.strftime('%Y-%m-%d %A')}")
     
     try:
-        # 🆕 Navegar directamente a la fecha del día (no al lunes)
+        #  Navegar directamente a la fecha del día (no al lunes)
         # Esto asegura que el día esté habilitado en la vista
         seleccionar_fecha(driver, fecha_obj)
         time.sleep(2)  # Esperar a que cargue la tabla
@@ -53,27 +53,27 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
         fecha_str = fecha_obj.strftime('%d/%m/%Y')
         dia_nombre_capitalize = dia_nombre.capitalize()
         
-        resumen = f"📅 {dia_nombre_capitalize} {fecha_str}\n\n"
+        resumen = f" {dia_nombre_capitalize} {fecha_str}\n\n"
         
         total_dia = 0
         proyectos_con_horas = []
         
         for proyecto in proyectos:
-            # 🆕 CAMBIO: Usar formateo con jerarquía en vez de solo nombre corto
+            #  CAMBIO: Usar formateo con jerarquía en vez de solo nombre corto
             nombre_formateado = formatear_proyecto_con_jerarquia(proyecto['proyecto'], "corto")
             horas_dia = proyecto['horas'][dia_nombre]
             
-            # 🆕 CONDICIÓN: Solo mostrar proyectos con horas > 0
+            #  CONDICIÓN: Solo mostrar proyectos con horas > 0
             if horas_dia > 0:
                 proyectos_con_horas.append((nombre_formateado, horas_dia))
                 total_dia += horas_dia
         
         if not proyectos_con_horas:
-            return f"📅 {dia_nombre_capitalize} {fecha_str}\n\n⚪ No hay horas imputadas este día"
+            return f" {dia_nombre_capitalize} {fecha_str}\n\n⚪ No hay horas imputadas este día"
         
         # 🌐 Si es webapp, generar tabla HTML
         if canal == "webapp":
-            resumen = f"<h3 style='margin: 0 0 5px 0;'>📅 {dia_nombre_capitalize} {fecha_str}</h3>\n"
+            resumen = f"<h3 style='margin: 0 0 5px 0;'> {dia_nombre_capitalize} {fecha_str}</h3>\n"
             resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
             resumen += "<thead><tr style='background-color: #f0f0f0;'><th>Proyecto</th><th>Horas</th></tr></thead>\n"
             resumen += "<tbody>\n"
@@ -97,7 +97,7 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
             for nombre, horas in proyectos_con_horas:
                 resumen += f"🔹 {nombre}: {horas}h\n"
             
-            resumen += f"\n📊 Total: {total_dia} horas"
+            resumen += f"\n Total: {total_dia} horas"
         
         #  VALIDACIONES DE HORAS
         avisos = []
@@ -141,7 +141,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
     Consulta la información de una semana específica.
     Navega a la fecha, lee la tabla y devuelve un resumen.
     
-    🆕 IMPORTANTE: Detecta si hay días deshabilitados en la vista actual
+     IMPORTANTE: Detecta si hay días deshabilitados en la vista actual
     y hace una segunda consulta si es necesario para obtener todos los datos.
     
     Args:
@@ -155,14 +155,14 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
     """
     from web_automation import lunes_de_semana, seleccionar_fecha, leer_tabla_imputacion, detectar_dias_deshabilitados
     
-    print(f"[DEBUG] 📅 consultar_semana - Fecha recibida: {fecha_obj.strftime('%Y-%m-%d %A')}")
+    print(f"[DEBUG]  consultar_semana - Fecha recibida: {fecha_obj.strftime('%Y-%m-%d %A')}")
     
     try:
         # Calcular lunes y viernes de la semana
         lunes = lunes_de_semana(fecha_obj)
         viernes = lunes + timedelta(days=4)
         
-        print(f"[DEBUG] 📅 Semana: {lunes.strftime('%d/%m/%Y')} - {viernes.strftime('%d/%m/%Y')}")
+        print(f"[DEBUG]  Semana: {lunes.strftime('%d/%m/%Y')} - {viernes.strftime('%d/%m/%Y')}")
         
         # Diccionario para acumular horas de todos los proyectos
         proyectos_combinados = {}
@@ -170,16 +170,16 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         # =====================================================
         # CONSULTA 1: Navegar al LUNES
         # =====================================================
-        print(f"[DEBUG] 📊 Consulta 1: Navegando al lunes {lunes.strftime('%d/%m/%Y')}...")
+        print(f"[DEBUG]  Consulta 1: Navegando al lunes {lunes.strftime('%d/%m/%Y')}...")
         seleccionar_fecha(driver, lunes)
         time.sleep(2)
         
-        # 🆕 Detectar si hay días deshabilitados
+        #  Detectar si hay días deshabilitados
         dias_estado = detectar_dias_deshabilitados(driver)
         dias_deshabilitados = [dia for dia, habilitado in dias_estado.items() if not habilitado]
         
         proyectos_lunes = leer_tabla_imputacion(driver)
-        print(f"[DEBUG] 📊 Consulta 1 (lunes): {len(proyectos_lunes)} proyectos encontrados")
+        print(f"[DEBUG]  Consulta 1 (lunes): {len(proyectos_lunes)} proyectos encontrados")
         
         # Acumular proyectos de la primera consulta
         for proyecto in proyectos_lunes:
@@ -202,7 +202,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
             time.sleep(2)
             
             proyectos_viernes = leer_tabla_imputacion(driver)
-            print(f"[DEBUG] 📊 Consulta 2 (viernes): {len(proyectos_viernes)} proyectos encontrados")
+            print(f"[DEBUG]  Consulta 2 (viernes): {len(proyectos_viernes)} proyectos encontrados")
             
             # Acumular proyectos de la segunda consulta
             for proyecto in proyectos_viernes:
@@ -228,15 +228,15 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         if not proyectos:
             fecha_inicio = lunes.strftime('%d/%m/%Y')
             fecha_fin = viernes.strftime('%d/%m/%Y')
-            return f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n⚪ No hay horas imputadas en esta semana"
+            return f" Semana del {fecha_inicio} al {fecha_fin}\n\n⚪ No hay horas imputadas en esta semana"
         
         # Formatear la información
         fecha_inicio = lunes.strftime('%d/%m/%Y')
         fecha_fin = viernes.strftime('%d/%m/%Y')
         
-        resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n"
+        resumen = f" Semana del {fecha_inicio} al {fecha_fin}\n\n"
         
-        # 🆕 CALCULAR TOTALES POR DÍA PRIMERO (para usar en validaciones)
+        #  CALCULAR TOTALES POR DÍA PRIMERO (para usar en validaciones)
         totales_por_dia = {
             'lunes': 0,
             'martes': 0,
@@ -256,19 +256,19 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         
         # 🌐 Generar encabezado según canal
         if canal == "webapp":
-            resumen = f"<h3 style='margin: 0 0 5px 0;'>📅 Semana del {fecha_inicio} al {fecha_fin}</h3>\n"
+            resumen = f"<h3 style='margin: 0 0 5px 0;'> Semana del {fecha_inicio} al {fecha_fin}</h3>\n"
             resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
             resumen += "<thead><tr style='background-color: #f0f0f0;'><th>Proyecto</th><th>Total</th><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th></tr></thead>\n"
             resumen += "<tbody>\n"
         else:
-            resumen = f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n"
+            resumen = f" Semana del {fecha_inicio} al {fecha_fin}\n\n"
             
         for proyecto in proyectos:
-            # 🆕 CAMBIO: Usar formateo con jerarquía en vez de solo nombre corto
+            #  CAMBIO: Usar formateo con jerarquía en vez de solo nombre corto
             nombre_formateado = formatear_proyecto_con_jerarquia(proyecto['proyecto'], "corto")
             horas = proyecto['horas']
             
-            # 🆕 Calcular el total del proyecto sumando solo L-V (no confiar en proyecto['total'])
+            #  Calcular el total del proyecto sumando solo L-V (no confiar en proyecto['total'])
             total_proyecto = (
                 horas.get('lunes', 0) + 
                 horas.get('martes', 0) + 
@@ -277,7 +277,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                 horas.get('viernes', 0)
             )
             
-            # 🆕 SOLO PROCESAR PROYECTOS CON HORAS > 0 EN LA SEMANA
+            #  SOLO PROCESAR PROYECTOS CON HORAS > 0 EN LA SEMANA
             if total_proyecto == 0:
                 continue
             
@@ -317,7 +317,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                     resumen += f"🔹 {nombre_formateado}: {total_proyecto}h ({dias_str})\n"
         
         if total_semana == 0:
-            return f"📅 Semana del {fecha_inicio} al {fecha_fin}\n\n⚪ No hay horas imputadas en esta semana"
+            return f" Semana del {fecha_inicio} al {fecha_fin}\n\n⚪ No hay horas imputadas en esta semana"
         
         # 🌐 Cerrar tabla y mostrar total según canal
         if canal == "webapp":
@@ -351,7 +351,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
             resumen += "<span style='background-color: #f0f0f0; padding: 2px 6px;'>- Sin imputar</span>\n"
             resumen += "</p>\n"
         else:
-            resumen += f"\n📊 Total: {total_semana} horas"
+            resumen += f"\n Total: {total_semana} horas"
         
         #  VALIDACIONES DE HORAS POR DÍA (usando totales_por_dia ya calculados)
         dias_exceso = []
@@ -366,7 +366,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
             'viernes': 'Viernes'
         }
         
-        # 🆕 Detectar qué días tienen Festivo o Vacaciones (no se validan)
+        #  Detectar qué días tienen Festivo o Vacaciones (no se validan)
         dias_con_festivo_o_vacaciones = set()
         for proyecto in proyectos:
             nombre_lower = proyecto['proyecto'].lower()
@@ -381,7 +381,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         
         # Verificar cada día (totales_por_dia ya está calculado arriba)
         for dia, total in totales_por_dia.items():
-            # 🆕 SKIP: No validar días con Festivo o Vacaciones
+            #  SKIP: No validar días con Festivo o Vacaciones
             if dia in dias_con_festivo_o_vacaciones:
                 continue
             
@@ -502,7 +502,7 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
     """
     Consulta la información de todas las semanas de un mes.
     
-    🆕 NUEVA FUNCIONALIDAD: Resumen mensual de horas imputadas.
+     NUEVA FUNCIONALIDAD: Resumen mensual de horas imputadas.
     
     Args:
         driver: WebDriver de Selenium
@@ -527,16 +527,16 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
     nombre_mes = MESES_NOMBRES.get(mes, f"Mes {mes}")
     hoy = datetime.now()
     
-    print(f"[DEBUG] 📅 consultar_mes - {nombre_mes} {anio}")
+    print(f"[DEBUG]  consultar_mes - {nombre_mes} {anio}")
     
     try:
         # Calcular semanas del mes
         semanas = calcular_semanas_del_mes(anio, mes)
         
         if not semanas:
-            return f"📅 {nombre_mes} {anio}\n\n⚪ No hay semanas disponibles para consultar."
+            return f" {nombre_mes} {anio}\n\n⚪ No hay semanas disponibles para consultar."
         
-        print(f"[DEBUG] 📊 Semanas a consultar: {len(semanas)}")
+        print(f"[DEBUG]  Semanas a consultar: {len(semanas)}")
         
         # =====================================================
         # RECOPILAR DATOS DE CADA SEMANA
@@ -546,7 +546,7 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
         proyectos_mes = {}  # Acumulado de horas por proyecto en todo el mes
         
         for i, (lunes, viernes) in enumerate(semanas, 1):
-            print(f"[DEBUG] 📊 Consultando semana {i}/{len(semanas)}: {lunes.strftime('%d/%m')} - {viernes.strftime('%d/%m')}...")
+            print(f"[DEBUG]  Consultando semana {i}/{len(semanas)}: {lunes.strftime('%d/%m')} - {viernes.strftime('%d/%m')}...")
             
             # Navegar al lunes de esta semana
             seleccionar_fecha(driver, lunes)
@@ -585,7 +585,7 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
             total_mes += total_semana
             print(f"[DEBUG]    Semana {i}: {total_semana}h")
         
-        print(f"[DEBUG] 📊 Total mes: {total_mes}h")
+        print(f"[DEBUG]  Total mes: {total_mes}h")
         
         # =====================================================
         # FORMATEAR RESULTADO
@@ -593,7 +593,7 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
         
         if canal == "webapp":
             # ==================== FORMATO HTML ====================
-            resumen = f"<h3 style='margin: 0 0 10px 0;'>📅 {nombre_mes} {anio}</h3>\n"
+            resumen = f"<h3 style='margin: 0 0 10px 0;'> {nombre_mes} {anio}</h3>\n"
             
             # Tabla de semanas
             resumen += "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; margin-bottom: 15px;'>\n"
@@ -609,11 +609,11 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
                 
                 # Color según si tiene horas o no
                 if total == 0:
-                    color = '#f0f0f0'  # Gris - Sin horas
+                    color = '#f0f0f0'
                 elif total < 40:
-                    color = '#fff8dc'  # Amarillo - Pocas horas
+                    color = '#fff8dc'
                 else:
-                    color = '#d4edda'  # Verde - Bien
+                    color = '#d4edda'  
                 
                 periodo = f"{lunes.strftime('%d/%m')} - {viernes.strftime('%d/%m')}"
                 resumen += f"<tr>"
@@ -632,7 +632,7 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
             
             # Desglose por proyecto (si hay proyectos)
             if proyectos_mes:
-                resumen += "<h4 style='margin: 15px 0 5px 0;'>📊 Desglose por proyecto:</h4>\n"
+                resumen += "<h4 style='margin: 15px 0 5px 0;'> Desglose por proyecto:</h4>\n"
                 resumen += "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse: collapse; width: 100%;'>\n"
                 resumen += "<thead><tr style='background-color: #f0f0f0;'>"
                 resumen += "<th>Proyecto</th><th>Horas</th><th>%</th>"
@@ -664,16 +664,16 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
         
         else:
             # ==================== FORMATO TEXTO (Slack/WhatsApp) ====================
-            resumen = f"📅 **{nombre_mes} {anio}**\n\n"
+            resumen = f" **{nombre_mes} {anio}**\n\n"
             
             for i, datos in enumerate(datos_semanas, 1):
                 lunes = datos['lunes']
                 viernes = datos['viernes']
                 total = datos['total']
                 periodo = f"{lunes.strftime('%d/%m')} - {viernes.strftime('%d/%m')}"
-                resumen += f"📆 Semana {i} ({periodo}): {total}h\n"
+                resumen += f" Semana {i} ({periodo}): {total}h\n"
             
-            resumen += f"\n📊 **Total {nombre_mes}: {total_mes}h**\n"
+            resumen += f"\n **Total {nombre_mes}: {total_mes}h**\n"
             
             # Desglose por proyecto
             if proyectos_mes:

@@ -1,10 +1,10 @@
-# 🤖 Bot de Imputación de Horas - GestiónITT
+#  Bot de Imputación de Horas - GestiónITT
 
 Sistema inteligente de automatización para imputación de horas con soporte multiusuario, múltiples interfaces y **búsqueda jerárquica de proyectos**.
 
 ---
 
-## 🆕 ¡NUEVA FUNCIONALIDAD! - Nodos Padre
+##  ¡NUEVA FUNCIONALIDAD! - Nodos Padre
 
 Ahora puedes especificar proyectos con el mismo nombre diferenciándolos por su **nodo padre** (departamento/área).
 
@@ -140,7 +140,7 @@ El servidor estará disponible en: `http://localhost:8000`
 gestiondeverdad/
 ├── ai/                    # Inteligencia artificial
 │   ├── classifier.py      # Clasificación de mensajes
-│   ├── interpreter.py     # 🆕 Interpretación con nodos padre
+│   ├── interpreter.py     #  Interpretación con nodos padre
 │   ├── query_analyzer.py  # Análisis de consultas
 │   └── response_generator.py
 ├── config/                # Configuración
@@ -149,13 +149,13 @@ gestiondeverdad/
 │   └── settings.py
 ├── core/                  # Lógica de negocio
 │   ├── consultas.py
-│   ├── ejecutor.py        # 🆕 Soporte nodos padre
+│   ├── ejecutor.py        #  Soporte nodos padre
 │   └── imputacion.py
 ├── web_automation/        # Automatización web
 │   ├── interactions.py
 │   ├── jornada.py
 │   ├── navigation.py
-│   └── proyecto_handler.py  # 🆕 Búsqueda jerárquica
+│   └── proyecto_handler.py  #  Búsqueda jerárquica
 ├── browser_pool.py        # Pool de navegadores
 ├── credential_manager.py  # Gestión de credenciales
 ├── db.py                  # Base de datos
@@ -174,7 +174,7 @@ gestiondeverdad/
 
 ---
 
-## 📊 Rendimiento
+##  Rendimiento
 
 **Configuración actual**:
 - 50 usuarios concurrentes
@@ -244,7 +244,7 @@ El bot pedirá automáticamente nuevas credenciales.
 
 ---
 
-## 📝 Licencia
+##  Licencia
 
 [Tu licencia aquí]
 

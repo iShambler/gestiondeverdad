@@ -2,7 +2,7 @@
 Analizador de consultas sobre horas imputadas.
 Extrae fechas y tipo de consulta (día, semana o mes).
 
-🆕 MODIFICADO: Añadido soporte para consultas de mes
+ MODIFICADO: Añadido soporte para consultas de mes
 """
 
 import json
@@ -25,9 +25,9 @@ def interpretar_consulta(texto):
     hoy_obj = datetime.now()
     dia_semana = hoy_obj.strftime("%A")
     
-    # 🔥 DEBUG: Verificar fecha actual
-    print(f"[DEBUG] 📅 HOY calculado: {hoy} ({dia_semana})")
-    print(f"[DEBUG] 📅 Weekday: {hoy_obj.weekday()} (0=Monday, 6=Sunday)")
+    #  DEBUG: Verificar fecha actual
+    print(f"[DEBUG]  HOY calculado: {hoy} ({dia_semana})")
+    print(f"[DEBUG]  Weekday: {hoy_obj.weekday()} (0=Monday, 6=Sunday)")
     
     # Calcular lunes de esta semana
     weekday_actual = hoy_obj.weekday()
@@ -39,13 +39,9 @@ def interpretar_consulta(texto):
     # Calcular lunes de la semana pasada
     lunes_semana_pasada = (hoy_obj - timedelta(days=weekday_actual + 7)).strftime("%Y-%m-%d")
     
-    # 🔥 Calcular lunes de la semana siguiente
+    #  Calcular lunes de la semana siguiente
     dias_hasta_proximo_lunes = 7 - weekday_actual  # Días desde hoy hasta el próximo lunes
     lunes_semana_siguiente = (hoy_obj + timedelta(days=dias_hasta_proximo_lunes)).strftime("%Y-%m-%d")
-    
-    print(f"[DEBUG] 📅 Lunes de ESTA semana: {lunes_esta_semana}")
-    print(f"[DEBUG] 📅 Lunes de SEMANA PASADA: {lunes_semana_pasada}")
-    print(f"[DEBUG] 📅 Lunes de SEMANA SIGUIENTE: {lunes_semana_siguiente}")
     
     # Calcular ejemplos dinámicos
     ayer = (hoy_obj - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -67,7 +63,7 @@ def interpretar_consulta(texto):
         dias_atras_martes = 7 - (weekday_martes - weekday_hoy)
     martes_pasado = (hoy_obj - timedelta(days=dias_atras_martes)).strftime("%Y-%m-%d")
     
-    # 🆕 Calcular primer día del mes actual y mes anterior
+    #  Calcular primer día del mes actual y mes anterior
     primer_dia_mes_actual = hoy_obj.replace(day=1).strftime("%Y-%m-%d")
     mes_anterior = (hoy_obj.replace(day=1) - timedelta(days=1)).replace(day=1)
     primer_dia_mes_anterior = mes_anterior.strftime("%Y-%m-%d")
@@ -87,7 +83,7 @@ Hoy es {hoy} ({dia_semana}). Mes actual: {mes_actual_nombre} {hoy_obj.year}.
 
 El usuario pregunta: "{texto}"
 
-🆕 IMPORTANTE: Primero identifica el TIPO de consulta:
+ IMPORTANTE: Primero identifica el TIPO de consulta:
 
 TIPO A: "listar_proyectos" - Pide lista de proyectos disponibles
 - Ejemplos: "qué proyectos hay", "lista de proyectos", "muéstrame los proyectos", "dime en qué proyectos puedo imputar"
@@ -101,7 +97,7 @@ TIPO C: "semana" - Consulta de una semana
 - Ejemplos: "resumen de la semana", "qué tengo esta semana", "semana del 15 de enero"
 - Devuelve: {{"fecha": "YYYY-MM-DD", "tipo": "semana"}}
 
-🆕 TIPO D: "mes" - Consulta de un mes completo
+ TIPO D: "mes" - Consulta de un mes completo
 - Ejemplos: "resumen del mes", "qué tengo este mes", "resumen de enero", "horas de diciembre", "mes pasado", "mes de febrero"
 - Palabras clave: "mes", "mensual", nombre de mes (enero, febrero, etc.)
 - Devuelve: {{"fecha": "YYYY-MM-01", "tipo": "mes"}} (siempre día 01 del mes)
@@ -131,7 +127,7 @@ Ejemplos de consulta de MES:
 
 REGLAS PARA TIPO B y C (DIA y SEMANA):
 
-🚨 FECHAS ABSOLUTAS (día + mes especificado):
+ FECHAS ABSOLUTAS (día + mes especificado):
 - Si menciona día y mes específico (ej: "19 de diciembre", "15 de enero", "semana del 23 de noviembre"):
   * PRIMERO determina el año correcto:
     - Hoy es {hoy} (año actual: {hoy_obj.year}, mes actual: {hoy_obj.month})
@@ -149,7 +145,7 @@ FECHAS RELATIVAS (sin mes específico):
 - Si pregunta por "HOY" → tipo: "dia", fecha: {hoy}
 - Si pregunta por un día específico PASADO (ej: "jueves pasado", "ayer") → tipo: "dia", fecha: ese día calculado
 
-🚨 CÁLCULO DEL LUNES DE LA SEMANA ACTUAL:
+ CÁLCULO DEL LUNES DE LA SEMANA ACTUAL:
 Hoy es {hoy} ({dia_semana})
 - Si {dia_semana} = Monday → lunes = {hoy}
 - Si {dia_semana} = Tuesday → lunes = {hoy} - 1 día
@@ -182,8 +178,8 @@ Respuesta:"""
         
         raw = response.choices[0].message.content.strip()
         
-        # 🔥 DEBUG: Ver qué devuelve GPT
-        print(f"[DEBUG] 🤖 GPT raw response para '{texto}': {raw}")
+        #  DEBUG: Ver qué devuelve GPT
+        print(f"[DEBUG]  GPT raw response para '{texto}': {raw}")
         
         # Limpiar posible markdown
         if raw.startswith("```"):

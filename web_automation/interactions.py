@@ -81,7 +81,7 @@ def hacer_login(driver, wait, username=None, password=None):
             print(f"[DEBUG]  Encontrado 'botonSalirHtml' en el HTML")
             print(f"[DEBUG]  CONFIRMADO: Login exitoso")
             
-            # 🔥 NUEVO: Comprobar si existe el botón especial "Imputar horas"
+            #  NUEVO: Comprobar si existe el botón especial "Imputar horas"
             print(f"[DEBUG]  Buscando botón especial 'Imputar horas'...")
             try:
                 boton_imputar = driver.find_element(By.ID, "botonImputar")

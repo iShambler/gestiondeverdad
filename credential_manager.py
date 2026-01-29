@@ -60,7 +60,7 @@ class CredentialManager:
         if not credenciales["ambos"]:
             mensaje_incompleto = (
                 " No he podido extraer las credenciales.\n\n"
-                "📝 *Envíamelas así:*\n"
+                " *Envíamelas así:*\n"
                 "```\n"
                 "Usuario: tu_usuario  Contraseña: tu_contraseña\n"
                 "```\n\n"

@@ -35,7 +35,7 @@ def detectar_tipo_accion(ordenes: List[dict], indice_actual: int) -> str:
         if accion == "eliminar_linea":
             return "eliminar"
         elif accion in ["imputar_horas_dia", "imputar_horas_semana"]:
-            # 🆕 Verificar si las horas son negativas o si el modo es "establecer"
+            #  Verificar si las horas son negativas o si el modo es "establecer"
             parametros = ordenes[idx].get("parametros", {})
             horas = parametros.get("horas", 0)
             modo = parametros.get("modo", "sumar")
@@ -72,13 +72,13 @@ def generar_mensaje_confirmacion_proyecto(texto_completo: str, tipo_accion: str,
         emoji_accion = "🗑️"
     elif tipo_accion == "borrar_horas":
         pregunta = "¿Quieres borrar las horas de este proyecto?"
-        emoji_accion = "🧹"
+        emoji_accion = ""
     elif tipo_accion == "imputar":
         pregunta = "¿Quieres imputar horas a este proyecto?"
         emoji_accion = "⏱️"
     else:
         pregunta = "¿Quieres usar este proyecto?"
-        emoji_accion = "📝"
+        emoji_accion = ""
     
     if canal == "webapp":
         return (
@@ -135,7 +135,7 @@ def manejar_pregunta_modificacion(mensaje_dict: dict, texto: str, user_id: str,
     num_proyectos = len(proyectos)
     
     if canal == "webapp":
-        mensaje = f"📊 Tienes **{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}** el {dia}:\n\n"
+        mensaje = f" Tienes **{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}** el {dia}:\n\n"
         
         for i, proyecto in enumerate(proyectos, 1):
             mensaje += f"  **{i}.** {proyecto['nombre']}: **{proyecto['horas']}h**\n"
@@ -147,7 +147,7 @@ def manejar_pregunta_modificacion(mensaje_dict: dict, texto: str, user_id: str,
         mensaje += "- **'cancelar'** para salir"
     else:
         # WhatsApp / Slack
-        mensaje = f"📊 Tienes *{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}* el {dia}:\n\n"
+        mensaje = f" Tienes *{num_proyectos} proyecto{'s' if num_proyectos > 1 else ''}* el {dia}:\n\n"
         
         for i, proyecto in enumerate(proyectos, 1):
             mensaje += f"  *{i}.* {proyecto['nombre']}: *{proyecto['horas']}h*\n"
@@ -155,7 +155,7 @@ def manejar_pregunta_modificacion(mensaje_dict: dict, texto: str, user_id: str,
         mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto}?\n\n"
         mensaje += "Responde con el número (1, 2...) o el nombre"
     
-    # 🆕 Guardar estado en conversation_state_manager
+    #  Guardar estado en conversation_state_manager
     conversation_state_manager.guardar_info_incompleta(
         user_id,
         {
@@ -251,7 +251,7 @@ def manejar_cambio_credenciales(texto: str, user_id: str, usuario, db: Session,
             # Login falló → pedir de nuevo
             respuesta = (
                 " *Error de login*: Las credenciales no son correctas.\n\n"
-                "📝 *Envíamelas de nuevo:*\n"
+                " *Envíamelas de nuevo:*\n"
                 "```\n"
                 "Usuario: tu_usuario  Contraseña: tu_contraseña\n"
                 "```\n\n"
@@ -289,7 +289,7 @@ def realizar_login_inicial(session, user_id: str, username: str, password: str,
                     error_msg = (
                         " **Error de login**: Las credenciales de GestiónITT no son correctas.\n\n"
                         "Necesito tus credenciales de GestiónITT.\n\n"
-                        "📝 **Envíamelas así:**\n"
+                        " **Envíamelas así:**\n"
                         "```\n"
                         "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
                         
@@ -364,7 +364,7 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
         proyecto = info_parcial.get('proyecto')
         comando_completo = f"{texto} en {proyecto}"
     
-    # 🆕 Manejar selección de proyecto por número o nombre
+    #  Manejar selección de proyecto por número o nombre
     elif que_falta == "seleccion_proyecto":
         proyectos = estado.get('proyectos', [])
         horas = info_parcial.get('horas', 0)
@@ -413,7 +413,7 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
                 session.update_activity()
                 return respuesta
     
-    # 🆕 Manejar selección de proyecto para modificar horas
+    #  Manejar selección de proyecto para modificar horas
     elif que_falta == "seleccion_proyecto_modificacion":
         proyectos = info_parcial.get('proyectos', [])
         horas = info_parcial.get('horas', 0)
@@ -533,7 +533,7 @@ def ejecutar_ordenes_y_generar_respuesta(ordenes: list, texto: str, session, con
                     modo = siguiente.get("parametros", {}).get("modo", "sumar")
                     if horas == 0 and modo == "establecer":
                         contexto["es_borrado_horas"] = True
-                        print(f"[DEBUG] 🧹 Detectado: seleccionar_proyecto + imputar(0, establecer) → modo borrar horas")
+                        print(f"[DEBUG]  Detectado: seleccionar_proyecto + imputar(0, establecer) → modo borrar horas")
                         break
     
     for idx, orden in enumerate(ordenes):
@@ -584,7 +584,7 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
     if respuestas_acumuladas is None:
         respuestas_acumuladas = []
     
-    # 🆕 Pregunta de modificación de horas
+    #  Pregunta de modificación de horas
     if tipo == "pregunta_modificacion":
         return manejar_pregunta_modificacion(mensaje, texto_original, user_id, 
                                             db, usuario, canal, session)
@@ -615,8 +615,8 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
             mensaje["coincidencias"],
             ordenes,
             indice_orden,
-            respuestas_acumuladas=respuestas_acumuladas,  # 🆕 Pasar respuestas acumuladas
-            texto_original=texto_original  # 🆕 Pasar texto original
+            respuestas_acumuladas=respuestas_acumuladas,  #  Pasar respuestas acumuladas
+            texto_original=texto_original  #  Pasar texto original
         )
         
         registrar_peticion(db, usuario.id, texto, "desambiguacion_pendiente", 
@@ -645,7 +645,7 @@ def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session,
         return ejecutar_con_coincidencia(coincidencia, estado, session, db, usuario, 
                                         user_id, canal, contexto, texto)
     
-    # 🆕 Detectar "otro" / "busca" / "diferente" → Buscar en el árbol del sistema
+    #  Detectar "otro" / "busca" / "diferente" → Buscar en el árbol del sistema
     palabras_buscar_otro = ['otro', 'otra', 'busca', 'buscar', 'diferente', 'distinto', 
                            'uno diferente', 'otro proyecto', 'no ese']
     
@@ -688,10 +688,10 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
     nombre_proyecto = estado["nombre_proyecto"]
     indice_orden = estado.get("indice_orden", 0)
     
-    # 🆕 Recuperar respuestas acumuladas de desambiguaciones anteriores
+    #  Recuperar respuestas acumuladas de desambiguaciones anteriores
     respuestas_previas = estado.get("respuestas_acumuladas", [])
     
-    # 🆕 Recuperar texto original del comando completo
+    #  Recuperar texto original del comando completo
     texto_comando_original = estado.get("texto_original", f"Pon horas en {nombre_proyecto}")
     
     # Modificar la orden que causó desambiguación con proyecto específico
@@ -704,7 +704,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
             print(f"[DEBUG]  Proyecto actualizado: '{proyecto_especifico}' bajo '{coincidencia['nodo_padre']}'")
     
     # Ejecutar solo desde el índice que falló en adelante
-    respuestas = list(respuestas_previas)  # 🆕 Empezar con las respuestas previas
+    respuestas = list(respuestas_previas)  #  Empezar con las respuestas previas
     
     # Pre-procesar: detectar si es "borrar horas de proyecto específico"
     for i, orden in enumerate(ordenes_originales):
@@ -716,7 +716,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
                     modo = siguiente.get("parametros", {}).get("modo", "sumar")
                     if horas == 0 and modo == "establecer":
                         contexto["es_borrado_horas"] = True
-                        print(f"[DEBUG] 🧹 Detectado en desambiguación: modo borrar horas")
+                        print(f"[DEBUG]  Detectado en desambiguación: modo borrar horas")
                         break
     
     print(f"[DEBUG] 🔁 Ejecutando órdenes desde índice {indice_orden} hasta {len(ordenes_originales)-1}")
@@ -754,8 +754,8 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
                         mensaje["coincidencias"],
                         ordenes_originales,
                         idx,
-                        respuestas_acumuladas=respuestas,  # 🆕 Pasar respuestas acumuladas
-                        texto_original=texto_comando_original  # 🆕 Pasar texto original
+                        respuestas_acumuladas=respuestas,  #  Pasar respuestas acumuladas
+                        texto_original=texto_comando_original  #  Pasar texto original
                     )
                     
                     registrar_peticion(db, usuario.id, texto_original, "desambiguacion_pendiente", 
@@ -773,7 +773,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
     conversation_state_manager.limpiar_estado(user_id)
     
     if respuestas:
-        # 🆕 Usar el texto original completo para generar la respuesta
+        #  Usar el texto original completo para generar la respuesta
         respuesta_natural = generar_respuesta_natural(respuestas, texto_comando_original, contexto)
     else:
         respuesta_natural = " Listo"
@@ -793,7 +793,7 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
     nombre_proyecto = estado["nombre_proyecto"]
     indice_orden = estado.get("indice_orden", 0)
     
-    # 🆕 Recuperar respuestas y texto original
+    #  Recuperar respuestas y texto original
     respuestas_previas = estado.get("respuestas_acumuladas", [])
     texto_comando_original = estado.get("texto_original", f"Pon horas en {nombre_proyecto}")
     
@@ -804,7 +804,7 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
             orden["parametros"]["nodo_padre"] = "__buscar__"
     
     # Re-ejecutar solo desde el índice que falló
-    respuestas = list(respuestas_previas)  # 🆕 Empezar con respuestas previas
+    respuestas = list(respuestas_previas)  #  Empezar con respuestas previas
     
     for idx in range(indice_orden, len(ordenes_originales)):
         orden = ordenes_originales[idx]
@@ -834,8 +834,8 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
                         mensaje["coincidencias"],
                         ordenes_originales,
                         idx,
-                        respuestas_acumuladas=respuestas,  # 🆕 Pasar respuestas
-                        texto_original=texto_comando_original  # 🆕 Pasar texto original
+                        respuestas_acumuladas=respuestas,  #  Pasar respuestas
+                        texto_original=texto_comando_original  #  Pasar texto original
                     )
                     
                     registrar_peticion(db, usuario.id, texto_original, "desambiguacion_pendiente", 
@@ -866,13 +866,13 @@ def manejar_desambiguacion_multiple(texto: str, estado: dict, session, db: Sessi
     """
     texto_lower = texto.lower().strip()
     
-    # 🆕 Detectar CANCELACIÓN
+    #  Detectar CANCELACIÓN
     palabras_cancelar = ['cancelar', 'cancel', 'nada', 'olvida', 'olvídalo', 'olvidalo',
                         'equivocado', 'equivocada', 'me equivoqué', 'me equivoque',
                         'error', 'no quiero', 'déjalo', 'dejalo', 'salir', 'sal']
     
     if any(palabra in texto_lower for palabra in palabras_cancelar):
-        print(f"[DEBUG] 🚫 Usuario canceló la desambiguación")
+        print(f"[DEBUG]  Usuario canceló la desambiguación")
         conversation_state_manager.limpiar_estado(user_id)
         respuesta = "👍 Vale, no pasa nada. ¿En qué puedo ayudarte?"
         registrar_peticion(db, usuario.id, texto, "cancelacion_desambiguacion", 
@@ -880,7 +880,7 @@ def manejar_desambiguacion_multiple(texto: str, estado: dict, session, db: Sessi
         session.update_activity()
         return respuesta
     
-    # 🆕 Detectar BÚSQUEDA DE OTRO PROYECTO (ninguno/otro)
+    #  Detectar BÚSQUEDA DE OTRO PROYECTO (ninguno/otro)
     palabras_otro = ['ninguno', 'ninguna', 'otro', 'otra', 'diferente', 'busca', 
                      'buscar', 'otro proyecto', 'uno diferente', 'distinto']
     
@@ -892,7 +892,7 @@ def manejar_desambiguacion_multiple(texto: str, estado: dict, session, db: Sessi
         
         if son_existentes:
             # Si son proyectos existentes, buscar en el sistema
-            print(f"[DEBUG] 📂 Proyectos existentes rechazados, buscando en sistema...")
+            print(f"[DEBUG]  Proyectos existentes rechazados, buscando en sistema...")
             return buscar_en_sistema(estado, session, db, usuario, user_id, canal, contexto, texto)
         else:
             # Si son del sistema, es ambiguo - no hay "otro"

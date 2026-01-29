@@ -2,7 +2,7 @@
 Generador de respuestas naturales usando GPT.
 Incluye conversación general y confirmación de acciones ejecutadas.
 
-🆕 MODIFICADO: Ahora incluye departamento y cliente en las respuestas
+ MODIFICADO: Ahora incluye departamento y cliente en las respuestas
 """
 
 from datetime import datetime
@@ -10,7 +10,7 @@ from config import settings
 from utils.proyecto_utils import parsear_path_proyecto
 
 
-# 🆕 Historial conversacional POR USUARIO (antes era global)
+#  Historial conversacional POR USUARIO (antes era global)
 historiales_conversacion = {}  # user_id -> lista de mensajes
 
 
@@ -29,7 +29,7 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
     if not acciones_ejecutadas:
         return "No he entendido qué quieres que haga. ¿Podrías reformularlo?"
     
-    # 🔥 Extraer fechas de cada acción y limpiar mensajes
+    #  Extraer fechas de cada acción y limpiar mensajes
     # Ahora mantenemos la fecha asociada a cada acción
     import re
     acciones_con_fecha = []
@@ -53,7 +53,7 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
     # Crear resumen de acciones
     resumen_acciones = "\n".join([f"- {acc}" for acc in acciones_con_fecha])
     
-    # 🆕 MEJORADO: Extraer información de jerarquía completa del proyecto
+    #  MEJORADO: Extraer información de jerarquía completa del proyecto
     info_adicional = ""
     if contexto:
         # Intentar obtener path completo primero (más información)
@@ -68,7 +68,7 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
             
             if partes_jerarquia:
                 jerarquia_texto = " del ".join(partes_jerarquia)
-                info_adicional = f"\n\n IMPORTANTE - JERARQUÍA DEL PROYECTO:\nEl proyecto '{info['nombre']}' pertenece al {jerarquia_texto}.\n🚨 SIEMPRE incluye el departamento y cliente en tu respuesta. Ejemplo: 'He imputado X horas en {info['nombre']} del {info['departamento'] or 'departamento'}" + (f" ({info['cliente']})" if info['cliente'] else "") + "'"
+                info_adicional = f"\n\n IMPORTANTE - JERARQUÍA DEL PROYECTO:\nEl proyecto '{info['nombre']}' pertenece al {jerarquia_texto}.\n SIEMPRE incluye el departamento y cliente en tu respuesta. Ejemplo: 'He imputado X horas en {info['nombre']} del {info['departamento'] or 'departamento'}" + (f" ({info['cliente']})" if info['cliente'] else "") + "'"
         
         # Fallback al método anterior si no hay path_completo
         elif contexto.get("nodo_padre_actual") and contexto.get("nodo_padre_actual") != "__buscar__":
@@ -87,15 +87,13 @@ Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando
 
  REGLAS CRÍTICAS:
 - NUNCA inventes fechas. USA EXACTAMENTE las fechas que aparecen en las acciones.
-- Si una acción dice "(fecha: 12/01/2026)", usa ESA FECHA, no otra.
-- Si dice "el lunes" y hay "(fecha: 12/01/2026)", di "el lunes 12/01" o "el lunes 12 de enero", NO "el lunes 1 de diciembre".
 - Si hay VARIAS acciones con DIFERENTES fechas, menciona CADA fecha específica.
 - NO digas "para esa misma fecha" si las fechas son diferentes.
 - Usa formato de fecha legible (ej: "el 12/01" o "el lunes 12/01").
 - Si no estás seguro de una fecha, NO la menciones, di solo "el lunes/martes/etc."
 - Usa un tono conversacional, cercano y profesional. Puedes usar emojis ocasionalmente.
-- 🚨 SIEMPRE incluye el departamento/área del proyecto en la respuesta si está disponible en la información.
-- 🚨 RESPETA LA OPERACIÓN EXACTA: Si la acción dice "restado" o "quitado", usa ESE verbo. Si dice "sumado" o "añadido", usa ESE verbo. NO los confundas.
+-  SIEMPRE incluye el departamento/área del proyecto en la respuesta si está disponible en la información.
+-  RESPETA LA OPERACIÓN EXACTA: Si la acción dice "restado" o "quitado", usa ESE verbo. Si dice "sumado" o "añadido", usa ESE verbo. NO los confundas.
   Ejemplos CORRECTOS:
   - Acción: "Restado 2 horas" → Respuesta: "He restado/quitado 2 horas" 
   - Acción: "Sumado 3 horas" → Respuesta: "He sumado/añadido 3 horas" 
@@ -146,7 +144,7 @@ def responder_conversacion(texto, user_id="default"):
     """
     global historiales_conversacion
     
-    # 🆕 Crear historial para este usuario si no existe
+    #  Crear historial para este usuario si no existe
     if user_id not in historiales_conversacion:
         historiales_conversacion[user_id] = []
     
@@ -222,35 +220,6 @@ def generar_resumen_natural(info_horas, consulta_usuario):
     # Convertir saltos de línea en <br> para HTML
     info_con_html = info_horas.replace("\n", "<br>")
     return info_con_html
-
-
-def limpiar_historiales_antiguos(minutos_inactividad=30):
-    """
-    Limpia historiales de usuarios que llevan mucho tiempo sin actividad.
-    Debe ser llamado periódicamente para evitar acumulación de memoria.
-    
-    Args:
-        minutos_inactividad: Minutos de inactividad antes de limpiar historial
-        
-    Returns:
-        int: Número de historiales limpiados
-    """
-    # Por ahora no implementamos timestamp, solo limpiamos si hay muchos usuarios
-    global historiales_conversacion
-    
-    # Si hay más de 100 usuarios, limpiar los más antiguos
-    if len(historiales_conversacion) > 100:
-        # Mantener solo los últimos 50
-        usuarios = list(historiales_conversacion.keys())
-        usuarios_a_eliminar = usuarios[:-50]
-        
-        for user_id in usuarios_a_eliminar:
-            del historiales_conversacion[user_id]
-        
-        print(f"[CONVERSACION] 🧹 Limpiados {len(usuarios_a_eliminar)} historiales antiguos")
-        return len(usuarios_a_eliminar)
-    
-    return 0
 
 
 def obtener_stats_historiales():

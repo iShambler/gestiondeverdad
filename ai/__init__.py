@@ -9,7 +9,6 @@ from .response_generator import (
     generar_respuesta_natural,
     responder_conversacion,
     generar_resumen_natural,
-    limpiar_historiales_antiguos,
     obtener_stats_historiales
 )
 from .query_analyzer import interpretar_consulta
@@ -25,7 +24,6 @@ __all__ = [
     'generar_respuesta_natural',
     'responder_conversacion',
     'generar_resumen_natural',
-    'limpiar_historiales_antiguos',
     'obtener_stats_historiales',
     
     # Query Analyzer
