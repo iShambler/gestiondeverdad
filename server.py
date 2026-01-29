@@ -81,7 +81,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
     # Obtener sesión de navegador
     session = browser_pool.get_session(user_id)
     if not session or not session.driver:
-        error_msg = "⚠️ No he podido iniciar el navegador. Intenta de nuevo en unos momentos."
+        error_msg = " No he podido iniciar el navegador. Intenta de nuevo en unos momentos."
         registrar_peticion(db, usuario.id, texto, "error", canal=canal, respuesta=error_msg, estado="error")
         return error_msg
     
@@ -238,7 +238,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                 with session.lock:
                     tabla_actual = leer_tabla_imputacion(session.driver)
             except Exception as e:
-                print(f"[DEBUG] ⚠️ No se pudo leer la tabla: {e}")
+                print(f"[DEBUG]  No se pudo leer la tabla: {e}")
             
             ordenes = interpretar_con_gpt(texto, contexto, tabla_actual)
             
@@ -278,7 +278,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
             return respuesta
 
     except Exception as e:
-        error_msg = f"⚠️ Error procesando la solicitud: {e}"
+        error_msg = f" Error procesando la solicitud: {e}"
         registrar_peticion(db, usuario.id, texto, "error", canal=canal, 
                          respuesta=error_msg, estado="error")
         return error_msg
@@ -353,7 +353,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 
                 return JSONResponse({
                     "success": True,
-                    "message": "✅ Credenciales verificadas y guardadas correctamente",
+                    "message": " Credenciales verificadas y guardadas correctamente",
                     "username": username,
                     "gestiondeverdad_user_id": usuario.id
                 })
@@ -395,7 +395,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                 )
                 
                 if not session or not session.driver:
-                    return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador."})
+                    return JSONResponse({"reply": " No he podido iniciar el navegador."})
                 
                 try:
                     success, mensaje = await loop.run_in_executor(
@@ -426,22 +426,22 @@ async def chat(request: Request, db: Session = Depends(get_db)):
                         
                         return JSONResponse({
                             "reply": (
-                                "✅ *¡Credenciales guardadas correctamente!*\n\n"
+                                " *¡Credenciales guardadas correctamente!*\n\n"
                                 f"✓ Usuario: *{credenciales['username']}*\n"
                                 "✓ Contraseña: ******\n\n"
-                                "🚀 Ya puedes empezar a usar el bot. ¿En qué puedo ayudarte?"
+                                " Ya puedes empezar a usar el bot. ¿En qué puedo ayudarte?"
                             )
                         })
                     else:
                         return JSONResponse({
                             "reply": (
-                                "❌ *Error de login*\n\n"
+                                " *Error de login*\n\n"
                                 "Las credenciales no son correctas."
                             )
                         })
                 
                 except Exception as e:
-                    return JSONResponse({"reply": f"⚠️ Error: {str(e)}"})
+                    return JSONResponse({"reply": f" Error: {str(e)}"})
             
             else:
                 return JSONResponse({
@@ -456,7 +456,7 @@ async def chat(request: Request, db: Session = Depends(get_db)):
         # 🔐 ASEGURAR LOGIN Y NAVEGACIÓN BASE
         session = browser_pool.get_session(wa_id)
         if not session or not session.driver:
-            return JSONResponse({"reply": "⚠️ No he podido iniciar el navegador."})
+            return JSONResponse({"reply": " No he podido iniciar el navegador."})
 
         # 🆕 VERIFICAR SI ESTÁ CAMBIANDO CREDENCIALES (antes de hacer login con las viejas)
         if credential_manager.esta_cambiando_credenciales(wa_id):
@@ -545,12 +545,12 @@ async def procesar_whatsapp_en_background(texto: str, wa_id: str):
         enviar_whatsapp(wa_id, respuesta)
 
     except Exception:
-        print("[BACKGROUND ERROR] ❌ Excepción en background:")
+        print("[BACKGROUND ERROR]  Excepción en background:")
         traceback.print_exc()  # 🔥 ESTO ES CLAVE
 
         enviar_whatsapp(
             wa_id,
-            "⚠️ Ha ocurrido un error procesando tu solicitud."
+            " Ha ocurrido un error procesando tu solicitud."
         )
 
     finally:
@@ -575,12 +575,12 @@ def enviar_whatsapp(wa_id: str, mensaje: str):
         response = requests.post(url, json=payload, timeout=15)
 
         if response.status_code != 200:
-            print(f"[GREEN API] ❌ Error {response.status_code}: {response.text}")
+            print(f"[GREEN API]  Error {response.status_code}: {response.text}")
         else:
-            print(f"[GREEN API] ✅ Mensaje enviado a {wa_id}")
+            print(f"[GREEN API]  Mensaje enviado a {wa_id}")
 
     except Exception as e:
-        print(f"[GREEN API] ❌ Excepción enviando mensaje: {e}")
+        print(f"[GREEN API]  Excepción enviando mensaje: {e}")
 
 
 @app.get("/stats")

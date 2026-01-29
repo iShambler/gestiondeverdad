@@ -44,7 +44,7 @@ class Selectors:
     CAMPO_HORAS_DIA_TEMPLATE = "input[id$='.{dia_key}']"  # Usar .format(dia_key='h1')
     
     # ========================================
-    # 🔍 BUSCADOR DE PROYECTOS
+    #  BUSCADOR DE PROYECTOS
     # ========================================
     BUSCADOR_INPUT = '#textoBusqueda'
     BUSCADOR_BOTON = '#buscar'
@@ -63,7 +63,7 @@ class Selectors:
     DIALOG_CONTENT = '.ui-dialog-content, .modal-body, p'
     
     # ========================================
-    # 📋 XPATH ESPECÍFICOS
+    #  XPATH ESPECÍFICOS
     # ========================================
     @staticmethod
     def xpath_dia_calendario(dia: int) -> str:

@@ -35,7 +35,7 @@ def verificar_y_solicitar_credenciales(db: Session, user_id: str, canal: str = "
         else:
             usuario = crear_usuario(db, app_id=user_id, canal=canal)
 
-    # ✅ Si NO tiene credenciales guardadas → mostrar mensaje
+    #  Si NO tiene credenciales guardadas → mostrar mensaje
     if not usuario.username_intranet or not usuario.password_intranet:
         # Mensaje diferente para WhatsApp (permite ingresarlas por chat)
         if canal == "whatsapp":
@@ -50,12 +50,12 @@ def verificar_y_solicitar_credenciales(db: Session, user_id: str, canal: str = "
         else:
             mensaje = (
                 "👋 **¡Hola!** Aún no tengo tus credenciales de GestiónITT.\n\n"
-                "🔧 Dirígete a **Mi Perfil → Integración con GestiónITT** y configúralas.\n\n"
+                " Dirígete a **Mi Perfil → Integración con GestiónITT** y configúralas.\n\n"
                 "Una vez configuradas, ¡podré ayudarte! 😊"
             )
         return usuario, mensaje
 
-    # ✅ Si las tiene → todo OK
+    #  Si las tiene → todo OK
     return usuario, None
 
 

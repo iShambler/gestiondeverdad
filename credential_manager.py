@@ -47,7 +47,7 @@ class CredentialManager:
         texto_lower = texto.lower().strip()
         if texto_lower in ['cancelar', 'cancel', 'no', 'salir']:
             self.finalizar_cambio(user_id)
-            return (False, "❌ Cambio de credenciales cancelado.", None)
+            return (False, " Cambio de credenciales cancelado.", None)
         
         # Extraer credenciales (misma función que primera vez)
         from auth_handler import extraer_credenciales_con_gpt
@@ -59,21 +59,21 @@ class CredentialManager:
         # Validar que tengamos AMBAS credenciales
         if not credenciales["ambos"]:
             mensaje_incompleto = (
-                "⚠️ No he podido extraer las credenciales.\n\n"
+                " No he podido extraer las credenciales.\n\n"
                 "📝 *Envíamelas así:*\n"
                 "```\n"
                 "Usuario: tu_usuario  Contraseña: tu_contraseña\n"
                 "```\n\n"
-                "⚠️ Escribe *'cancelar'* para salir."
+                " Escribe *'cancelar'* para salir."
             )
             return (False, mensaje_incompleto, None)
         
         # Validar longitud mínima
         if len(username) < 3:
-            return (False, "❌ El usuario debe tener al menos 3 caracteres. Inténtalo de nuevo.", None)
+            return (False, " El usuario debe tener al menos 3 caracteres. Inténtalo de nuevo.", None)
         
         if len(password) < 4:
-            return (False, "❌ La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo.", None)
+            return (False, " La contraseña debe tener al menos 4 caracteres. Inténtalo de nuevo.", None)
         
         # Credenciales extraídas OK → devolver para que server.py haga login
         return (True, None, {"username": username, "password": password})
@@ -92,7 +92,7 @@ class CredentialManager:
             usuario = obtener_usuario_por_origen(db, app_id=user_id)
         
         if not usuario:
-            return False, "⚠️ Error: usuario no encontrado."
+            return False, " Error: usuario no encontrado."
         
         # Guardar credenciales cifradas
         usuario.username_intranet = username
@@ -102,7 +102,7 @@ class CredentialManager:
         # Finalizar proceso
         self.finalizar_cambio(user_id)
         
-        return True, f"🎉 *¡Credenciales actualizadas!*\n\n✅ Usuario: *{username}*\n✅ Contraseña: ******\n\n🚀 Ya puedes seguir usando el bot."
+        return True, f"🎉 *¡Credenciales actualizadas!*\n\n Usuario: *{username}*\n Contraseña: ******\n\n Ya puedes seguir usando el bot."
     
     def finalizar_cambio(self, user_id: str):
         """Finaliza el proceso de cambio de credenciales"""

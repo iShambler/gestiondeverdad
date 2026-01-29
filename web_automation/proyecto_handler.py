@@ -7,10 +7,10 @@ Funciones para el manejo específico de proyectos:
 - Lectura de tabla de imputación
 
 CORRECCIONES APLICADAS:
-1. ✅ Eliminada lógica compleja de contexto (proyecto_actual_contexto, inferido_contexto)
-2. ✅ SIEMPRE preguntar cuando hay coincidencias en tabla (sin importar si es 1 o más)
-3. ✅ Para modificar/borrar: si NO existe en tabla → ERROR (no buscar en sistema)
-4. ✅ Para imputar nuevo: si NO existe en tabla → buscar en sistema
+1.  Eliminada lógica compleja de contexto (proyecto_actual_contexto, inferido_contexto)
+2.  SIEMPRE preguntar cuando hay coincidencias en tabla (sin importar si es 1 o más)
+3.  Para modificar/borrar: si NO existe en tabla → ERROR (no buscar en sistema)
+4.  Para imputar nuevo: si NO existe en tabla → buscar en sistema
 """
 
 import time
@@ -68,7 +68,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         if not selects:
             selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='subproyecto']")
         
-        print(f"[DEBUG] 🔍 Buscando proyecto '{nombre_proyecto}' en {len(selects)} líneas totales...")
+        print(f"[DEBUG]  Buscando proyecto '{nombre_proyecto}' en {len(selects)} líneas totales...")
         
         # 🆕 Recolectar TODAS las coincidencias
         coincidencias_encontradas = []
@@ -109,7 +109,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
             # 2. El nombre buscado está contenido en el nombre real
             if nombre_buscado_norm == nombre_real_norm or nombre_buscado_norm in nombre_real_norm:
                 # 🆕 ENCONTRADO - Añadir a la lista de coincidencias
-                print(f"[DEBUG] ✅ Encontrado '{nombre_proyecto}' en línea {idx+1}")
+                print(f"[DEBUG]  Encontrado '{nombre_proyecto}' en línea {idx+1}")
                 
                 # Extraer nodo padre del proyecto en tabla
                 nodo_padre_encontrado = partes[-2].strip() if len(partes) >= 2 else ""
@@ -133,7 +133,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                         except:
                             horas_dias[dia_nombre] = 0.0
                 except Exception as e:
-                    print(f"[DEBUG] ⚠️ Error leyendo horas: {e}")
+                    print(f"[DEBUG]  Error leyendo horas: {e}")
                 
                 coincidencias_encontradas.append({
                     "proyecto": nombre_proyecto_real,
@@ -154,8 +154,8 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
             # Buscar la coincidencia que match con el nodo_padre
             for coincidencia in coincidencias_encontradas:
                 if normalizar(nodo_padre) in normalizar(coincidencia["nodo_padre"]):
-                    # ✅ Coincide - usar este
-                    print(f"[DEBUG] ✅ Nodo padre coincide, reutilizando línea existente")
+                    #  Coincide - usar este
+                    print(f"[DEBUG]  Nodo padre coincide, reutilizando línea existente")
                     fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
                     time.sleep(0.3)
@@ -170,8 +170,8 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 )
                 
                 if ya_usado:
-                    # ✅ Ya fue usado en este comando: usar directamente SIN preguntar
-                    print(f"[DEBUG] ✅ Proyecto '{nombre_proyecto}' ya usado en este comando, usando directamente")
+                    #  Ya fue usado en este comando: usar directamente SIN preguntar
+                    print(f"[DEBUG]  Proyecto '{nombre_proyecto}' ya usado en este comando, usando directamente")
                     coincidencia = coincidencias_encontradas[0]
                     fila = selects[coincidencia["fila_idx"]].find_element(By.XPATH, "./ancestor::tr")
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", fila)
@@ -188,33 +188,33 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         
         # Si solo_existente=True (modificar/borrar) → ERROR, no buscar en sistema
         if solo_existente:
-            print(f"[DEBUG] ⚠️ Proyecto '{nombre_proyecto}' NO encontrado en tabla y solo_existente=True")
-            return (None, f"❌ No tienes '{nombre_proyecto}' imputado esta semana. No puedo modificar horas de un proyecto que no existe.", False, [])
+            print(f"[DEBUG]  Proyecto '{nombre_proyecto}' NO encontrado en tabla y solo_existente=True")
+            return (None, f" No tienes '{nombre_proyecto}' imputado esta semana. No puedo modificar horas de un proyecto que no existe.", False, [])
         
         # Si no existe → añadimos nueva línea y buscamos en sistema
         print(f"[DEBUG] ➕ Proyecto '{nombre_proyecto}' NO encontrado en tabla, añadiendo nueva línea y buscando en sistema...")
         try:
             btn_nueva_linea = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BTN_NUEVA_LINEA)))
             btn_nueva_linea.click()
-            print(f"[DEBUG] ✅ Botón nueva línea pulsado")
+            print(f"[DEBUG]  Botón nueva línea pulsado")
             time.sleep(1)
         except Exception as e:
-            print(f"[DEBUG] ❌ Error al pulsar botón nueva línea: {e}")
+            print(f"[DEBUG]  Error al pulsar botón nueva línea: {e}")
             return (None, f"No he podido crear una nueva línea: {e}", False, [])
 
         # Detectar el nuevo <select> (último en la lista)
         try:
             selects_actualizados = driver.find_elements(By.CSS_SELECTOR, "select[id^='listaEmpleadoHoras'][id$='.subproyecto']")
-            print(f"[DEBUG] 📋 Selects encontrados después de añadir: {len(selects_actualizados)}")
+            print(f"[DEBUG]  Selects encontrados después de añadir: {len(selects_actualizados)}")
             
             if not selects_actualizados:
                 return (None, "No se pudo detectar el nuevo select después de añadir línea", False, [])
                 
             nuevo_select = selects_actualizados[-1]
             fila = nuevo_select.find_element(By.XPATH, "./ancestor::tr")
-            print(f"[DEBUG] ✅ Nuevo select detectado")
+            print(f"[DEBUG]  Nuevo select detectado")
         except Exception as e:
-            print(f"[DEBUG] ❌ Error detectando nuevo select: {e}")
+            print(f"[DEBUG]  Error detectando nuevo select: {e}")
             return (None, f"No he podido detectar la nueva línea: {e}", False, [])
 
         # Buscar el botón "»" correspondiente dentro de la misma fila
@@ -234,7 +234,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
         campo_buscar = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, Selectors.BUSCADOR_INPUT)))
         campo_buscar.clear()
         campo_buscar.send_keys(nombre_proyecto)
-        print(f"[DEBUG] 🔍 Escrito '{nombre_proyecto}' en el campo de búsqueda")
+        print(f"[DEBUG]  Escrito '{nombre_proyecto}' en el campo de búsqueda")
 
         # Pulsar en el botón "Buscar"
         btn_buscar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, Selectors.BUSCADOR_BOTON)))
@@ -249,14 +249,14 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
             if (tree && tree.jstree) { tree.jstree('open_all'); }
         """)
         time.sleep(1)
-        print(f"[DEBUG] ✅ Árbol expandido")
+        print(f"[DEBUG]  Árbol expandido")
 
         # Buscar y seleccionar el proyecto
         # IMPORTANTE: NO normalizar (quitar tildes) porque el sistema es sensible a tildes
         
         if nodo_padre and nodo_padre != "__buscar__":
-            # 🎯 Búsqueda con jerarquía: buscar el proyecto bajo su nodo padre específico
-            print(f"[DEBUG] 🔍 Buscando '{nombre_proyecto}' bajo nodo padre '{nodo_padre}'...")
+            #  Búsqueda con jerarquía: buscar el proyecto bajo su nodo padre específico
+            print(f"[DEBUG]  Buscando '{nombre_proyecto}' bajo nodo padre '{nodo_padre}'...")
             
             try:
                 # 🆕 BUSCAR TODOS los nodos y comparar normalizados en Python (más confiable que XPath)
@@ -264,14 +264,14 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 nodo_padre_norm = normalizar(nodo_padre)
                 nodo_padre_elemento = None
                 
-                print(f"[DEBUG] 🔍 Buscando entre {len(todos_nodos)} nodos...")
+                print(f"[DEBUG]  Buscando entre {len(todos_nodos)} nodos...")
                 
                 for nodo in todos_nodos:
                     try:
                         texto_nodo = nodo.text.strip()
                         if texto_nodo and nodo_padre_norm in normalizar(texto_nodo):
                             nodo_padre_elemento = nodo
-                            print(f"[DEBUG] ✅ Nodo padre encontrado: '{texto_nodo}'")
+                            print(f"[DEBUG]  Nodo padre encontrado: '{texto_nodo}'")
                             break
                     except:
                         continue
@@ -303,7 +303,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                         if texto_elem_norm == nombre_proyecto_norm:
                             # Coincidencia EXACTA
                             elementos_exactos.append(elem)
-                            print(f"[DEBUG] ✅ Coincidencia EXACTA: '{texto_elem}'")
+                            print(f"[DEBUG]  Coincidencia EXACTA: '{texto_elem}'")
                         elif nombre_proyecto_norm in texto_elem_norm:
                             # Coincidencia parcial (contiene)
                             elementos_parciales.append(elem)
@@ -328,7 +328,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                         if nodo_padre_norm in normalizar(c.get("nodo_padre", ""))
                     ]
                     
-                    print(f"[DEBUG] 📋 {len(coincidencias_filtradas)} coincidencias en '{nodo_padre}'")
+                    print(f"[DEBUG]  {len(coincidencias_filtradas)} coincidencias en '{nodo_padre}'")
                     
                     # Cerrar buscador
                     try:
@@ -364,7 +364,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 return (fila, f"He abierto el proyecto '{nombre_proyecto}' de '{nodo_padre}'", False, [])
                 
             except Exception as e:
-                print(f"[DEBUG] ❌ Error buscando con nodo padre: {e}")
+                print(f"[DEBUG]  Error buscando con nodo padre: {e}")
                 # Si falla la búsqueda con nodo padre, intentar búsqueda simple
                 print(f"[DEBUG] 🔄 Intentando búsqueda simple sin nodo padre...")
         
@@ -383,13 +383,13 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
             print(f"[DEBUG] 📊 Elementos encontrados: {len(elementos)}")
             if not elementos:
                 # 🆕 Buscar en NODOS PADRE (departamentos/áreas)
-                print(f"[DEBUG] 🔍 No se encontraron proyectos, buscando nodos padre...")
+                print(f"[DEBUG]  No se encontraron proyectos, buscando nodos padre...")
                 
                 # 🆕 BUSCAR TODOS LOS ENLACES Y FILTRAR EN PYTHON (más confiable)
                 todos_los_nodos = driver.find_elements(By.XPATH, "//li//a")
                 nombre_normalizado = normalizar(nombre_proyecto)
                 
-                print(f"[DEBUG] 🔍 Buscando '{nombre_proyecto}' entre {len(todos_los_nodos)} nodos...")
+                print(f"[DEBUG]  Buscando '{nombre_proyecto}' entre {len(todos_los_nodos)} nodos...")
                 
                 nodos_padre = []
                 
@@ -437,7 +437,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                                     "path_completo": f"{nodo_nombre} → {proyecto.text.strip()}"
                                 })
                         except Exception as e:
-                            print(f"[DEBUG] ⚠️ Error explorando nodo {nodo_nombre}: {e}")
+                            print(f"[DEBUG]  Error explorando nodo {nodo_nombre}: {e}")
                             continue
                     
                     print(f"[DEBUG] 📊 Total proyectos en nodos: {len(proyectos_en_nodos)}")
@@ -446,9 +446,9 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                         raise Exception(f"No encontré proyectos dentro de '{nombre_proyecto}'")
                     
                     elif len(proyectos_en_nodos) == 1:
-                        # ✅ SOLO 1 PROYECTO: Seleccionarlo automáticamente
+                        #  SOLO 1 PROYECTO: Seleccionarlo automáticamente
                         proyecto_unico = proyectos_en_nodos[0]
-                        print(f"[DEBUG] ✅ Solo 1 proyecto en '{nombre_proyecto}', seleccionando: {proyecto_unico['proyecto']}")
+                        print(f"[DEBUG]  Solo 1 proyecto en '{nombre_proyecto}', seleccionando: {proyecto_unico['proyecto']}")
                         
                         elemento = proyecto_unico["elemento"]
                         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
@@ -490,9 +490,9 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                     # No encontró ni proyectos ni nodos padre
                     raise Exception(f"No se encontró ninguna coincidencia para '{nombre_proyecto}'")
             
- # ✅ Si hay 1 ÚNICO proyecto → usar automáticamente SIN preguntar
+ #  Si hay 1 ÚNICO proyecto → usar automáticamente SIN preguntar
             if len(elementos) == 1 and not elemento_preseleccionado:
-                print(f"[DEBUG] ✅ 1 único proyecto encontrado en sistema, usando automáticamente")
+                print(f"[DEBUG]  1 único proyecto encontrado en sistema, usando automáticamente")
                 elemento = elementos[0]
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
                 elemento.click()
@@ -536,15 +536,15 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 # Devolver flag de desambiguación
                 return (None, "", True, coincidencias)
             
-            # 🎯 Si hay elemento preseleccionado (usuario ya eligió), usarlo
+            #  Si hay elemento preseleccionado (usuario ya eligió), usarlo
             if elemento_preseleccionado:
-                print(f"[DEBUG] ✅ Usando elemento preseleccionado por el usuario")
+                print(f"[DEBUG]  Usando elemento preseleccionado por el usuario")
                 elemento = elemento_preseleccionado
             else:
                 # Tomar la primera coincidencia
                 elemento = elementos[0]
                 if len(elementos) > 1:
-                    print(f"[DEBUG] ⚠️ Usando primera coincidencia de {len(elementos)} (nodo padre especificado)")
+                    print(f"[DEBUG]  Usando primera coincidencia de {len(elementos)} (nodo padre especificado)")
             
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
             elemento.click()
@@ -555,7 +555,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
             
         except Exception as e:
             # CRÍTICO: Si no encuentra el proyecto, cerrar todo y devolver error
-            print(f"[DEBUG] ❌ No se encontró el proyecto '{nombre_proyecto}' en el sistema")
+            print(f"[DEBUG]  No se encontró el proyecto '{nombre_proyecto}' en el sistema")
             
             # Cerrar el overlay del buscador
             try:
@@ -570,7 +570,7 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 """)
                 time.sleep(0.5)
             except Exception as close_error:
-                print(f"[DEBUG] ⚠️ Error cerrando overlay: {close_error}")
+                print(f"[DEBUG]  Error cerrando overlay: {close_error}")
             
             # Eliminar la línea vacía que quedó
             try:
@@ -581,10 +581,10 @@ def seleccionar_proyecto(driver, wait, nombre_proyecto, nodo_padre=None, element
                 time.sleep(0.5)
                 print(f"[DEBUG] 🗑️ Línea vacía eliminada")
             except Exception as del_error:
-                print(f"[DEBUG] ⚠️ No se pudo eliminar la línea vacía: {del_error}")
+                print(f"[DEBUG]  No se pudo eliminar la línea vacía: {del_error}")
             
             # Devolver None para indicar ERROR y detener la ejecución
-            return (None, f"❌ No he encontrado el proyecto '{nombre_proyecto}' en el sistema. Verifica el nombre e inténtalo de nuevo.", False, [])
+            return (None, f" No he encontrado el proyecto '{nombre_proyecto}' en el sistema. Verifica el nombre e inténtalo de nuevo.", False, [])
 
     except Exception as e:
         return (None, f"No he podido seleccionar el proyecto '{nombre_proyecto}': {e}", False, [])
@@ -634,7 +634,7 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
                 # Si encontramos el proyecto
                 if texto_selected and normalizar(nombre_proyecto) in normalizar(texto_selected):
                     fila = sel.find_element(By.XPATH, "./ancestor::tr")
-                    print(f"[DEBUG] ✅ Encontrado '{nombre_proyecto}' en línea {idx+1}: {texto_selected}")
+                    print(f"[DEBUG]  Encontrado '{nombre_proyecto}' en línea {idx+1}: {texto_selected}")
                     break
         
         if not fila:
@@ -668,7 +668,7 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
             if not btn_eliminar:
                 # Último intento: buscar cualquier botón/input en la fila
                 botones = fila.find_elements(By.CSS_SELECTOR, "button, input[type='button'], input[type='submit']")
-                print(f"[DEBUG] 🔍 Buscando entre {len(botones)} botones en la fila...")
+                print(f"[DEBUG]  Buscando entre {len(botones)} botones en la fila...")
                 for boton in botones:
                     texto_boton = (boton.get_attribute("title") or boton.get_attribute("value") or boton.text or "").lower()
                     onclick = (boton.get_attribute("onclick") or "").lower()
@@ -691,9 +691,9 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
                 from selenium.webdriver.common.alert import Alert
                 alert = Alert(driver)
                 alert_text = alert.text
-                print(f"[DEBUG] ⚠️ Alert detectado: {alert_text}")
+                print(f"[DEBUG]  Alert detectado: {alert_text}")
                 alert.accept()  # Aceptar el alert
-                print(f"[DEBUG] ✅ Alert aceptado")
+                print(f"[DEBUG]  Alert aceptado")
                 time.sleep(0.5)
             except:
                 # No hay alert, continuar normalmente
@@ -711,11 +711,11 @@ def eliminar_linea_proyecto(driver, wait, nombre_proyecto, fila_contexto=None):
             
             time.sleep(0.5)
             
-            print(f"[DEBUG] ✅ Línea del proyecto '{nombre_proyecto}' eliminada")
+            print(f"[DEBUG]  Línea del proyecto '{nombre_proyecto}' eliminada")
             return f"He eliminado la línea del proyecto '{nombre_proyecto}'"
             
         except Exception as e:
-            print(f"[DEBUG] ❌ Error en eliminación: {e}")
+            print(f"[DEBUG]  Error en eliminación: {e}")
             import traceback
             traceback.print_exc()
             return f"Encontré el proyecto pero no pude eliminar la línea: {e}"
@@ -769,8 +769,8 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
             # 🆕 VALIDACIÓN: No permitir quitar horas de 0
             if modo == "sumar" and nuevas_horas < 0 and valor_actual == 0:
                 proyecto_texto = f"de {nombre_proyecto}" if nombre_proyecto else ""
-                print(f"[DEBUG] ❌ Intento de quitar {abs(nuevas_horas)}h {proyecto_texto} el {dia} pero ya tiene 0h")
-                return f"❌ No puedo quitar {abs(nuevas_horas)}h {proyecto_texto} el {dia} porque ya tiene 0h"
+                print(f"[DEBUG]  Intento de quitar {abs(nuevas_horas)}h {proyecto_texto} el {dia} pero ya tiene 0h")
+                return f" No puedo quitar {abs(nuevas_horas)}h {proyecto_texto} el {dia} porque ya tiene 0h"
             
             if modo == "establecer":
                 total = nuevas_horas
@@ -787,7 +787,7 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
                 time.sleep(0.5)  # Dar tiempo a que la tabla se actualice
                 
                 proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
-                print(f"[DEBUG] ✅ Establecidas {total}h el {dia} {proyecto_texto}")
+                print(f"[DEBUG]  Establecidas {total}h el {dia} {proyecto_texto}")
                 return f"He establecido {total}h el {dia} {proyecto_texto}"
             else:
                 total = round(valor_actual + nuevas_horas, 2)
@@ -806,7 +806,7 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
                 proyecto_texto = f"en el proyecto {nombre_proyecto}" if nombre_proyecto else ""
                 accion = "añadido" if nuevas_horas > 0 else "restado"
                 
-                print(f"[DEBUG] ✅ {accion.capitalize()} {abs(nuevas_horas)}h el {dia} {proyecto_texto} (total: {total}h)")
+                print(f"[DEBUG]  {accion.capitalize()} {abs(nuevas_horas)}h el {dia} {proyecto_texto} (total: {total}h)")
                 
                 if valor_actual > 0:
                     return f"He {accion} {abs(nuevas_horas)}h el {dia} {proyecto_texto} (total: {total}h)"
@@ -815,7 +815,7 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
         else:
             return f"El {dia} no está disponible para imputar"
     except Exception as e:
-        print(f"[DEBUG] ❌ Error imputando horas: {e}")
+        print(f"[DEBUG]  Error imputando horas: {e}")
         import traceback
         traceback.print_exc()
         return f"No he podido imputar horas el {dia}: {e}"
@@ -918,13 +918,13 @@ def imputar_horas_semana(driver, wait, fila, nombre_proyecto=None):
                     campo.send_keys(str(valor))
                     
                     dias_imputados.append(f"{dia_nombre} ({valor}h)")
-                    print(f"[DEBUG] ✅ {dia_nombre}: imputado {valor}h")
+                    print(f"[DEBUG]  {dia_nombre}: imputado {valor}h")
                     time.sleep(0.1)
                 else:
                     print(f"[DEBUG] ⏭️ {dia_nombre}: campo deshabilitado")
                     dias_omitidos.append(f"{dia_nombre} (bloqueado)")
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Error en {dia_nombre}: {e}")
+                print(f"[DEBUG]  Error en {dia_nombre}: {e}")
                 pass
         
         # 🆕 CRÍTICO: Después de modificar TODOS los días, salir del último input
@@ -1019,7 +1019,7 @@ def borrar_todas_horas_dia(driver, wait, dia):
                         time.sleep(0.1)
             
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Error procesando línea {idx+1}: {e}")
+                print(f"[DEBUG]  Error procesando línea {idx+1}: {e}")
                 continue
         
         # 🆕 CRÍTICO: Después de modificar todos los campos, salir del último input
@@ -1117,14 +1117,14 @@ def leer_tabla_imputacion(driver):
                 })
             
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Error leyendo proyecto {idx}: {e}")
+                print(f"[DEBUG]  Error leyendo proyecto {idx}: {e}")
                 continue
         
-        print(f"[DEBUG] ✅ Lectura completa: {len(proyectos_info)} proyectos procesados")
+        print(f"[DEBUG]  Lectura completa: {len(proyectos_info)} proyectos procesados")
         return proyectos_info
     
     except Exception as e:
-        print(f"[DEBUG] ❌ Error leyendo tabla: {e}")
+        print(f"[DEBUG]  Error leyendo tabla: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -1178,7 +1178,7 @@ def copiar_semana_anterior(driver, wait, contexto=None):
         proyectos_semana_pasada = leer_tabla_imputacion(driver)
         
         if not proyectos_semana_pasada:
-            return (False, "❌ No encontré ningún proyecto en la semana pasada. No hay nada que copiar.", [])
+            return (False, " No encontré ningún proyecto en la semana pasada. No hay nada que copiar.", [])
         
         # Filtrar solo proyectos con horas > 0
         proyectos_con_horas = [
@@ -1187,9 +1187,9 @@ def copiar_semana_anterior(driver, wait, contexto=None):
         ]
         
         if not proyectos_con_horas:
-            return (False, "❌ La semana pasada no tiene horas imputadas. No hay nada que copiar.", [])
+            return (False, " La semana pasada no tiene horas imputadas. No hay nada que copiar.", [])
         
-        print(f"[DEBUG] 📋 Encontrados {len(proyectos_con_horas)} proyectos con horas en la semana pasada")
+        print(f"[DEBUG]  Encontrados {len(proyectos_con_horas)} proyectos con horas en la semana pasada")
         
         # Guardar info de proyectos para copiar
         proyectos_a_copiar = []
@@ -1241,12 +1241,12 @@ def copiar_semana_anterior(driver, wait, contexto=None):
                 
                 # Si necesita desambiguación, saltamos este proyecto por ahora
                 if necesita_desamb:
-                    print(f"[DEBUG] ⚠️ Proyecto '{nombre}' necesita desambiguación, saltando...")
+                    print(f"[DEBUG]  Proyecto '{nombre}' necesita desambiguación, saltando...")
                     errores.append(f"{nombre} (requiere selección manual)")
                     continue
                 
                 if not fila:
-                    print(f"[DEBUG] ❌ No se pudo seleccionar '{nombre}': {mensaje}")
+                    print(f"[DEBUG]  No se pudo seleccionar '{nombre}': {mensaje}")
                     errores.append(f"{nombre} ({mensaje})")
                     continue
                 
@@ -1258,7 +1258,7 @@ def copiar_semana_anterior(driver, wait, contexto=None):
                             driver, wait, dia_nombre, valor, fila, nombre, modo="establecer"
                         )
                         dias_imputados.append(f"{dia_nombre}: {valor}h")
-                        print(f"[DEBUG]   ✅ {dia_nombre}: {valor}h")
+                        print(f"[DEBUG]    {dia_nombre}: {valor}h")
                 
                 if dias_imputados:
                     # Calcular total de este proyecto
@@ -1271,7 +1271,7 @@ def copiar_semana_anterior(driver, wait, contexto=None):
                     })
                     
             except Exception as e:
-                print(f"[DEBUG] ❌ Error copiando '{nombre}': {e}")
+                print(f"[DEBUG]  Error copiando '{nombre}': {e}")
                 errores.append(f"{nombre} (error: {str(e)[:50]})")
                 continue
         
@@ -1327,19 +1327,19 @@ def copiar_semana_anterior(driver, wait, contexto=None):
             
             print(f"[DEBUG] 📊 Total semana leído de tabla: {total_semana_real}h")
             
-            mensaje_exito = f"✅ He copiado {len(proyectos_copiados)} proyecto(s) de la semana pasada:\n"
+            mensaje_exito = f" He copiado {len(proyectos_copiados)} proyecto(s) de la semana pasada:\n"
             mensaje_exito += "\n".join(resumen_proyectos)
             mensaje_exito += f"\n\n📊 **Total semana: {total_semana_real}h**"
             
             if errores:
-                mensaje_exito += f"\n\n⚠️ No pude copiar: {', '.join(errores)}"
+                mensaje_exito += f"\n\n No pude copiar: {', '.join(errores)}"
             
             return (True, mensaje_exito, proyectos_copiados)
         else:
-            return (False, f"❌ No pude copiar ningún proyecto. Errores: {', '.join(errores)}", [])
+            return (False, f" No pude copiar ningún proyecto. Errores: {', '.join(errores)}", [])
     
     except Exception as e:
-        print(f"[DEBUG] ❌ Error general copiando semana: {e}")
+        print(f"[DEBUG]  Error general copiando semana: {e}")
         import traceback
         traceback.print_exc()
-        return (False, f"❌ Error al copiar la semana anterior: {e}", [])
+        return (False, f" Error al copiar la semana anterior: {e}", [])

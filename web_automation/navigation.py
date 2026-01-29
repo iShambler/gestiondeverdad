@@ -48,7 +48,7 @@ def detectar_dias_deshabilitados(driver):
         # Buscar todas las celdas de encabezado de días
         celdas_dias = driver.find_elements(By.CSS_SELECTOR, "td.tdDia, td.tdDiaDisabled")
         
-        print(f"[DEBUG] 🔍 Detectando días deshabilitados... ({len(celdas_dias)} celdas encontradas)")
+        print(f"[DEBUG]  Detectando días deshabilitados... ({len(celdas_dias)} celdas encontradas)")
         
         dia_idx = 0
         for celda in celdas_dias:
@@ -66,18 +66,18 @@ def detectar_dias_deshabilitados(driver):
                 dia_nombre = dias_orden[dia_idx]
                 dias_estado[dia_nombre] = not esta_deshabilitado
                 
-                print(f"[DEBUG]   {dia_nombre.capitalize()}: {'❌ Deshabilitado' if esta_deshabilitado else '✅ Habilitado'}")
+                print(f"[DEBUG]   {dia_nombre.capitalize()}: {' Deshabilitado' if esta_deshabilitado else ' Habilitado'}")
                 dia_idx += 1
         
         # Resumen
         dias_deshabilitados = [dia for dia, habilitado in dias_estado.items() if not habilitado]
         if dias_deshabilitados:
-            print(f"[DEBUG] ⚠️ Días deshabilitados: {dias_deshabilitados}")
+            print(f"[DEBUG]  Días deshabilitados: {dias_deshabilitados}")
         else:
-            print(f"[DEBUG] ✅ Todos los días habilitados")
+            print(f"[DEBUG]  Todos los días habilitados")
             
     except Exception as e:
-        print(f"[DEBUG] ⚠️ Error detectando días deshabilitados: {e}")
+        print(f"[DEBUG]  Error detectando días deshabilitados: {e}")
     
     return dias_estado
 
@@ -129,12 +129,12 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
                     resultado_guardar = guardar_linea(driver, WebDriverWait(driver, 15))
                     print(f"[DEBUG] 💾 {resultado_guardar}")
                 except Exception as e:
-                    print(f"[DEBUG] ⚠️ Error guardando antes de volver: {e}")
+                    print(f"[DEBUG]  Error guardando antes de volver: {e}")
                 
                 debe_volver = True
             else:
                 # Misma semana, NO volver
-                print(f"[DEBUG] ✅ Misma semana ({lunes_objetivo.strftime('%d/%m')}), NO volver atrás")
+                print(f"[DEBUG]  Misma semana ({lunes_objetivo.strftime('%d/%m')}), NO volver atrás")
                 # 🔥 RETORNAR INMEDIATAMENTE - No necesitamos hacer nada más
                 return f"Ya estás en la semana del {lunes_objetivo.strftime('%d/%m/%Y')}"
             

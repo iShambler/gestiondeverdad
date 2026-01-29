@@ -84,7 +84,7 @@ def generar_mensaje_confirmacion_proyecto(texto_completo: str, tipo_accion: str,
         return (
             f"{emoji_accion} He encontrado **{texto_completo}** ya imputado.\n\n"
             f"{pregunta}\n\n"
-            f"💡 Responde:\n"
+            f" Responde:\n"
             f"- **'sí'** para continuar\n"
             f"- **'no'** para buscar otro proyecto"
         )
@@ -126,7 +126,7 @@ def manejar_pregunta_modificacion(mensaje_dict: dict, texto: str, user_id: str,
         emoji = "➖"
     elif modo == "establecer":
         accion_texto = f"establecer en {horas}h"
-        emoji = "🎯"
+        emoji = ""
     else:
         accion_texto = f"añadir {horas}h"
         emoji = "➕"
@@ -141,7 +141,7 @@ def manejar_pregunta_modificacion(mensaje_dict: dict, texto: str, user_id: str,
             mensaje += f"  **{i}.** {proyecto['nombre']}: **{proyecto['horas']}h**\n"
         
         mensaje += f"\n{emoji} ¿A cuál quieres {accion_texto}?\n\n"
-        mensaje += "💡 Responde con:\n"
+        mensaje += " Responde con:\n"
         mensaje += "- El **número** (1, 2, 3...)\n"
         mensaje += "- El **nombre del proyecto**\n"
         mensaje += "- **'cancelar'** para salir"
@@ -230,7 +230,7 @@ def manejar_cambio_credenciales(texto: str, user_id: str, usuario, db: Session,
     # Obtener sesión del navegador
     session = browser_pool.get_session(user_id)
     if not session or not session.driver:
-        respuesta = "⚠️ No he podido iniciar el navegador. Intenta de nuevo."
+        respuesta = " No he podido iniciar el navegador. Intenta de nuevo."
         registrar_peticion(db, usuario.id, texto, "cambio_credenciales", canal=canal, respuesta=respuesta)
         return (False, respuesta, False)
     
@@ -250,21 +250,21 @@ def manejar_cambio_credenciales(texto: str, user_id: str, usuario, db: Session,
         else:
             # Login falló → pedir de nuevo
             respuesta = (
-                "❌ *Error de login*: Las credenciales no son correctas.\n\n"
+                " *Error de login*: Las credenciales no son correctas.\n\n"
                 "📝 *Envíamelas de nuevo:*\n"
                 "```\n"
                 "Usuario: tu_usuario  Contraseña: tu_contraseña\n"
                 "```\n\n"
-                "💡 También puedes escribir:\n"
+                " También puedes escribir:\n"
                 "_pablo.solis y contraseña MiClave123_\n\n"
-                "⚠️ Escribe *'cancelar'* para salir."
+                " Escribe *'cancelar'* para salir."
             )
             registrar_peticion(db, usuario.id, texto, "cambio_credenciales", 
                              canal=canal, respuesta=respuesta, estado="credenciales_invalidas")
             return (False, respuesta, False)
     
     except Exception as e:
-        respuesta = f"⚠️ Error al verificar credenciales: {e}"
+        respuesta = f" Error al verificar credenciales: {e}"
         registrar_peticion(db, usuario.id, texto, "cambio_credenciales", 
                          canal=canal, respuesta=respuesta, estado="error")
         return (False, respuesta, False)
@@ -287,7 +287,7 @@ def realizar_login_inicial(session, user_id: str, username: str, password: str,
                 if "credenciales_invalidas" in mensaje_login:
                     credential_manager.iniciar_cambio_credenciales(user_id)
                     error_msg = (
-                        "❌ **Error de login**: Las credenciales de GestiónITT no son correctas.\n\n"
+                        " **Error de login**: Las credenciales de GestiónITT no son correctas.\n\n"
                         "Necesito tus credenciales de GestiónITT.\n\n"
                         "📝 **Envíamelas así:**\n"
                         "```\n"
@@ -295,13 +295,13 @@ def realizar_login_inicial(session, user_id: str, username: str, password: str,
                         
                         "```\n\n"
                         "🔒 **Tranquilo:** Tus credenciales se guardan cifradas.\n\n"
-                        "⚠️ Si no quieres cambiarlas, escribe 'cancelar'."
+                        " Si no quieres cambiarlas, escribe 'cancelar'."
                     )
                     registrar_peticion(db, usuario.id, texto, "error_login", canal=canal, 
                                      respuesta=error_msg, estado="credenciales_invalidas")
                     return (False, error_msg, False)
                 else:
-                    error_msg = f"⚠️ Error técnico al hacer login: {mensaje_login}"
+                    error_msg = f" Error técnico al hacer login: {mensaje_login}"
                     registrar_peticion(db, usuario.id, texto, "error", canal=canal, 
                                      respuesta=error_msg, estado="error")
                     return (False, error_msg, False)
@@ -312,7 +312,7 @@ def realizar_login_inicial(session, user_id: str, username: str, password: str,
             return (True, "", True)
             
         except Exception as e:
-            error_msg = f"⚠️ Error al hacer login: {e}"
+            error_msg = f" Error al hacer login: {e}"
             registrar_peticion(db, usuario.id, texto, "error", canal=canal, 
                              respuesta=error_msg, estado="error")
             return (False, error_msg, False)
@@ -384,7 +384,7 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
                     comando_completo = f"pon {horas} horas en {nombre_proyecto}"
             else:
                 conversation_state_manager.limpiar_estado(user_id)
-                respuesta = f"❌ El número debe estar entre 1 y {len(proyectos)}."
+                respuesta = f" El número debe estar entre 1 y {len(proyectos)}."
                 registrar_peticion(db, usuario.id, texto, "seleccion_invalida", 
                                  canal=canal, respuesta=respuesta)
                 session.update_activity()
@@ -407,7 +407,7 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
                     comando_completo = f"pon {horas} horas en {nombre_proyecto}"
             else:
                 conversation_state_manager.limpiar_estado(user_id)
-                respuesta = "❌ No he encontrado ese proyecto. Indica el número o el nombre exacto."
+                respuesta = " No he encontrado ese proyecto. Indica el número o el nombre exacto."
                 registrar_peticion(db, usuario.id, texto, "proyecto_no_encontrado", 
                                  canal=canal, respuesta=respuesta)
                 session.update_activity()
@@ -437,7 +437,7 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
         
         if not proyecto_seleccionado:
             conversation_state_manager.limpiar_estado(user_id)
-            respuesta = f"❌ No he encontrado ese proyecto. Por favor, responde con el número (1-{len(proyectos)}) o el nombre exacto."
+            respuesta = f" No he encontrado ese proyecto. Por favor, responde con el número (1-{len(proyectos)}) o el nombre exacto."
             registrar_peticion(db, usuario.id, texto, "seleccion_invalida", 
                              canal=canal, respuesta=respuesta)
             session.update_activity()
@@ -454,7 +454,7 @@ def manejar_info_incompleta(texto: str, estado: dict, user_id: str, session,
         else:
             comando_completo = f"suma {horas} horas a {nombre_proyecto} el {dia}"
     
-    print(f"[DEBUG] ✅ Comando completo generado: '{comando_completo}'")
+    print(f"[DEBUG]  Comando completo generado: '{comando_completo}'")
     conversation_state_manager.limpiar_estado(user_id)
     
     if comando_completo:
@@ -482,7 +482,7 @@ def ejecutar_comando_completo(comando: str, texto_original: str, session, contex
         with session.lock:
             tabla_actual = leer_tabla_imputacion(session.driver)
     except Exception as e:
-        print(f"[DEBUG] ⚠️ No se pudo leer la tabla: {e}")
+        print(f"[DEBUG]  No se pudo leer la tabla: {e}")
     
     ordenes = interpretar_con_gpt(comando, contexto, tabla_actual)
     
@@ -589,9 +589,9 @@ def manejar_respuesta_especial(mensaje: dict, orden: dict, ordenes: list, texto:
         return manejar_pregunta_modificacion(mensaje, texto_original, user_id, 
                                             db, usuario, canal, session)
     
-    # ❌ Error
+    #  Error
     elif tipo == "error":
-        respuesta_final = mensaje.get("mensaje", "❌ Ha ocurrido un error")
+        respuesta_final = mensaje.get("mensaje", " Ha ocurrido un error")
         registrar_peticion(db, usuario.id, texto_original, "error", 
                          canal=canal, respuesta=respuesta_final)
         session.update_activity()
@@ -640,7 +640,7 @@ def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session,
     
     # Detectar "sí"
     if texto_lower in ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep']:
-        print(f"[DEBUG] ✅ Usuario confirmó usar el proyecto existente")
+        print(f"[DEBUG]  Usuario confirmó usar el proyecto existente")
         coincidencia = estado["coincidencias"][0]
         return ejecutar_con_coincidencia(coincidencia, estado, session, db, usuario, 
                                         user_id, canal, contexto, texto)
@@ -658,13 +658,13 @@ def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session,
     
     if any(palabra == texto_lower or (palabra in texto_lower and len(texto_lower) < 15) 
            for palabra in palabras_cancelar):
-        print(f"[DEBUG] ❌ Usuario canceló la operación")
+        print(f"[DEBUG]  Usuario canceló la operación")
         
         conversation_state_manager.limpiar_estado(user_id)
         
         respuesta = (
             "👍 Vale, operación cancelada.\n\n"
-            "💡 Si quieres usar otro proyecto, escribe tu comando de nuevo.\n"
+            " Si quieres usar otro proyecto, escribe tu comando de nuevo.\n"
             "Ejemplo: *Pon 3 horas en [nombre del proyecto]*"
         )
         registrar_peticion(db, usuario.id, texto, "confirmacion_rechazada", 
@@ -673,7 +673,7 @@ def manejar_confirmacion_si_no(texto: str, estado: dict, session, db: Session,
         return respuesta
     
     else:
-        return "❌ No he entendido. Responde:\n• *'sí'* para usar este proyecto\n• *'otro'* para buscar uno diferente\n• *'no'* para cancelar"
+        return " No he entendido. Responde:\n• *'sí'* para usar este proyecto\n• *'otro'* para buscar uno diferente\n• *'no'* para cancelar"
 
 
 def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Session,
@@ -682,7 +682,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
     """
     Ejecuta comando con una coincidencia específica seleccionada
     """
-    print(f"[DEBUG] ✅ Coincidencia encontrada: {coincidencia['nodo_padre']}")
+    print(f"[DEBUG]  Coincidencia encontrada: {coincidencia['nodo_padre']}")
     
     ordenes_originales = estado["comando_original"]
     nombre_proyecto = estado["nombre_proyecto"]
@@ -701,7 +701,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
             proyecto_especifico = coincidencia["proyecto"]
             orden["parametros"]["nombre"] = proyecto_especifico
             orden["parametros"]["nodo_padre"] = coincidencia["nodo_padre"]
-            print(f"[DEBUG] ✅ Proyecto actualizado: '{proyecto_especifico}' bajo '{coincidencia['nodo_padre']}'")
+            print(f"[DEBUG]  Proyecto actualizado: '{proyecto_especifico}' bajo '{coincidencia['nodo_padre']}'")
     
     # Ejecutar solo desde el índice que falló en adelante
     respuestas = list(respuestas_previas)  # 🆕 Empezar con las respuestas previas
@@ -765,7 +765,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
                 
                 else:
                     conversation_state_manager.limpiar_estado(user_id)
-                    return "❌ Algo salió mal al seleccionar el proyecto. Inténtalo de nuevo."
+                    return " Algo salió mal al seleccionar el proyecto. Inténtalo de nuevo."
             
             if mensaje:
                 respuestas.append(mensaje)
@@ -776,7 +776,7 @@ def ejecutar_con_coincidencia(coincidencia: dict, estado: dict, session, db: Ses
         # 🆕 Usar el texto original completo para generar la respuesta
         respuesta_natural = generar_respuesta_natural(respuestas, texto_comando_original, contexto)
     else:
-        respuesta_natural = "✅ Listo"
+        respuesta_natural = " Listo"
     
     registrar_peticion(db, usuario.id, texto_original, "comando_desambiguado", 
                      canal=canal, respuesta=respuesta_natural)
@@ -851,7 +851,7 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
     if respuestas:
         respuesta_natural = generar_respuesta_natural(respuestas, texto_comando_original, contexto)
     else:
-        respuesta_natural = "✅ Listo"
+        respuesta_natural = " Listo"
     
     registrar_peticion(db, usuario.id, texto_original, "comando_confirmado", 
                      canal=canal, respuesta=respuesta_natural)
@@ -915,4 +915,4 @@ def manejar_desambiguacion_multiple(texto: str, estado: dict, session, db: Sessi
         return ejecutar_con_coincidencia(coincidencia, estado, session, db, usuario, 
                                         user_id, canal, contexto, texto)
     else:
-        return "❌ No he entendido tu respuesta. Por favor:\n• Indica el **número** (1, 2, 3...)\n• El **nombre del departamento/área**\n• Escribe **'cancelar'** para salir"
+        return " No he entendido tu respuesta. Por favor:\n• Indica el **número** (1, 2, 3...)\n• El **nombre del departamento/área**\n• Escribe **'cancelar'** para salir"

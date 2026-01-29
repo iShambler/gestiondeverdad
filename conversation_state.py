@@ -40,7 +40,7 @@ class ConversationStateManager:
         timestamp = estado.get("timestamp")
         if not timestamp:
             # Si no hay timestamp, el estado es inválido, limpiar
-            print(f"[CONVERSACION] ⚠️ Estado sin timestamp para usuario: {user_id}, limpiando...")
+            print(f"[CONVERSACION]  Estado sin timestamp para usuario: {user_id}, limpiando...")
             self.limpiar_estado(user_id)
             return False
         
@@ -182,7 +182,7 @@ class ConversationStateManager:
         # 🆕 Verificar que tenga timestamp antes de comparar
         timestamp = ultimo.get("timestamp")
         if not timestamp:
-            print(f"[CONVERSACION] ⚠️ Último proyecto sin timestamp para {user_id}")
+            print(f"[CONVERSACION]  Último proyecto sin timestamp para {user_id}")
             return None
         
         # Verificar si no ha expirado (15 minutos)

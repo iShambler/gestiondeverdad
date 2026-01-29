@@ -55,14 +55,14 @@ class RecoveryHandler:
             
             if success:
                 session.is_logged_in = True
-                print(f"[RECOVERY] ✅ Sesión recuperada exitosamente")
+                print(f"[RECOVERY]  Sesión recuperada exitosamente")
                 return True, "Sesión recuperada"
             else:
-                print(f"[RECOVERY] ❌ No se pudo recuperar la sesión")
+                print(f"[RECOVERY]  No se pudo recuperar la sesión")
                 return False, "Error en recuperación"
                 
         except Exception as e:
-            print(f"[RECOVERY] ❌ Error en recuperación: {e}")
+            print(f"[RECOVERY]  Error en recuperación: {e}")
             return False, str(e)
 
 

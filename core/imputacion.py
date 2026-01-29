@@ -170,5 +170,5 @@ def loop_interactivo(driver, wait):
             print("\n\n👋 ¡Hasta pronto! Cerrando el navegador...")
             break
         except Exception as e:
-            print(f"\n⚠️ Error inesperado: {e}\n")
+            print(f"\n Error inesperado: {e}\n")
             # No romper el loop, continuar

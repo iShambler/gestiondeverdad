@@ -3,7 +3,7 @@ Intérprete de comandos en lenguaje natural.
 Traduce instrucciones del usuario a comandos JSON estructurados.
 
 CORRECCIÓN APLICADA:
-- ✅ Validación post-GPT: SIEMPRE añadir 'dia' a imputar_horas_dia si GPT lo omite (usar hoy por defecto)
+-  Validación post-GPT: SIEMPRE añadir 'dia' a imputar_horas_dia si GPT lo omite (usar hoy por defecto)
 """
 
 import json
@@ -49,11 +49,11 @@ def validar_ordenes(ordenes, texto, contexto=None):
     tiene_borrado_horas = any(o.get("accion") == "borrar_todas_horas_dia" for o in ordenes)
     tiene_copiar_semana = any(o.get("accion") == "copiar_semana_anterior" for o in ordenes)
 
-    print(f"[DEBUG] 🔍 Validación - proyecto:{tiene_proyecto} imputacion:{tiene_imputacion} eliminacion:{tiene_eliminacion} borrado:{tiene_borrado_horas} copiar:{tiene_copiar_semana}")
+    print(f"[DEBUG]  Validación - proyecto:{tiene_proyecto} imputacion:{tiene_imputacion} eliminacion:{tiene_eliminacion} borrado:{tiene_borrado_horas} copiar:{tiene_copiar_semana}")
 
     # 🔥 Si hay eliminación, borrado de horas o copiar semana → NO VALIDAR (son acciones válidas sin imputación)
     if tiene_eliminacion or tiene_borrado_horas or tiene_copiar_semana:
-        print(f"[DEBUG] ✅ Acción especial detectada, omitiendo validación")
+        print(f"[DEBUG]  Acción especial detectada, omitiendo validación")
         return None
 
     # ----------------------------------------------------------------------
@@ -76,7 +76,7 @@ def validar_ordenes(ordenes, texto, contexto=None):
                 "que_falta": "horas_y_dia",
                 "mensaje": (
                     f"📝 Vale, **{nombre_proyecto}**. ¿Cuántas horas y para qué día?\n\n"
-                    "💡 Ejemplos:\n- \"Pon 8 horas hoy\"\n- \"5 horas el lunes\"\n- \"Toda la semana\""
+                    " Ejemplos:\n- \"Pon 8 horas hoy\"\n- \"5 horas el lunes\"\n- \"Toda la semana\""
                 )
             }]
 
@@ -145,8 +145,8 @@ def validar_ordenes(ordenes, texto, contexto=None):
     # ----------------------------------------------------------------------
     # 🚫 4. Comandos realmente vacíos (solo seleccionar_fecha sin más acciones)
     # ----------------------------------------------------------------------
-    # ✅ PERMITIR: emitir_linea / guardar_linea (con o sin seleccionar_fecha)
-    # ❌ RECHAZAR: solo seleccionar_fecha sin ninguna acción después
+    #  PERMITIR: emitir_linea / guardar_linea (con o sin seleccionar_fecha)
+    #  RECHAZAR: solo seleccionar_fecha sin ninguna acción después
     
     # Caso: SOLO seleccionar_fecha, nada más
     if len(ordenes) == 1 and ordenes[0].get("accion") == "seleccionar_fecha":
@@ -192,7 +192,7 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
             if dias_con_horas:
                 info_tabla += f"  • {nombre_proyecto}: {', '.join(dias_con_horas)}\n"
 
-        info_tabla += "\n⚠️ IMPORTANTE: Puedes usar esta información para:\n"
+        info_tabla += "\n IMPORTANTE: Puedes usar esta información para:\n"
         info_tabla += "  - Copiar horas de un proyecto a otro\n"
         info_tabla += "  - Duplicar/triplicar horas\n"
         info_tabla += "  - Sumar o restar basándote en datos existentes\n"
@@ -213,8 +213,8 @@ def interpretar_con_gpt(texto, contexto=None, tabla_actual=None, historial=None)
                     asistente_texto = asistente_texto[:200] + "..."
                 info_historial += f"Asistente: {asistente_texto}\n"
             info_historial += "\n"
-        info_historial += "⚠️ Usa este historial para entender mejor el contexto y las intenciones del usuario.\n"
-        info_historial += "⚠️ Si el usuario dice 'lo mismo', 'otra vez', 'igual', etc., busca en el historial qué hizo antes.\n"
+        info_historial += " Usa este historial para entender mejor el contexto y las intenciones del usuario.\n"
+        info_historial += " Si el usuario dice 'lo mismo', 'otra vez', 'igual', etc., busca en el historial qué hizo antes.\n"
 
     # Usar f-string pero con llaves cuádruples {{{{ para que se escapen correctamente
     prompt = f"""
@@ -303,7 +303,7 @@ REGLA #2: Palabras clave de jerarquía
   - Separadores: "X / Y", "X - Y" → nodo_padre = X, nombre = Y
   - Capitalizar siempre los nombres
 
-⚠️ IMPORTANTE: El nodo_padre puede ser un departamento ("Subvenciones") o una empresa/cliente ("Inn2Travel", "Menpe")
+ IMPORTANTE: El nodo_padre puede ser un departamento ("Subvenciones") o una empresa/cliente ("Inn2Travel", "Menpe")
 El sistema buscará el proyecto dentro de ese nodo específico.
 
 ====================================================
@@ -343,7 +343,7 @@ TIPOS DE ACCIONES
      - "quitale 2h A Estudio" → SÍ proyecto ("A Estudio" = explícito)
      - "establece Desarrollo a 5h" → SÍ proyecto ("Desarrollo" mencionado)
 
-     ⚠️ Si hay duda: si el proyecto NO está en el texto del usuario, NO lo incluyas.
+      Si hay duda: si el proyecto NO está en el texto del usuario, NO lo incluyas.
 
    - imputar_horas_semana: Para TODA LA SEMANA (L-V). NO requiere parámetros.
      🚨 CRÍTICO: SIEMPRE debe ir precedida de seleccionar_fecha con el LUNES de la semana
@@ -602,7 +602,7 @@ Frase del usuario: "{texto}"
 """
 
     try:
-        client = settings.get_openai_client()  # ✅ Necesario para usar la API
+        client = settings.get_openai_client()  #  Necesario para usar la API
 
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -637,13 +637,13 @@ Frase del usuario: "{texto}"
                 if "dia" not in parametros or not parametros.get("dia"):
                     parametros["dia"] = hoy
                     orden["parametros"] = parametros
-                    print(f"[DEBUG] ⚠️ GPT omitió 'dia' en imputar_horas_dia, usando hoy: {hoy}")
+                    print(f"[DEBUG]  GPT omitió 'dia' en imputar_horas_dia, usando hoy: {hoy}")
 
         # 🆕 VALIDAR que las órdenes tengan sentido
         resultado_validacion = validar_ordenes(data, texto, contexto)
         if resultado_validacion:
             # Si devuelve algo, es porque hay error o info incompleta
-            print(f"[DEBUG] ⚠️ Comando requiere atención: {texto}")
+            print(f"[DEBUG]  Comando requiere atención: {texto}")
             return resultado_validacion
 
         return data

@@ -99,7 +99,7 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
             
             resumen += f"\n📊 Total: {total_dia} horas"
         
-        # ⚠️ VALIDACIONES DE HORAS
+        #  VALIDACIONES DE HORAS
         avisos = []
         
         # Determinar límite de horas según el día (viernes = 6.5h, resto = 8.5h)
@@ -108,12 +108,12 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
         # Verificar si hay exceso de horas
         if total_dia > limite_horas:
             horas_exceso = round(total_dia - limite_horas, 2)
-            avisos.append(f"⚠️ EXCESO: Te has pasado {horas_exceso}h en este día.")
+            avisos.append(f" EXCESO: Te has pasado {horas_exceso}h en este día.")
         
         # Verificar si faltan horas
         elif 0 < total_dia < limite_horas:
             horas_faltantes = round(limite_horas - total_dia, 2)
-            avisos.append(f"⚠️ FALTAN HORAS: Te faltan {horas_faltantes}h para completar la jornada.")
+            avisos.append(f" FALTAN HORAS: Te faltan {horas_faltantes}h para completar la jornada.")
         
         # Mostrar avisos si existen
         if avisos:
@@ -128,7 +128,7 @@ def consultar_dia(driver, wait, fecha_obj, canal="webapp"):
                     resumen += f"{aviso}\n"
                 resumen += "\n¿Es correcto o necesitas modificarlo?"
         
-        print(f"[DEBUG] ✅ consultar_dia - Resumen generado ({len(resumen)} caracteres)")
+        print(f"[DEBUG]  consultar_dia - Resumen generado ({len(resumen)} caracteres)")
         print(f"[DEBUG] Primeras 200 chars: {resumen[:200]}")
         return resumen
     
@@ -220,7 +220,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
                     if valor_actual == 0 and valor_nuevo > 0:
                         proyectos_combinados[nombre]['horas'][dia] = valor_nuevo
             
-            print(f"[DEBUG] ✅ Datos combinados de ambas consultas")
+            print(f"[DEBUG]  Datos combinados de ambas consultas")
         
         # Convertir diccionario a lista
         proyectos = list(proyectos_combinados.values())
@@ -353,7 +353,7 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         else:
             resumen += f"\n📊 Total: {total_semana} horas"
         
-        # ⚠️ VALIDACIONES DE HORAS POR DÍA (usando totales_por_dia ya calculados)
+        #  VALIDACIONES DE HORAS POR DÍA (usando totales_por_dia ya calculados)
         dias_exceso = []
         dias_faltantes = []
         dias_sin_imputar = []
@@ -423,21 +423,21 @@ def consultar_semana(driver, wait, fecha_obj, canal="webapp"):
         else:
             # Formato texto para Slack
             if dias_exceso:
-                resumen += "\n\n⚠️ EXCESO DE HORAS:\n"
+                resumen += "\n\n EXCESO DE HORAS:\n"
                 for dia_info in dias_exceso:
                     resumen += f"  • {dia_info}\n"
             
             if dias_faltantes:
-                resumen += "\n⚠️ FALTAN HORAS:\n"
+                resumen += "\n FALTAN HORAS:\n"
                 for dia_info in dias_faltantes:
                     resumen += f"  • {dia_info}\n"
             
             if dias_sin_imputar:
-                resumen += "\n⚠️ DÍAS SIN IMPUTAR:\n"
+                resumen += "\n DÍAS SIN IMPUTAR:\n"
                 for dia_info in dias_sin_imputar:
                     resumen += f"  • {dia_info}\n"
         
-        print(f"[DEBUG] ✅ consultar_semana - Resumen generado ({len(resumen)} caracteres)")
+        print(f"[DEBUG]  consultar_semana - Resumen generado ({len(resumen)} caracteres)")
         print(f"[DEBUG] Total semana calculado: {total_semana}h")
         if dias_deshabilitados:
             print(f"[DEBUG] ℹ️ Días deshabilitados detectados: {dias_deshabilitados} - se hicieron 2 consultas")
@@ -583,7 +583,7 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
             })
             
             total_mes += total_semana
-            print(f"[DEBUG]   ✅ Semana {i}: {total_semana}h")
+            print(f"[DEBUG]    Semana {i}: {total_semana}h")
         
         print(f"[DEBUG] 📊 Total mes: {total_mes}h")
         
@@ -677,7 +677,7 @@ def consultar_mes(driver, wait, mes: int, anio: int, canal: str = "webapp"):
             
             # Desglose por proyecto
             if proyectos_mes:
-                resumen += f"\n📋 Desglose por proyecto:\n"
+                resumen += f"\n Desglose por proyecto:\n"
                 proyectos_ordenados = sorted(proyectos_mes.items(), key=lambda x: x[1], reverse=True)
                 
                 for nombre_proyecto, horas_proyecto in proyectos_ordenados[:5]:  # Top 5
@@ -702,7 +702,7 @@ def mostrar_comandos():
     """
     
     comandos = """
-📋 **COMANDOS DISPONIBLES**
+ **COMANDOS DISPONIBLES**
 
 DEBES PONER EL TÍTULO DEL PROYECTO TAL Y COMO ESTÁ ESCRITO EN GESTIONITT,
 CON SUS TILDES. NO HACE FALTA PONER EL NOMBRE ENTERO.
@@ -740,13 +740,13 @@ Cambia horas ya imputadas:
   • "Ayuda" o "Comandos" - Muestra este mensaje
   • "¿Qué puedes hacer?"
 
-💡 **TIPS:**
+ **TIPS:**
   - Puedes usar días: hoy, ayer, mañana, lunes, martes, etc.
   - Puedes usar fechas: 25/12/2024 o 25 de diciembre
   - Las horas pueden ser decimales: 2.5, 4.25, etc.
   - No hace falta ser muy específico, ¡entiendo lenguaje natural!
 
-⚠️ **VALIDACIONES AUTOMÁTICAS:**
+ **VALIDACIONES AUTOMÁTICAS:**
   - Te aviso si te pasas de horas en un día (8.5h L-J, 6.5h V)
   - Te aviso si te faltan horas por imputar
   - Te aviso si hay días sin imputar en la semana

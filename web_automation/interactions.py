@@ -62,15 +62,15 @@ def hacer_login(driver, wait, username=None, password=None):
         # Verificación 1: Buscar div de error
         print(f"[DEBUG] Buscando errorLogin...")
         if "errorLogin" in html_completo:
-            print(f"[DEBUG] ⚠️ Encontrado 'errorLogin' en el HTML")
+            print(f"[DEBUG]  Encontrado 'errorLogin' en el HTML")
             import re
             match = re.search(r'<div[^>]*class="[^"]*errorLogin[^"]*"[^>]*>(.*?)</div>', html_completo, re.DOTALL)
             if match:
                 error_text = match.group(1).strip()
                 error_text = re.sub(r'<[^>]+>', '', error_text).strip()
-                print(f"[DEBUG] ❌ Texto del error: '{error_text}'")
+                print(f"[DEBUG]  Texto del error: '{error_text}'")
                 if "credenciales no válidas" in error_text.lower() or "credenciales no validas" in error_text.lower():
-                    print(f"[DEBUG] ❌ CONFIRMADO: Credenciales inválidas")
+                    print(f"[DEBUG]  CONFIRMADO: Credenciales inválidas")
                     return False, "credenciales_invalidas"
         else:
             print(f"[DEBUG] No se encontró 'errorLogin' en el HTML")
@@ -78,18 +78,18 @@ def hacer_login(driver, wait, username=None, password=None):
         # Verificación 2: Buscar botón de salir
         print(f"[DEBUG] Buscando botonSalirHtml...")
         if "botonSalirHtml" in html_completo:
-            print(f"[DEBUG] ✅ Encontrado 'botonSalirHtml' en el HTML")
-            print(f"[DEBUG] ✅ CONFIRMADO: Login exitoso")
+            print(f"[DEBUG]  Encontrado 'botonSalirHtml' en el HTML")
+            print(f"[DEBUG]  CONFIRMADO: Login exitoso")
             
             # 🔥 NUEVO: Comprobar si existe el botón especial "Imputar horas"
-            print(f"[DEBUG] 🔍 Buscando botón especial 'Imputar horas'...")
+            print(f"[DEBUG]  Buscando botón especial 'Imputar horas'...")
             try:
                 boton_imputar = driver.find_element(By.ID, "botonImputar")
                 if boton_imputar:
-                    print(f"[DEBUG] ✅ Botón 'Imputar horas' encontrado, haciendo click...")
+                    print(f"[DEBUG]  Botón 'Imputar horas' encontrado, haciendo click...")
                     boton_imputar.click()
                     time.sleep(2)  # Esperar a que cargue la pantalla de imputación
-                    print(f"[DEBUG] ✅ Click en botón 'Imputar horas' completado")
+                    print(f"[DEBUG]  Click en botón 'Imputar horas' completado")
             except:
                 print(f"[DEBUG] ℹ️ Botón 'Imputar horas' no encontrado (interfaz estándar)")
             
@@ -98,7 +98,7 @@ def hacer_login(driver, wait, username=None, password=None):
             print(f"[DEBUG] No se encontró 'botonSalirHtml' en el HTML")
         
         # Si no encontramos ni error ni botón
-        print(f"[DEBUG] ⚠️ No se encontró ni errorLogin ni botonSalirHtml")
+        print(f"[DEBUG]  No se encontró ni errorLogin ni botonSalirHtml")
         print(f"[DEBUG] Título de la página: {driver.title}")
         print(f"[DEBUG] URL actual: {driver.current_url}")
         
@@ -113,7 +113,7 @@ def hacer_login(driver, wait, username=None, password=None):
         return False, "estado_indeterminado"
         
     except Exception as e:
-        print(f"[DEBUG] ❌ Excepción durante login: {e}")
+        print(f"[DEBUG]  Excepción durante login: {e}")
         import traceback
         traceback.print_exc()
         return False, f"error_tecnico: {e}"
@@ -149,7 +149,7 @@ def guardar_linea(driver, wait):
                 # Leer el mensaje de error
                 try:
                     mensaje_error = popup_error.find_element(By.CSS_SELECTOR, ".ui-dialog-content, .modal-body, p").text
-                    print(f"[DEBUG] ⚠️ Error detectado al guardar: {mensaje_error}")
+                    print(f"[DEBUG]  Error detectado al guardar: {mensaje_error}")
                     
                     # Cerrar el popup
                     try:
@@ -160,9 +160,9 @@ def guardar_linea(driver, wait):
                         driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
                         time.sleep(0.5)
                     
-                    return f"❌ Error al guardar: {mensaje_error}"
+                    return f" Error al guardar: {mensaje_error}"
                 except:
-                    return "❌ Error al guardar (no se pudo leer el mensaje de error)"
+                    return " Error al guardar (no se pudo leer el mensaje de error)"
         except:
             # No hay popup de error, todo OK
             pass
@@ -195,13 +195,13 @@ def emitir_linea(driver, wait):
             
             # Aceptar el alert
             alert.accept()
-            print(f"[DEBUG] ✅ Alert aceptado")
+            print(f"[DEBUG]  Alert aceptado")
             
             time.sleep(1.5)
             return "He emitido las horas correctamente"
             
         except Exception as e_alert:
-            print(f"[DEBUG] ⚠️ No se detectó alert o error al aceptarlo: {e_alert}")
+            print(f"[DEBUG]  No se detectó alert o error al aceptarlo: {e_alert}")
             time.sleep(1.5)
             return "He pulsado emitir (no se detectó confirmación)"
             

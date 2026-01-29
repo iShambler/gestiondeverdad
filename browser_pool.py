@@ -68,11 +68,11 @@ class BrowserSession:
             self.driver = webdriver.Chrome(service=service, options=options)
             self.wait = WebDriverWait(self.driver, 15)
             self.last_activity = datetime.now()
-            print(f"[BROWSER POOL] ✅ Navegador iniciado para usuario: {self.user_id}")
+            print(f"[BROWSER POOL]  Navegador iniciado para usuario: {self.user_id}")
             return True
 
         except Exception as e:
-            print(f"[BROWSER POOL] ❌ Error iniciando navegador para {self.user_id}: {e}")
+            print(f"[BROWSER POOL]  Error iniciando navegador para {self.user_id}: {e}")
             return False
     
     def update_activity(self):
@@ -90,7 +90,7 @@ class BrowserSession:
                 self.driver.quit()
                 print(f"[BROWSER POOL] 🔒 Navegador cerrado para usuario: {self.user_id}")
         except Exception as e:
-            print(f"[BROWSER POOL] ⚠️ Error cerrando navegador para {self.user_id}: {e}")
+            print(f"[BROWSER POOL]  Error cerrando navegador para {self.user_id}: {e}")
         finally:
             self.driver = None
             self.wait = None
@@ -111,7 +111,7 @@ class BrowserPool:
         # Iniciar thread de limpieza de sesiones inactivas
         self.cleanup_thread = threading.Thread(target=self._cleanup_expired_sessions, daemon=True)
         self.cleanup_thread.start()
-        print(f"[BROWSER POOL] 🚀 Pool inicializado (max: {max_sessions}, timeout: {session_timeout_minutes}min)")
+        print(f"[BROWSER POOL]  Pool inicializado (max: {max_sessions}, timeout: {session_timeout_minutes}min)")
     
     def get_session(self, user_id: str) -> BrowserSession:
         """Obtiene o crea una sesión de navegador para un usuario."""
@@ -126,7 +126,7 @@ class BrowserPool:
                 self._force_cleanup()
                 
                 if len(self.sessions) >= self.max_sessions:
-                    print(f"[BROWSER POOL] ⚠️ Límite de sesiones alcanzado ({self.max_sessions})")
+                    print(f"[BROWSER POOL]  Límite de sesiones alcanzado ({self.max_sessions})")
                     oldest_user = min(self.sessions.keys(), 
                                     key=lambda k: self.sessions[k].last_activity)
                     self.close_session(oldest_user)
@@ -183,7 +183,7 @@ class BrowserPool:
             for session in self.sessions.values():
                 session.close()
             self.sessions.clear()
-            print("[BROWSER POOL] ✅ Todas las sesiones cerradas")
+            print("[BROWSER POOL]  Todas las sesiones cerradas")
     
     def get_stats(self) -> dict:
         """Obtiene estadísticas del pool."""

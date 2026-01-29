@@ -74,9 +74,9 @@ def ejecutar_accion(driver, wait, orden, contexto):
             # 🔥 Pasar flag al contexto para que proyecto_handler lo use
             contexto["inferido_contexto"] = inferido_contexto
             
-            # 🔍 Debug: mostrar si hay nodo padre o si es inferido
+            #  Debug: mostrar si hay nodo padre o si es inferido
             if nodo_padre:
-                print(f"[DEBUG] 🎯 Seleccionando proyecto con jerarquía: '{nombre}' bajo '{nodo_padre}'")
+                print(f"[DEBUG]  Seleccionando proyecto con jerarquía: '{nombre}' bajo '{nodo_padre}'")
             if inferido_contexto:
                 print(f"[DEBUG] 🧠 Proyecto '{nombre}' inferido del contexto (no mencionado por usuario)")
             
@@ -102,7 +102,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 }
             
             if fila:
-                # ✅ Proyecto encontrado o creado correctamente
+                #  Proyecto encontrado o creado correctamente
                 contexto["fila_actual"] = fila
                 contexto["proyecto_actual"] = nombre
                 contexto["nodo_padre_actual"] = nodo_padre
@@ -118,7 +118,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
                     contexto["path_completo_actual"] = path_completo
                     print(f"[DEBUG] 📁 Path completo guardado: {path_completo}")
                 except Exception as e:
-                    print(f"[DEBUG] ⚠️ No se pudo obtener path completo: {e}")
+                    print(f"[DEBUG]  No se pudo obtener path completo: {e}")
                     contexto["path_completo_actual"] = None
                 
                 # 🔥 Guardar en lista de proyectos del comando actual
@@ -140,7 +140,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 
                 return mensaje
             else:
-                # ❌ Proyecto NO encontrado - DETENER ejecución
+                #  Proyecto NO encontrado - DETENER ejecución
                 contexto["fila_actual"] = None
                 contexto["proyecto_actual"] = None
                 contexto["path_completo_actual"] = None
@@ -153,7 +153,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
     # 🗑️ Eliminar línea
     elif accion == "eliminar_linea":
         try:
-            # 🔧 FIX: Usar .get() para evitar KeyError si no hay parámetros
+            #  FIX: Usar .get() para evitar KeyError si no hay parámetros
             parametros = orden.get("parametros", {})
             nombre = parametros.get("nombre") if parametros else None
             
@@ -162,7 +162,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 nombre = contexto.get("proyecto_actual")
             
             if not nombre:
-                return "❌ No sé qué proyecto eliminar. Especifica el nombre del proyecto."
+                return " No sé qué proyecto eliminar. Especifica el nombre del proyecto."
             
             # 🆕 Pasar la fila del contexto si existe (evita buscar de nuevo)
             fila_contexto = contexto.get("fila_actual")
@@ -267,11 +267,11 @@ def ejecutar_accion(driver, wait, orden, contexto):
                     
                     if fila_nueva:
                         contexto["fila_actual"] = fila_nueva
-                        print(f"[DEBUG] ✅ Proyecto re-encontrado, reintentando imputación...")
+                        print(f"[DEBUG]  Proyecto re-encontrado, reintentando imputación...")
                         resultado = imputar_horas_dia(driver, wait, dia, horas, fila_nueva, proyecto, modo)
                         return f"{resultado} [FECHA:{fecha_formateada}]"
                     else:
-                        return f"❌ No he podido re-encontrar el proyecto '{proyecto}': {mensaje}"
+                        return f" No he podido re-encontrar el proyecto '{proyecto}': {mensaje}"
                 else:
                     raise
 
@@ -282,11 +282,11 @@ def ejecutar_accion(driver, wait, orden, contexto):
     elif accion == "imputar_horas_semana":
         proyecto = contexto.get("proyecto_actual")
         if not proyecto:
-            return "❌ No sé en qué proyecto quieres imputar. Dímelo, por favor."
+            return " No sé en qué proyecto quieres imputar. Dímelo, por favor."
 
         fila = contexto.get("fila_actual")
         if not fila:
-            return f"❌ No he podido seleccionar el proyecto '{proyecto}'. ¿Estás en la pantalla de imputación?"
+            return f" No he podido seleccionar el proyecto '{proyecto}'. ¿Estás en la pantalla de imputación?"
 
         return imputar_horas_semana(driver, wait, fila, nombre_proyecto=proyecto)
 
@@ -308,7 +308,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
             exito, mensaje, proyectos = copiar_semana_anterior(driver, wait, contexto)
             return mensaje
         except Exception as e:
-            return f"❌ Error al copiar la semana anterior: {e}"
+            return f" Error al copiar la semana anterior: {e}"
     
     # 📊 Leer tabla y preguntar qué proyecto modificar
     elif accion == "leer_tabla_y_preguntar":
@@ -329,14 +329,14 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 seleccionar_fecha(driver, fecha_obj, contexto)
                 contexto["fecha_seleccionada"] = fecha_obj
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Error al seleccionar fecha: {e}")
+                print(f"[DEBUG]  Error al seleccionar fecha: {e}")
             
             # 2. Leer la tabla de imputación
             try:
                 tabla = leer_tabla_imputacion(driver)
-                print(f"[DEBUG] 📋 Tabla leída: {len(tabla)} proyectos")
+                print(f"[DEBUG]  Tabla leída: {len(tabla)} proyectos")
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Error al leer tabla: {e}")
+                print(f"[DEBUG]  Error al leer tabla: {e}")
                 tabla = []
             
             # 3. Filtrar proyectos del día especificado
@@ -362,7 +362,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
                 if len(proyectos_con_horas) == 0:
                     return {
                         "tipo": "error",
-                        "mensaje": f"❌ No tienes horas imputadas el {dia_nombre}. No hay nada que quitar."
+                        "mensaje": f" No tienes horas imputadas el {dia_nombre}. No hay nada que quitar."
                     }
                 
                 proyectos_del_dia = proyectos_con_horas
@@ -393,7 +393,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
             }
             
         except Exception as e:
-            return f"❌ Error al leer la tabla: {e}"
+            return f" Error al leer la tabla: {e}"
     
     # ❓ Desconocido
     else:

@@ -78,7 +78,7 @@ class Constants:
     ESTADO_CREDENCIALES_INVALIDAS = "credenciales_invalidas"
     
     # ========================================
-    # 🔧 UTILIDADES
+    #  UTILIDADES
     # ========================================
     @staticmethod
     def get_fecha_hoy() -> datetime:

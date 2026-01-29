@@ -48,7 +48,7 @@ def buscar_proyectos_duplicados(driver, wait, nombre_proyecto):
     from selenium.webdriver.common.by import By
     
     try:
-        print(f"[DEBUG] 🔍 Buscando todas las coincidencias de '{nombre_proyecto}'...")
+        print(f"[DEBUG]  Buscando todas las coincidencias de '{nombre_proyecto}'...")
         
         # Expandir árbol completo
         driver.execute_script("""
@@ -134,13 +134,13 @@ def buscar_proyectos_duplicados(driver, wait, nombre_proyecto):
                 })
                 
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Error procesando elemento {idx}: {e}")
+                print(f"[DEBUG]  Error procesando elemento {idx}: {e}")
                 continue
         
         return coincidencias
         
     except Exception as e:
-        print(f"[DEBUG] ❌ Error buscando proyectos duplicados: {e}")
+        print(f"[DEBUG]  Error buscando proyectos duplicados: {e}")
         return []
 
 
@@ -180,10 +180,10 @@ def encontrar_mejor_coincidencia_nodo(nodo_respuesta, coincidencias):
     
     # Umbral mínimo de similitud: 0.4 (40%)
     if mejor_similitud >= 0.4:
-        print(f"[DEBUG] ✅ Mejor coincidencia: '{mejor_coincidencia['nodo_padre']}' (similitud: {mejor_similitud:.2f})")
+        print(f"[DEBUG]  Mejor coincidencia: '{mejor_coincidencia['nodo_padre']}' (similitud: {mejor_similitud:.2f})")
         return mejor_coincidencia
     else:
-        print(f"[DEBUG] ❌ No hay coincidencias suficientemente buenas (máxima similitud: {mejor_similitud:.2f})")
+        print(f"[DEBUG]  No hay coincidencias suficientemente buenas (máxima similitud: {mejor_similitud:.2f})")
         return None
 
 
@@ -201,7 +201,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
         str: Mensaje formateado para el usuario
     """
     if len(coincidencias) == 0:
-        return f"❌ No he encontrado ningún proyecto llamado '{nombre_proyecto}'"
+        return f" No he encontrado ningún proyecto llamado '{nombre_proyecto}'"
     
     # 🆕 Caso especial: 1 coincidencia (proyecto existente) → preguntar si quiere usarlo
     if len(coincidencias) == 1:
@@ -228,17 +228,17 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
         
         if canal == "webapp":
             return (
-                f"✅ **Ya tienes 1 proyecto con horas:**\n\n"
+                f" **Ya tienes 1 proyecto con horas:**\n\n"
                 f"**1.** {path} - **{horas}h**\n\n"
                 f"{emoji} **{pregunta}**\n\n"
-                f"💡 Responde:\n"
+                f" Responde:\n"
                 f"- **'1'** o **'sí'** para continuar\n"
                 f"- **'otro'** para buscar un proyecto diferente\n"
                 f"- **'cancelar'** para abandonar"
             )
         else:
             return (
-                f"✅ *Ya tienes 1 proyecto con horas:*\n\n"
+                f" *Ya tienes 1 proyecto con horas:*\n\n"
                 f"1. {path} - *{horas}h*\n\n"
                 f"{emoji} *{pregunta}*\n\n"
                 f"Responde 'sí' para continuar, 'otro' para buscar diferente, 'cancelar' para salir"
@@ -267,7 +267,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     # Formato según el canal
     if canal == "slack":
         if son_existentes:
-            mensaje = f"✅ *Ya tienes {len(coincidencias)} proyectos con horas:*\n\n"
+            mensaje = f" *Ya tienes {len(coincidencias)} proyectos con horas:*\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"{idx}. `{coin['path_completo']}` - *{horas}h*\n"
@@ -281,7 +281,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     
     elif canal == "whatsapp":
         if son_existentes:
-            mensaje = f"✅ *Ya tienes {len(coincidencias)} proyectos con horas:*\n\n"
+            mensaje = f" *Ya tienes {len(coincidencias)} proyectos con horas:*\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"{idx}. {coin['path_completo']} - *{horas}h*\n"
@@ -295,7 +295,7 @@ def generar_mensaje_desambiguacion(nombre_proyecto, coincidencias, canal="webapp
     
     else:  # webapp
         if son_existentes:
-            mensaje = f"✅ **Ya tienes {len(coincidencias)} proyectos con horas:**\n\n"
+            mensaje = f" **Ya tienes {len(coincidencias)} proyectos con horas:**\n\n"
             for idx, coin in enumerate(coincidencias, 1):
                 horas = coin.get('total_horas', 0)
                 mensaje += f"**{idx}.** {coin['path_completo']} - **{horas}h**\n"
@@ -370,12 +370,12 @@ def resolver_respuesta_desambiguacion(respuesta_usuario, coincidencias):
         indice = numero - 1
         
         if 0 <= indice < len(coincidencias):
-            print(f"[DEBUG] ✅ Usuario seleccionó opción {numero}")
+            print(f"[DEBUG]  Usuario seleccionó opción {numero}")
             return coincidencias[indice]
         else:
-            print(f"[DEBUG] ❌ Número fuera de rango: {numero} (máximo: {len(coincidencias)})")
-            return None  # ❌ No continuar con fuzzy si el número está fuera de rango
+            print(f"[DEBUG]  Número fuera de rango: {numero} (máximo: {len(coincidencias)})")
+            return None  #  No continuar con fuzzy si el número está fuera de rango
     
     # Caso 2: Usuario responde con texto (nombre del departamento/área)
-    print(f"[DEBUG] 🔍 Buscando coincidencia fuzzy para: '{respuesta}'")
+    print(f"[DEBUG]  Buscando coincidencia fuzzy para: '{respuesta}'")
     return encontrar_mejor_coincidencia_nodo(respuesta, coincidencias)

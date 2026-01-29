@@ -11,7 +11,7 @@ from cryptography.fernet import Fernet
 import os
 
 # ==============================================================
-# 🔧 CONFIGURACIÓN BASE DE DATOS
+#  CONFIGURACIÓN BASE DE DATOS
 # ==============================================================
 
 DATABASE_URL = "mysql+pymysql://agente:1234@localhost:3306/agente_bot"
@@ -19,7 +19,7 @@ DATABASE_URL = "mysql+pymysql://agente:1234@localhost:3306/agente_bot"
 
 engine = create_engine(
     DATABASE_URL,
-    # 🚀 CONFIGURACIÓN OPTIMIZADA PARA CONCURRENCIA
+    #  CONFIGURACIÓN OPTIMIZADA PARA CONCURRENCIA
     pool_size=20,              # 20 conexiones permanentes
     max_overflow=30,           # Hasta 30 conexiones adicionales (total: 50)
     pool_pre_ping=True,        # Verificar conexiones antes de usar
@@ -39,7 +39,7 @@ ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
 
 if not ENCRYPTION_KEY:
     raise RuntimeError(
-        "❌ ENCRYPTION_KEY no definida. "
+        " ENCRYPTION_KEY no definida. "
         "Nunca se debe generar automáticamente."
     )
 
@@ -57,7 +57,7 @@ def descifrar(texto: str) -> str:
     try:
         return fernet.decrypt(texto.encode()).decode()
     except Exception as e:
-        print(f"[DB] ⚠️ Error descifrando contraseña: {e}")
+        print(f"[DB]  Error descifrando contraseña: {e}")
         return None  # Devolverá None y el sistema pedirá credenciales de nuevo
 
 
@@ -193,8 +193,8 @@ def limpiar_usuarios_inactivos(db, dias: int = 60):
 
 
 # ==============================================================
-# 🚀 INICIALIZAR
+#  INICIALIZAR
 # ==============================================================
 
 Base.metadata.create_all(bind=engine)
-print("[DB] Tablas inicializadas correctamente ✅")
+print("[DB] Tablas inicializadas correctamente ")

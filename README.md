@@ -10,10 +10,10 @@ Ahora puedes especificar proyectos con el mismo nombre diferenciándolos por su 
 
 ### Ejemplo:
 ```
-❌ Antes: "Pon 3 horas en Desarrollo" 
+ Antes: "Pon 3 horas en Desarrollo" 
    → Tomaba el primer "Desarrollo" (podía ser el incorrecto)
 
-✅ Ahora: "Pon 3 horas en Departamento Desarrollo en Desarrollo"
+ Ahora: "Pon 3 horas en Departamento Desarrollo en Desarrollo"
    → Selecciona específicamente el "Desarrollo" de "Departamento Desarrollo"
 ```
 
@@ -21,15 +21,15 @@ Ahora puedes especificar proyectos con el mismo nombre diferenciándolos por su 
 
 ---
 
-## 🎯 Características
+##  Características
 
-- ✅ **Interpretación en lenguaje natural** con GPT-4
-- ✅ **Multiusuario concurrente** (50+ usuarios simultáneos)
-- ✅ **Múltiples interfaces**: WebApp, Slack, WhatsApp
-- ✅ **Búsqueda jerárquica**: Selección precisa con nodos padre
-- ✅ **Pool de navegadores**: Sesión individual por usuario
-- ✅ **Credenciales cifradas**: Almacenamiento seguro con Fernet
-- ✅ **Auto-recovery**: Gestión inteligente de errores de login
+-  **Interpretación en lenguaje natural** con GPT-4
+-  **Multiusuario concurrente** (50+ usuarios simultáneos)
+-  **Múltiples interfaces**: WebApp, Slack, WhatsApp
+-  **Búsqueda jerárquica**: Selección precisa con nodos padre
+-  **Pool de navegadores**: Sesión individual por usuario
+-  **Credenciales cifradas**: Almacenamiento seguro con Fernet
+-  **Auto-recovery**: Gestión inteligente de errores de login
 
 ---
 
@@ -73,7 +73,7 @@ SLACK_BOT_TOKEN=xoxb-tu-token-aqui
 
 ---
 
-## 🚀 Uso
+##  Uso
 
 ### Iniciar el servidor
 ```bash
@@ -201,9 +201,9 @@ Verás una lista de casos de prueba que puedes enviar al bot.
 ### Verificar logs
 Busca líneas como:
 ```
-[DEBUG] 🎯 Seleccionando proyecto con jerarquía: 'Desarrollo' bajo 'Departamento Desarrollo'
-[DEBUG] 🔍 Buscando 'Desarrollo' bajo nodo padre 'Departamento Desarrollo'...
-[DEBUG] ✅ Nodo padre encontrado: Departamento Desarrollo
+[DEBUG]  Seleccionando proyecto con jerarquía: 'Desarrollo' bajo 'Departamento Desarrollo'
+[DEBUG]  Buscando 'Desarrollo' bajo nodo padre 'Departamento Desarrollo'...
+[DEBUG]  Nodo padre encontrado: Departamento Desarrollo
 ```
 
 ---
@@ -225,8 +225,8 @@ Busca líneas como:
 
 ### "Encontradas múltiples coincidencias"
 ```
-❌ "Pon 3h en Desarrollo"
-✅ "Pon 3h en Departamento Desarrollo en Desarrollo"
+ "Pon 3h en Desarrollo"
+ "Pon 3h en Departamento Desarrollo en Desarrollo"
 ```
 
 ### Error de login

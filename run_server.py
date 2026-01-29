@@ -9,11 +9,11 @@ if __name__ == "__main__":
         "server:app",
         host="0.0.0.0",
         port=8000,
-        # ⚠️ CRÍTICO: workers=1 para que todos compartan el mismo browser_pool
+        #  CRÍTICO: workers=1 para que todos compartan el mismo browser_pool
         # Si usas múltiples workers, cada uno tendría su propio pool y memoria
         workers=1,
         
-        # 🚀 CONCURRENCIA ALTA: hasta 500 peticiones simultáneas en cola
+        #  CONCURRENCIA ALTA: hasta 500 peticiones simultáneas en cola
         # Tu ThreadPoolExecutor(max_workers=50) procesará 50 a la vez
         # Las demás esperarán en cola (FastAPI las gestiona eficientemente)
         limit_concurrency=500,
@@ -30,9 +30,9 @@ if __name__ == "__main__":
         access_log=True,  # Ver todas las peticiones
         
         # 🔄 Reload: True para desarrollo, False para producción
-        reload=True,  # ⚠️ Cambiar a False en producción
+        reload=True,  #  Cambiar a False en producción
         
-        # 🔧 Loop asyncio (mejor rendimiento)
+        #  Loop asyncio (mejor rendimiento)
         loop="asyncio",
         
         # 🌐 Backlog de conexiones TCP (cuántas conexiones pueden esperar)

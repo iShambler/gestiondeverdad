@@ -68,13 +68,13 @@ def generar_respuesta_natural(acciones_ejecutadas, entrada_usuario, contexto=Non
             
             if partes_jerarquia:
                 jerarquia_texto = " del ".join(partes_jerarquia)
-                info_adicional = f"\n\n⚠️ IMPORTANTE - JERARQUÍA DEL PROYECTO:\nEl proyecto '{info['nombre']}' pertenece al {jerarquia_texto}.\n🚨 SIEMPRE incluye el departamento y cliente en tu respuesta. Ejemplo: 'He imputado X horas en {info['nombre']} del {info['departamento'] or 'departamento'}" + (f" ({info['cliente']})" if info['cliente'] else "") + "'"
+                info_adicional = f"\n\n IMPORTANTE - JERARQUÍA DEL PROYECTO:\nEl proyecto '{info['nombre']}' pertenece al {jerarquia_texto}.\n🚨 SIEMPRE incluye el departamento y cliente en tu respuesta. Ejemplo: 'He imputado X horas en {info['nombre']} del {info['departamento'] or 'departamento'}" + (f" ({info['cliente']})" if info['cliente'] else "") + "'"
         
         # Fallback al método anterior si no hay path_completo
         elif contexto.get("nodo_padre_actual") and contexto.get("nodo_padre_actual") != "__buscar__":
             nodo_padre = contexto.get("nodo_padre_actual")
             proyecto = contexto.get("proyecto_actual", "proyecto")
-            info_adicional = f"\n\n⚠️ IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. SIEMPRE menciona el departamento en tu respuesta."
+            info_adicional = f"\n\n IMPORTANTE: El proyecto '{proyecto}' pertenece a '{nodo_padre}'. SIEMPRE menciona el departamento en tu respuesta."
     
     prompt = f"""Eres un asistente virtual amigable de imputación de horas laborales.
 
@@ -85,7 +85,7 @@ Has ejecutado las siguientes acciones:
 
 Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando lo que has hecho.
 
-⚠️ REGLAS CRÍTICAS:
+ REGLAS CRÍTICAS:
 - NUNCA inventes fechas. USA EXACTAMENTE las fechas que aparecen en las acciones.
 - Si una acción dice "(fecha: 12/01/2026)", usa ESA FECHA, no otra.
 - Si dice "el lunes" y hay "(fecha: 12/01/2026)", di "el lunes 12/01" o "el lunes 12 de enero", NO "el lunes 1 de diciembre".
@@ -97,18 +97,18 @@ Genera una respuesta natural, breve y amigable (máximo 2-3 líneas) confirmando
 - 🚨 SIEMPRE incluye el departamento/área del proyecto en la respuesta si está disponible en la información.
 - 🚨 RESPETA LA OPERACIÓN EXACTA: Si la acción dice "restado" o "quitado", usa ESE verbo. Si dice "sumado" o "añadido", usa ESE verbo. NO los confundas.
   Ejemplos CORRECTOS:
-  - Acción: "Restado 2 horas" → Respuesta: "He restado/quitado 2 horas" ✅
-  - Acción: "Sumado 3 horas" → Respuesta: "He sumado/añadido 3 horas" ✅
-  - Acción: "Establecido a 5 horas" → Respuesta: "He establecido/puesto 5 horas totales" ✅
+  - Acción: "Restado 2 horas" → Respuesta: "He restado/quitado 2 horas" 
+  - Acción: "Sumado 3 horas" → Respuesta: "He sumado/añadido 3 horas" 
+  - Acción: "Establecido a 5 horas" → Respuesta: "He establecido/puesto 5 horas totales" 
   Ejemplos INCORRECTOS:
-  - Acción: "Restado 2 horas" → Respuesta: "He añadido 2 horas" ❌ (confunde restar con añadir)
-  - Acción: "Sumado 3 horas" → Respuesta: "He quitado 3 horas" ❌ (confunde sumar con quitar)
+  - Acción: "Restado 2 horas" → Respuesta: "He añadido 2 horas"  (confunde restar con añadir)
+  - Acción: "Sumado 3 horas" → Respuesta: "He quitado 3 horas"  (confunde sumar con quitar)
 
 Ejemplos de buen estilo completo (CON JERARQUÍA):
 - "¡Listo! He imputado 8 horas en Desarrollo del Dpto. Comercial (Arelance) para hoy y lo he guardado todo."
-- "Perfecto, he puesto 3h en Estudio del Departamento IDI para el 17/12. ¡Guardado! ✅"
+- "Perfecto, he puesto 3h en Estudio del Departamento IDI para el 17/12. ¡Guardado! "
 - "¡Hecho! He restado 4 horas del proyecto Formación (Staff) el lunes 12/01, dejando un total de 7 horas."
-- "Perfecto, he quitado 2 horas de Eventos del Dpto. Marketing el viernes 16/01. ✅"
+- "Perfecto, he quitado 2 horas de Eventos del Dpto. Marketing el viernes 16/01. "
 
 Respuesta:"""
     

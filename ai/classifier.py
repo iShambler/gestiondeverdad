@@ -24,18 +24,18 @@ def clasificar_mensaje(texto):
     Returns:
         str: 'comando', 'consulta', 'conversacion' o 'ayuda'
     """
-    print(f"[DEBUG] 🔍 Clasificando con GPT: '{texto}'")
+    print(f"[DEBUG] Clasificando con GPT: '{texto}'")
     
     texto_lower = texto.lower().strip()
     
     # 🆕 OPTIMIZACIÓN: Casos ultra-obvios sin GPT (opcional, pero ahorra latencia)
     # Solo los casos 100% seguros que no tienen ambigüedad
     if texto_lower in ["ayuda", "help", "comandos"]:
-        print(f"[DEBUG] ⚡ Clasificación rápida: ayuda")
+        print(f"[DEBUG]  Clasificación rápida: ayuda")
         return "ayuda"
     
     if texto_lower in ["hola", "buenos días", "buenas tardes", "buenas noches", "hey", "qué tal", "que tal"]:
-        print(f"[DEBUG] ⚡ Clasificación rápida: conversacion")
+        print(f"[DEBUG] Clasificación rápida: conversacion")
         return "conversacion"
     
     # Para todo lo demás, usar GPT
@@ -45,7 +45,7 @@ def clasificar_mensaje(texto):
     prompt = f"""
 Clasifica el siguiente mensaje en UNA de estas categorías:
 
-1️⃣ "comando" → El usuario quiere EJECUTAR una acción:
+1️"comando" → El usuario quiere EJECUTAR una acción:
    - Imputar horas, modificar horas, eliminar horas
    - Iniciar/finalizar jornada
    - Guardar o emitir horas
@@ -56,7 +56,7 @@ Clasifica el siguiente mensaje en UNA de estas categorías:
      * "cambia las horas del lunes a 6"
      * "borra las horas de hoy"
 
-2️⃣ "consulta" → El usuario quiere VER/CONSULTAR información:
+2️"consulta" → El usuario quiere VER/CONSULTAR información:
    A) Sobre HORAS IMPUTADAS:
       - Ver resúmenes de horas
       - Preguntar qué tiene imputado
@@ -76,7 +76,7 @@ Clasifica el siguiente mensaje en UNA de estas categorías:
      * "muéstrame los proyectos" → consulta de proyectos
      * "dime en qué proyectos puedo imputar" → consulta de proyectos
 
-3️⃣ "conversacion" → Saludos, preguntas generales fuera del ámbito:
+3️"conversacion" → Saludos, preguntas generales fuera del ámbito:
    - Saludos generales
    - Preguntas sobre temas externos
    - Conversación informal
@@ -89,7 +89,7 @@ Clasifica el siguiente mensaje en UNA de estas categorías:
      * "no veo el proyecto X" → problema técnico
      * "no encuentro X" → pregunta general
 
-4️⃣ "ayuda" → Solicita ayuda o información sobre cómo usar el bot:
+4️"ayuda" → Solicita ayuda o información sobre cómo usar el bot:
    - Ejemplos:
      * "ayuda"
      * "qué puedes hacer"
@@ -130,13 +130,13 @@ Respuesta:"""
         categorias_validas = ["comando", "consulta", "conversacion", "ayuda"]
         
         if clasificacion not in categorias_validas:
-            print(f"[DEBUG] ⚠️ GPT devolvió clasificación inválida: '{clasificacion}', usando 'conversacion' por defecto")
+            print(f"[DEBUG] GPT devolvió clasificación inválida: '{clasificacion}', usando 'conversacion' por defecto")
             clasificacion = "conversacion"
         
         print(f"[DEBUG] 🧠 GPT clasificó '{texto[:50]}...' como: {clasificacion}")
         return clasificacion
 
     except Exception as e:
-        print(f"[DEBUG] ❌ Error en clasificar_mensaje con GPT: {e}")
+        print(f"[DEBUG] Error en clasificar_mensaje con GPT: {e}")
         print(f"[DEBUG] Usando clasificación por defecto: conversacion")
         return "conversacion"
