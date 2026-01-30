@@ -512,17 +512,17 @@ NOTA CRÍTICA: MISMO proyecto → seleccionar_proyecto UNA SOLA VEZ al principio
 
 "8h en Vacaciones en Admin-Staf los días 26/12/2025, 29/12/2025, 30/12/2025, 31/12/2025, 02/01/2026"
 [
-  {"accion": "seleccionar_fecha", "parametros": {"fecha": "2025-12-26"}},
-  {"accion": "seleccionar_proyecto", "parametros": {"nombre": "Vacaciones", "nodo_padre": "Admin-Staf"}},
-  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-26", "horas": 8}},
-  {"accion": "guardar_linea"},
-  {"accion": "seleccionar_fecha", "parametros": {"fecha": "2025-12-29"}},
-  {"accion": "seleccionar_proyecto", "parametros": {"nombre": "Vacaciones", "nodo_padre": "Admin-Staf"}},
-  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-29", "horas": 8}},
-  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-30", "horas": 8}},
-  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-31", "horas": 8}},
-  {"accion": "imputar_horas_dia", "parametros": {"dia": "2026-01-02", "horas": 8}},
-  {"accion": "guardar_linea"}
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-26"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Vacaciones", "nodo_padre": "Admin-Staf"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-26", "horas": 8}}}},
+  {{"accion": "guardar_linea"}},
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-29"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Vacaciones", "nodo_padre": "Admin-Staf"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-29", "horas": 8}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-30", "horas": 8}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-31", "horas": 8}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-02", "horas": 8}}}},
+  {{"accion": "guardar_linea"}}
 ]
 NOTA CRÍTICA: 
 - 26/12 está en semana del 22/12 (lunes)
