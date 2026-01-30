@@ -275,13 +275,22 @@ Ejemplos:
    Ejemplo: "3h en X el lunes, 5h en Y el miércoles" (ambos semana 16-20 dic) → fecha(lunes) → proyecto(X) → imputar(3) → fecha(miércoles) → proyecto(Y) → imputar(5) → guardar_linea (UNA VEZ AL FINAL)
 
 5.  CRÍTICO - MISMO proyecto en MÚLTIPLES días de la MISMA SEMANA:
-   - seleccionar_proyecto UNA SOLA VEZ al inicio
+   - seleccionar_proyecto UNA SOLA VEZ al inicio de cada semana
    - Luego múltiples imputar_horas_dia (uno por cada día)
-   - NO repetir seleccionar_proyecto entre días del mismo proyecto
+   - NO repetir seleccionar_proyecto entre días de la misma semana
    - Ejemplo: "4h en Estudio lunes, martes, jueves" → seleccionar_fecha(primera_fecha) + seleccionar_proyecto(Estudio) + imputar(lunes) + imputar(martes) + imputar(jueves) + guardar_linea
 
-6. Cambio de SEMANA → guardar antes de cambiar:
-   Ejemplo: "3h el lunes 16, 5h el lunes 23" (semanas diferentes) → fecha(16) → proyecto(X) → imputar(3) → guardar_linea → fecha(23) → proyecto(Y) → imputar(5) → guardar_linea
+6.  CRÍTICO - Cambio de SEMANA → SIEMPRE guardar Y volver a seleccionar proyecto:
+   - ANTES de cambiar de semana → guardar_linea
+   - DESPUÉS de cambiar de semana → seleccionar_proyecto (OBLIGATORIO)
+   - Ejemplo: "8h en Vacaciones el 26/12, 29/12, 30/12" (semanas diferentes):
+     * fecha(26/12) → seleccionar_proyecto(Vacaciones) → imputar(26/12) → guardar_linea
+     * fecha(29/12) → seleccionar_proyecto(Vacaciones) → imputar(29/12) + imputar(30/12) → guardar_linea
+   
+   REGLA ABSOLUTA: Después de cada guardar_linea, si hay más acciones pendientes:
+   - SIEMPRE incluir seleccionar_proyecto antes de imputar
+   - Aunque sea el mismo proyecto
+   - Porque guardar_linea limpia el contexto del navegador
 
 7. REGLA CLAVE: guardar_linea solo cuando:
    - Vas a cambiar de semana (antes del cambio)
@@ -501,17 +510,26 @@ NOTA: Usa hoy por defecto porque no mencionó día. NO incluye proyecto porque n
 ]
 NOTA CRÍTICA: MISMO proyecto → seleccionar_proyecto UNA SOLA VEZ al principio. NO repetir entre días
 
-"3h el lunes 16 y 5h el lunes 23"
+"8h en Vacaciones en Admin-Staf los días 26/12/2025, 29/12/2025, 30/12/2025, 31/12/2025, 02/01/2026"
 [
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-16"}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-16", "horas": 3}}}},
-  {{"accion": "guardar_linea"}},
-  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2025-12-23"}}}},
-  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Desarrollo"}}}},
-  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2025-12-23", "horas": 5}}}},
-  {{"accion": "guardar_linea"}}
+  {"accion": "seleccionar_fecha", "parametros": {"fecha": "2025-12-26"}},
+  {"accion": "seleccionar_proyecto", "parametros": {"nombre": "Vacaciones", "nodo_padre": "Admin-Staf"}},
+  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-26", "horas": 8}},
+  {"accion": "guardar_linea"},
+  {"accion": "seleccionar_fecha", "parametros": {"fecha": "2025-12-29"}},
+  {"accion": "seleccionar_proyecto", "parametros": {"nombre": "Vacaciones", "nodo_padre": "Admin-Staf"}},
+  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-29", "horas": 8}},
+  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-30", "horas": 8}},
+  {"accion": "imputar_horas_dia", "parametros": {"dia": "2025-12-31", "horas": 8}},
+  {"accion": "imputar_horas_dia", "parametros": {"dia": "2026-01-02", "horas": 8}},
+  {"accion": "guardar_linea"}
 ]
+NOTA CRÍTICA: 
+- 26/12 está en semana del 22/12 (lunes)
+- 29/12 está en semana del 29/12 (lunes)
+- Cambio de semana detectado → guardar_linea ANTES de cambiar
+- OBLIGATORIO: seleccionar_proyecto DESPUÉS de cada guardar_linea
+- 29/12, 30/12, 31/12, 02/01 son la misma semana → NO repetir seleccionar_proyecto entre ellos
 
 "Último proyecto: Eventos. Usuario: 'borra la línea'"
 [

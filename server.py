@@ -115,7 +115,7 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
             ]
             
             if any(palabra in texto_lower for palabra in palabras_cancelar):
-                print(f"[DEBUG]  Usuario canceló la desambiguación")
+                print(f"[DEBUG] 🚫 Usuario canceló la desambiguación")
                 conversation_state_manager.limpiar_estado(user_id)
                 respuesta = "👍 Vale, no pasa nada. ¿En qué puedo ayudarte?"
                 registrar_peticion(db, usuario.id, texto, "cancelacion_desambiguacion", canal=canal, respuesta=respuesta)
