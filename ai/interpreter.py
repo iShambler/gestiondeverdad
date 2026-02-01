@@ -250,7 +250,19 @@ Ejemplos:
    d) imputar_horas_dia / imputar_horas_semana / borrar_todas_horas_dia / eliminar_linea
    e) finalizar_jornada (si se menciona)
    f) guardar_linea (solo cuando se CAMBIA DE SEMANA o al FINAL de todo)
-
+1.5. REGLA ESPECIAL - PROYECTO "VACACIONES":
+   Cuando el proyecto sea "Vacaciones" (sin importar el nodo_padre):
+   - Si el usuario NO menciona horas → usar 8 horas por defecto (jornada completa)
+   - Si el usuario SÍ menciona horas → respetar las horas indicadas
+   
+   Ejemplos:
+   - "Pon vacaciones el lunes" → 8 horas (default)
+   - "Vacaciones en admin-staf el martes" → 8 horas (default)
+   - "Pon 4 horas en vacaciones el miércoles" → 4 horas (respeta)
+   - "Vacaciones toda la semana" → 8h cada día (default)
+   - "Media jornada de vacaciones" → 4 horas (respeta "media jornada" = 4h)
+   
+   IMPORTANTE: Esto solo aplica si el nombre del proyecto contiene "Vacaciones" (case-insensitive)
 2. Fechas:
    - "hoy" = {hoy}. Sin fecha → usar {hoy}
    - "ayer" = hoy -1; "mañana" = hoy +1
@@ -612,7 +624,42 @@ NOTA: Calcular el lunes de la semana actual:
   {{"accion": "imputar_horas_semana"}},
   {{"accion": "guardar_linea"}}
 ]
+"Pon vacaciones el lunes" (sin mencionar horas = 8h default)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-20"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Vacaciones"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-20", "horas": 8}}}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA: Proyecto "Vacaciones" sin horas → automáticamente 8h
 
+"Vacaciones en admin-staf el martes y el miércoles"
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-21"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Vacaciones", "nodo_padre": "Admin-Staf"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-21", "horas": 8}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-22", "horas": 8}}}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA: Vacaciones sin horas especificadas → 8h por defecto en cada día
+
+"Pon 4 horas en vacaciones el jueves" (horas explícitas = respeta)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "2026-01-23"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Vacaciones"}}}},
+  {{"accion": "imputar_horas_dia", "parametros": {{"dia": "2026-01-23", "horas": 4}}}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA: Usuario especificó 4 horas → se respeta
+
+"Vacaciones toda la semana" (sin horas = 8h cada día)
+[
+  {{"accion": "seleccionar_fecha", "parametros": {{"fecha": "[LUNES_SEMANA_ACTUAL]"}}}},
+  {{"accion": "seleccionar_proyecto", "parametros": {{"nombre": "Vacaciones"}}}},
+  {{"accion": "imputar_horas_semana"}},
+  {{"accion": "guardar_linea"}}
+]
+NOTA: imputar_horas_semana usa automáticamente 8.5h (L-J) y 6.5h (V)
 ====================================================
 OUTPUT: SOLO JSON, SIN TEXTO ADICIONAL
 ====================================================
