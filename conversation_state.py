@@ -44,13 +44,14 @@ class ConversationStateManager:
             self.limpiar_estado(user_id)
             return False
         
-        # Verificar si ha expirado
-        if datetime.now() - timestamp > timedelta(minutes=self.timeout_minutes):
-            print(f"[CONVERSACION] ⏰ Estado expirado para usuario: {user_id}")
+        # Verificar si ha expirado (usar timeout_override si existe)
+        timeout = estado.get("timeout_override", self.timeout_minutes)
+        if datetime.now() - timestamp > timedelta(minutes=timeout):
+            print(f"[CONVERSACION] ⏰ Estado expirado para usuario: {user_id} (timeout: {timeout}min)")
             self.limpiar_estado(user_id)
             return False
         
-        return estado.get("tipo") in ["desambiguacion_proyecto", "info_incompleta", "recordatorio_semanal"]
+        return estado.get("tipo") in ["desambiguacion_proyecto", "info_incompleta", "recordatorio_semanal", "confirmar_emision"]
     
     def guardar_desambiguacion(self, user_id, nombre_proyecto, coincidencias, comando_original, indice_orden=0, respuestas_acumuladas=None, texto_original=None):
         """
@@ -196,6 +197,7 @@ class ConversationStateManager:
         """
         Guarda el estado de un recordatorio semanal pendiente.
         El usuario puede responder Sí/No o dar otra instrucción.
+        Expira a las 2 horas (más que el timeout normal de 5 min).
         
         Args:
             user_id: ID del usuario (wa_id)
@@ -203,10 +205,28 @@ class ConversationStateManager:
         self.estados[user_id] = {
             "tipo": "recordatorio_semanal",
             "coincidencias": [],  # Requerido por tiene_pregunta_pendiente
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(),
+            "timeout_override": 120  # 2 horas en minutos
         }
         
-        print(f"[CONVERSACION] 📋 Guardado recordatorio semanal para: {user_id}")
+        print(f"[CONVERSACION] 📋 Guardado recordatorio semanal para: {user_id} (expira en 2h)")
+    
+    def guardar_confirmar_emision(self, user_id):
+        """
+        Guarda el estado de confirmación de emisión de horas.
+        Expira a los 30 minutos.
+        
+        Args:
+            user_id: ID del usuario (wa_id)
+        """
+        self.estados[user_id] = {
+            "tipo": "confirmar_emision",
+            "coincidencias": [],
+            "timestamp": datetime.now(),
+            "timeout_override": 30  # 30 minutos
+        }
+        
+        print(f"[CONVERSACION] 📤 Guardada confirmación de emisión para: {user_id} (expira en 30min)")
     
     def limpiar_estado(self, user_id):
         """

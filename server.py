@@ -138,6 +138,17 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
                     return resultado_recordatorio
                 # Si es None, cae al flujo normal de procesamiento de mensaje
             
+            # =====================================================
+            # 📤 CASO ESPECIAL: Confirmar emisión de horas (Sí/No)
+            # =====================================================
+            if estado and estado.get("tipo") == "confirmar_emision":
+                from funciones_server import manejar_confirmar_emision
+                resultado_emision = manejar_confirmar_emision(
+                    texto, user_id, session, contexto, db, usuario, canal
+                )
+                if resultado_emision is not None:
+                    return resultado_emision
+            
             # 1. Palabras de cancelación
             palabras_cancelar = [
                 'cancelar', 'cancel', 'nada', 'olvida', 'olvídalo', 'olvidalo',

@@ -892,10 +892,13 @@ def manejar_recordatorio_semanal(texto: str, user_id: str, session, contexto: di
                 )
             
             if exito:
+                # Guardar estado para preguntar si emitir
+                conversation_state_manager.guardar_confirmar_emision(user_id)
+                
                 respuesta = (
                     "✅ *¡Listo!* He cargado el horario de la semana pasada.\n\n"
                     f"{mensaje}\n\n"
-                    "💾 Las horas están guardadas. ¿Necesitas algo más?"
+                    "¿Quieres que emita las horas? Responde *Sí* o *No*"
                 )
             else:
                 respuesta = (
@@ -938,6 +941,71 @@ def manejar_recordatorio_semanal(texto: str, user_id: str, session, contexto: di
     
     # Re-procesar el texto como un mensaje nuevo (importar aquí para evitar circular)
     # Retornar None para que server.py siga el flujo normal
+    return None
+
+
+def manejar_confirmar_emision(texto: str, user_id: str, session, contexto: dict,
+                             db: Session, usuario, canal: str) -> str:
+    """
+    Maneja la respuesta del usuario a la pregunta de emitir horas.
+    
+    Flujo:
+    - "Sí" → ejecuta emitir_linea
+    - "No" → las horas quedan guardadas sin emitir
+    - Otra instrucción → limpia estado y procesa como comando normal
+    """
+    texto_lower = texto.lower().strip()
+    
+    # Detectar "sí"
+    palabras_si = ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep', 'venga', 'emite']
+    
+    if texto_lower in palabras_si:
+        print(f"[DEBUG] 📤 Usuario {user_id} aceptó emitir horas")
+        conversation_state_manager.limpiar_estado(user_id)
+        
+        try:
+            from web_automation import emitir_linea
+            
+            with session.lock:
+                resultado = emitir_linea(session.driver, session.wait)
+            
+            respuesta = (
+                f"✅ *¡Horas emitidas!* {resultado}\n\n"
+                "¿Necesitas algo más?"
+            )
+            
+            registrar_peticion(db, usuario.id, texto, "emision_aceptada",
+                             canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
+        
+        except Exception as e:
+            print(f"[DEBUG] ❌ Error emitiendo: {e}")
+            respuesta = f"⚠️ No he podido emitir: {e}\n\nPuedes intentarlo con: *emite las horas*"
+            registrar_peticion(db, usuario.id, texto, "emision_error",
+                             canal=canal, respuesta=respuesta, estado="error")
+            session.update_activity()
+            return respuesta
+    
+    # Detectar "no"
+    palabras_no = ['no', 'nop', 'nope', 'n', 'nel', 'negativo']
+    
+    if texto_lower in palabras_no:
+        print(f"[DEBUG] 📤 Usuario {user_id} rechazó emitir")
+        conversation_state_manager.limpiar_estado(user_id)
+        
+        respuesta = (
+            "👍 Vale, las horas quedan guardadas pero sin emitir.\n\n"
+            "¿Necesitas algo más?"
+        )
+        registrar_peticion(db, usuario.id, texto, "emision_rechazada",
+                         canal=canal, respuesta=respuesta)
+        session.update_activity()
+        return respuesta
+    
+    # Cualquier otra cosa → limpiar estado y procesar como comando normal
+    print(f"[DEBUG] 📤 Usuario {user_id} dio otra instrucción, limpiando estado de emisión")
+    conversation_state_manager.limpiar_estado(user_id)
     return None
 
 
