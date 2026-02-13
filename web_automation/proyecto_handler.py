@@ -813,7 +813,108 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
                 else:
                     return f"He imputado {total}h el {dia} {proyecto_texto}"
         else:
-            return f"El {dia} no está disponible para imputar"
+            # Campo no habilitado - Verificar si es fin de semana o día bloqueado
+            print(f"[DEBUG] ⚠️ Campo {dia} deshabilitado")
+            
+            # Necesitamos la fecha exacta para verificar si es fin de semana
+            # Obtenerla del contexto
+            from web_automation.navigation import seleccionar_fecha, volver_atras
+            from web_automation.interactions import guardar_linea as guardar_linea_func
+            import re
+            
+            contexto = driver.contexto if hasattr(driver, 'contexto') else {}
+            
+            # Intentar obtener la fecha del parámetro 'dia' si viene en formato fecha
+            # o del contexto si es nombre de día
+            fecha_exacta = contexto.get("fecha_actual")
+            
+            # Si 'dia' es una fecha (YYYY-MM-DD), usarla
+            if re.match(r'\d{4}-\d{2}-\d{2}', str(dia)):
+                fecha_exacta = dia
+            
+            if not fecha_exacta:
+                print(f"[DEBUG] ❌ No hay fecha exacta en contexto para verificar")
+                return f"El {dia} no está disponible para imputar"
+            
+            # Verificar si es fin de semana
+            from datetime import datetime
+            try:
+                fecha_obj = datetime.strptime(fecha_exacta, "%Y-%m-%d")
+                dia_semana = fecha_obj.weekday()  # 0=lunes, 6=domingo
+                
+                if dia_semana in [5, 6]:  # Sábado o domingo
+                    print(f"[DEBUG] ⚠️ Es fin de semana, no se puede imputar")
+                    return f"No se puede imputar en fin de semana ({dia})"
+                
+                print(f"[DEBUG] 🔄 Campo bloqueado pero es día laborable → Usar calendario para fecha exacta")
+                print(f"[DEBUG] 💾 Guardando línea actual antes de cambiar...")
+                
+                # 1. Guardar la línea actual
+                try:
+                    guardar_linea_func(driver)
+                    print(f"[DEBUG] ✅ Línea guardada")
+                except Exception as e_guardar:
+                    print(f"[DEBUG] ⚠️ Error guardando: {e_guardar}")
+                
+                # 2. Volver atrás
+                try:
+                    volver_atras(driver)
+                    print(f"[DEBUG] ✅ Vuelto a pantalla principal")
+                    
+                    # Limpiar contexto
+                    contexto["fecha_actual"] = None
+                    contexto["fila_actual"] = None
+                    
+                except Exception as e_volver:
+                    print(f"[DEBUG] ⚠️ Error volviendo atrás: {e_volver}")
+                
+                # 3. Ir a la fecha EXACTA usando el calendario
+                try:
+                    print(f"[DEBUG] 📅 Navegando a fecha exacta: {fecha_exacta}")
+                    seleccionar_fecha(driver, contexto, fecha_exacta)
+                    print(f"[DEBUG] ✅ Navegado a {fecha_exacta}")
+                except Exception as e_fecha:
+                    print(f"[DEBUG] ❌ Error navegando a fecha: {e_fecha}")
+                    return f"No pude navegar a la fecha exacta {fecha_exacta}"
+                
+                # 4. Re-seleccionar el proyecto
+                try:
+                    nombre_proyecto_ctx = contexto.get("proyecto_actual") or nombre_proyecto
+                    nodo_padre = contexto.get("nodo_padre_actual")
+                    
+                    if not nombre_proyecto_ctx:
+                        print(f"[DEBUG] ❌ No hay proyecto en contexto para re-seleccionar")
+                        return "No hay proyecto en contexto"
+                    
+                    print(f"[DEBUG] 🔄 Re-seleccionando proyecto: {nombre_proyecto_ctx}")
+                    from web_automation.proyecto_handler import seleccionar_proyecto
+                    seleccionar_proyecto(driver, contexto, nombre_proyecto_ctx, nodo_padre)
+                    print(f"[DEBUG] ✅ Proyecto re-seleccionado")
+                    
+                except Exception as e_proyecto:
+                    print(f"[DEBUG] ❌ Error re-seleccionando proyecto: {e_proyecto}")
+                    return f"No pude re-seleccionar el proyecto: {e_proyecto}"
+                
+                # 5. Obtener la nueva fila y reintentar
+                print(f"[DEBUG] 🔄 Reintentando imputar {horas}h en {dia}...")
+                
+                try:
+                    nueva_fila = contexto.get("fila_actual")
+                    if not nueva_fila:
+                        print(f"[DEBUG] ❌ No hay fila en contexto después de re-seleccionar")
+                        return "No pude obtener la fila del proyecto"
+                    
+                    # Llamada recursiva con la nueva fila
+                    return imputar_horas_dia(driver, wait, dia, horas, nueva_fila, nombre_proyecto, modo)
+                    
+                except Exception as e_retry:
+                    print(f"[DEBUG] ❌ Falló reintento: {e_retry}")
+                    return f"No se pudo imputar en {dia} ni en fecha exacta"
+                    
+            except ValueError as ve:
+                print(f"[DEBUG] ❌ Error parseando fecha: {ve}")
+                return f"El {dia} no está disponible para imputar"
+                
     except Exception as e:
         print(f"[DEBUG]  Error imputando horas: {e}")
         import traceback

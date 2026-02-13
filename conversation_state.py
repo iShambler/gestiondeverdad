@@ -50,7 +50,7 @@ class ConversationStateManager:
             self.limpiar_estado(user_id)
             return False
         
-        return estado.get("tipo") in ["desambiguacion_proyecto", "info_incompleta"]
+        return estado.get("tipo") in ["desambiguacion_proyecto", "info_incompleta", "recordatorio_semanal"]
     
     def guardar_desambiguacion(self, user_id, nombre_proyecto, coincidencias, comando_original, indice_orden=0, respuestas_acumuladas=None, texto_original=None):
         """
@@ -191,6 +191,22 @@ class ConversationStateManager:
             return None
         
         return ultimo
+    
+    def guardar_recordatorio_semanal(self, user_id):
+        """
+        Guarda el estado de un recordatorio semanal pendiente.
+        El usuario puede responder Sí/No o dar otra instrucción.
+        
+        Args:
+            user_id: ID del usuario (wa_id)
+        """
+        self.estados[user_id] = {
+            "tipo": "recordatorio_semanal",
+            "coincidencias": [],  # Requerido por tiene_pregunta_pendiente
+            "timestamp": datetime.now()
+        }
+        
+        print(f"[CONVERSACION] 📋 Guardado recordatorio semanal para: {user_id}")
     
     def limpiar_estado(self, user_id):
         """

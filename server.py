@@ -56,6 +56,25 @@ GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
 GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
 
 # ============================================================================
+# 📋 SCHEDULER DE RECORDATORIOS SEMANALES
+# ============================================================================
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from scheduler import ejecutar_check_semanal
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(
+    ejecutar_check_semanal,
+    trigger=CronTrigger(day_of_week='fri', hour=14, minute=0),
+    id='check_semanal_imputacion',
+    name='Check semanal de imputación de horas',
+    replace_existing=True
+)
+scheduler.start()
+print("[SCHEDULER] 📋 Scheduler iniciado - Check semanal: Viernes a las 14:00")
+
+# ============================================================================
 # FUNCIÓN PRINCIPAL DE PROCESAMIENTO
 # ============================================================================
 
@@ -105,6 +124,19 @@ def procesar_mensaje_usuario_sync(texto: str, user_id: str, db: Session, canal: 
             
             #  DETECTAR CANCELACIÓN O NUEVA ORDEN
             texto_lower = texto.lower().strip()
+            
+            # =====================================================
+            # 📋 CASO ESPECIAL: Recordatorio semanal (Sí/No)
+            # =====================================================
+            if estado and estado.get("tipo") == "recordatorio_semanal":
+                from funciones_server import manejar_recordatorio_semanal
+                resultado_recordatorio = manejar_recordatorio_semanal(
+                    texto, user_id, session, contexto, db, usuario, canal
+                )
+                # Si retorna None, el usuario dio otra instrucción → seguir flujo normal
+                if resultado_recordatorio is not None:
+                    return resultado_recordatorio
+                # Si es None, cae al flujo normal de procesamiento de mensaje
             
             # 1. Palabras de cancelación
             palabras_cancelar = [
@@ -597,6 +629,14 @@ async def stats():
     })
 
 
+@app.post("/trigger-check-semanal")
+async def trigger_check_semanal():
+    """Ejecutar el check semanal manualmente (para testing)"""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(executor, ejecutar_check_semanal)
+    return JSONResponse({"status": "ok", "message": "Check semanal ejecutado"})
+
+
 @app.post("/close-session/{user_id}")
 async def close_user_session(user_id: str):
     """Cerrar sesión de un usuario"""
@@ -607,6 +647,8 @@ async def close_user_session(user_id: str):
 @app.on_event("shutdown")
 def shutdown_event():
     print("[SERVER] 🛑 Apagando servidor, cerrando todos los navegadores...")
+    scheduler.shutdown(wait=False)
+    print("[SCHEDULER] 🛑 Scheduler detenido")
     browser_pool.close_all()
     executor.shutdown(wait=True)
 

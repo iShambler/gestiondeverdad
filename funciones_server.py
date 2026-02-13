@@ -859,6 +859,88 @@ def buscar_en_sistema(estado: dict, session, db: Session, usuario, user_id: str,
     return respuesta_natural
 
 
+# ============================================================================
+# MANEJO DE RECORDATORIO SEMANAL
+# ============================================================================
+
+def manejar_recordatorio_semanal(texto: str, user_id: str, session, contexto: dict,
+                                 db: Session, usuario, canal: str) -> str:
+    """
+    Maneja la respuesta del usuario al recordatorio semanal de imputación.
+    
+    Flujo:
+    - "Sí" → ejecuta copiar_semana_anterior y confirma
+    - "No" → recuerda que debe imputar manualmente
+    - Otra instrucción → limpia estado y procesa como comando normal
+    """
+    texto_lower = texto.lower().strip()
+    
+    # Detectar "sí"
+    palabras_si = ['si', 'sí', 'sip', 'vale', 'ok', 'yes', 'y', 's', 'claro', 'dale', 'sep', 'venga']
+    
+    if texto_lower in palabras_si:
+        print(f"[DEBUG] 📋 Usuario {user_id} aceptó cargar semana anterior")
+        conversation_state_manager.limpiar_estado(user_id)
+        
+        # Ejecutar copiar_semana_anterior
+        try:
+            from web_automation import copiar_semana_anterior
+            
+            with session.lock:
+                exito, mensaje, proyectos = copiar_semana_anterior(
+                    session.driver, session.wait, contexto
+                )
+            
+            if exito:
+                respuesta = (
+                    "✅ *¡Listo!* He cargado el horario de la semana pasada.\n\n"
+                    f"{mensaje}\n\n"
+                    "💾 Las horas están guardadas. ¿Necesitas algo más?"
+                )
+            else:
+                respuesta = (
+                    f"⚠️ No he podido cargar la semana anterior: {mensaje}\n\n"
+                    "Puedes intentarlo manualmente con: *copia la semana pasada*"
+                )
+            
+            registrar_peticion(db, usuario.id, texto, "recordatorio_aceptado",
+                             canal=canal, respuesta=respuesta)
+            session.update_activity()
+            return respuesta
+        
+        except Exception as e:
+            print(f"[DEBUG] ❌ Error ejecutando copiar_semana_anterior: {e}")
+            respuesta = f"⚠️ Ha ocurrido un error: {e}\n\nPuedes intentarlo con: *copia la semana pasada*"
+            registrar_peticion(db, usuario.id, texto, "recordatorio_error",
+                             canal=canal, respuesta=respuesta, estado="error")
+            session.update_activity()
+            return respuesta
+    
+    # Detectar "no"
+    palabras_no = ['no', 'nop', 'nope', 'n', 'nel', 'negativo']
+    
+    if texto_lower in palabras_no:
+        print(f"[DEBUG] 📋 Usuario {user_id} rechazó cargar semana anterior")
+        conversation_state_manager.limpiar_estado(user_id)
+        
+        respuesta = (
+            "👍 Vale, recuerda imputar tus horas antes de que acabe el día.\n\n"
+            "¿Necesitas ayuda con algo?"
+        )
+        registrar_peticion(db, usuario.id, texto, "recordatorio_rechazado",
+                         canal=canal, respuesta=respuesta)
+        session.update_activity()
+        return respuesta
+    
+    # Cualquier otra cosa → limpiar estado y procesar como comando normal
+    print(f"[DEBUG] 📋 Usuario {user_id} dio otra instrucción, limpiando recordatorio")
+    conversation_state_manager.limpiar_estado(user_id)
+    
+    # Re-procesar el texto como un mensaje nuevo (importar aquí para evitar circular)
+    # Retornar None para que server.py siga el flujo normal
+    return None
+
+
 def manejar_desambiguacion_multiple(texto: str, estado: dict, session, db: Session,
                                    usuario, user_id: str, canal: str, contexto: dict) -> str:
     """

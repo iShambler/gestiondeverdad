@@ -41,6 +41,10 @@ def hacer_login(driver, wait, username=None, password=None):
     
     try:
         print(f"[DEBUG] Intentando login con usuario: {username}")
+        
+        # Establecer timeout de 30 segundos para cargar páginas
+        driver.set_page_load_timeout(30)
+        
         driver.get(settings.LOGIN_URL)
         
         # Esperar y rellenar formulario
