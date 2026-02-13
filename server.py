@@ -66,7 +66,7 @@ from scheduler import ejecutar_check_semanal
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     ejecutar_check_semanal,
-    trigger=CronTrigger(day_of_week='fri', hour=14, minute=0),
+    trigger=CronTrigger(day_of_week='fri', hour=14, minute=0, timezone='Europe/Madrid'),
     id='check_semanal_imputacion',
     name='Check semanal de imputación de horas',
     replace_existing=True
