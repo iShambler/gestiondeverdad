@@ -52,8 +52,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
-GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
+META_WHATSAPP_TOKEN = os.getenv("META_WHATSAPP_TOKEN")
+META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID")
 
 # ============================================================================
 # 📋 SCHEDULER DE RECORDATORIOS SEMANALES
@@ -602,28 +602,34 @@ async def procesar_whatsapp_en_background(texto: str, wa_id: str):
 
 def enviar_whatsapp(wa_id: str, mensaje: str):
     """
-    Envía un mensaje de WhatsApp usando Green API
+    Envía un mensaje de WhatsApp usando Meta Cloud API (Business API oficial)
     """
     try:
-        url = (
-            f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}"
-            f"/sendMessage/{GREEN_API_TOKEN}"
-        )
+        url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
 
-        payload = {
-            "chatId": f"{wa_id}@c.us",
-            "message": mensaje
+        headers = {
+            "Authorization": f"Bearer {META_WHATSAPP_TOKEN}",
+            "Content-Type": "application/json"
         }
 
-        response = requests.post(url, json=payload, timeout=15)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": wa_id,
+            "type": "text",
+            "text": {
+                "body": mensaje
+            }
+        }
 
-        if response.status_code != 200:
-            print(f"[GREEN API]  Error {response.status_code}: {response.text}")
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
+
+        if response.status_code not in (200, 201):
+            print(f"[META WA API] ❌ Error {response.status_code}: {response.text}")
         else:
-            print(f"[GREEN API]  Mensaje enviado a {wa_id}")
+            print(f"[META WA API] ✅ Mensaje enviado a {wa_id}")
 
     except Exception as e:
-        print(f"[GREEN API]  Excepción enviando mensaje: {e}")
+        print(f"[META WA API] ❌ Excepción enviando mensaje: {e}")
 
 
 @app.get("/stats")
