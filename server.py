@@ -58,7 +58,7 @@ META_WHATSAPP_TOKEN = os.getenv("META_WHATSAPP_TOKEN")
 META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID")
 BASE_URL = os.getenv("BASE_URL", "https://tu-dominio.com")  # URL pública del servidor
 
-# Servir archivos estáticos
+# Servir archivos estáticos (static/ y assets/ ambos en /static)
 import pathlib
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
