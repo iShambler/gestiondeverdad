@@ -524,77 +524,19 @@ async def chat(request: Request, db: Session = Depends(get_db)):
             usuario_wa = crear_usuario(db, wa_id=wa_id, canal="whatsapp")
         
         # -----------------------------------------------------
-        # REGISTRO DE CREDENCIALES SI NO EXISTEN
+        # REGISTRO DE CREDENCIALES SI NO EXISTEN → ENVIAR LINK
         # -----------------------------------------------------
         if not usuario_wa.username_intranet or not usuario_wa.password_intranet:
-            credenciales = extraer_credenciales_con_gpt(texto)
-            
-            if credenciales["ambos"]:
-                loop = asyncio.get_event_loop()
-                session = await loop.run_in_executor(
-                    executor,
-                    lambda: browser_pool.get_session(wa_id)
+            token = auth_token_manager.generar_token(wa_id)
+            login_url = f"{BASE_URL}/auth/login?token={token}"
+            return JSONResponse({
+                "reply": (
+                    f"👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
+                    f"🔐 Configura tus credenciales aquí:\n{login_url}\n\n"
+                    f"⏳ El enlace caduca en 15 minutos.\n"
+                    f"🔒 Tus credenciales se guardan cifradas y seguras."
                 )
-                
-                if not session or not session.driver:
-                    return JSONResponse({"reply": " No he podido iniciar el navegador."})
-                
-                try:
-                    success, mensaje = await loop.run_in_executor(
-                        executor,
-                        lambda: hacer_login_con_lock(
-                            session,
-                            credenciales["username"],
-                            credenciales["password"]
-                        )
-                    )
-                    
-                    if success:
-                        session.is_logged_in = True
-                        usuario_wa.establecer_credenciales_intranet(
-                            credenciales["username"], 
-                            credenciales["password"]
-                        )
-                        db.commit()
-                        
-                        registrar_peticion(
-                            db,
-                            usuario_wa.id,
-                            texto,
-                            "registro_whatsapp",
-                            canal="whatsapp",
-                            respuesta="Credenciales guardadas exitosamente"
-                        )
-                        
-                        return JSONResponse({
-                            "reply": (
-                                " *¡Credenciales guardadas correctamente!*\n\n"
-                                f"✓ Usuario: *{credenciales['username']}*\n"
-                                "✓ Contraseña: ******\n\n"
-                                " Ya puedes empezar a usar el bot. ¿En qué puedo ayudarte?"
-                            )
-                        })
-                    else:
-                        return JSONResponse({
-                            "reply": (
-                                " *Error de login*\n\n"
-                                "Las credenciales no son correctas."
-                            )
-                        })
-                
-                except Exception as e:
-                    return JSONResponse({"reply": f" Error: {str(e)}"})
-            
-            else:
-                return JSONResponse({
-                    "reply": (
-                        "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
-                        " Envíamelas así:\n"
-                        "```\n"
-                        "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
-                        "```"
-                    )
-                })
+            })
         # 🔐 ASEGURAR LOGIN Y NAVEGACIÓN BASE
         session = browser_pool.get_session(wa_id)
         if not session or not session.driver:
