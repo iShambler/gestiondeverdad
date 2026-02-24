@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aregest · Configurar credenciales</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #e94560 0%, #c62a47 100%);
+            padding: 32px 24px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #fff;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 14px;
+            margin-top: 6px;
+        }
+
+        .body {
+            padding: 32px 24px;
+        }
+
+        .timer {
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 24px;
+        }
+
+        .timer span {
+            font-weight: 600;
+            color: #e94560;
+        }
+
+        .field {
+            margin-bottom: 20px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .field input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+
+        .field input:focus {
+            border-color: #e94560;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #e94560 0%, #c62a47 100%);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .btn:hover { opacity: 0.9; }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .msg {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        .msg.error {
+            background: #fff0f0;
+            color: #c0392b;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .msg.success {
+            background: #f0fff4;
+            color: #27ae60;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .lock-icon {
+            text-align: center;
+            font-size: 13px;
+            color: #aaa;
+            margin-top: 20px;
+        }
+
+        .expired-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .expired-box {
+            background: #fff;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            max-width: 360px;
+        }
+
+        .expired-box h2 {
+            color: #e94560;
+            margin-bottom: 12px;
+        }
+
+        .expired-box p {
+            color: #666;
+            font-size: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card" id="loginCard">
+        <div class="header">
+            <h1>Aregest</h1>
+            <p>Configurar credenciales de GestiónITT</p>
+        </div>
+        <div class="body">
+            <div class="timer" id="timerDiv">
+                Este enlace caduca en <span id="countdown">15:00</span>
+            </div>
+
+            <form id="loginForm" onsubmit="handleSubmit(event)">
+                <div class="field">
+                    <label>Usuario de GestiónITT</label>
+                    <input type="text" id="username" placeholder="ej: pablo.solis" required autocomplete="username">
+                </div>
+                <div class="field">
+                    <label>Contraseña</label>
+                    <input type="password" id="password" placeholder="Tu contraseña" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn" id="submitBtn">
+                    Verificar y guardar
+                </button>
+            </form>
+
+            <div class="msg" id="msgBox"></div>
+
+            <div class="lock-icon">
+                🔒 Tus credenciales se guardan cifradas
+            </div>
+        </div>
+    </div>
+
+    <div class="expired-overlay" id="expiredOverlay" style="display:none;">
+        <div class="expired-box">
+            <h2>⏰ Enlace caducado</h2>
+            <p>Este enlace ha expirado. Escribe al bot por WhatsApp para recibir uno nuevo.</p>
+        </div>
+    </div>
+
+    <script>
+        // Extraer token de la URL
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token');
+
+        if (!token) {
+            document.getElementById('expiredOverlay').style.display = 'flex';
+            document.getElementById('loginCard').style.display = 'none';
+        }
+
+        // Countdown
+        let secondsLeft = 15 * 60;
+
+        function updateCountdown() {
+            if (secondsLeft <= 0) {
+                document.getElementById('expiredOverlay').style.display = 'flex';
+                document.getElementById('submitBtn').disabled = true;
+                return;
+            }
+            const m = Math.floor(secondsLeft / 60);
+            const s = secondsLeft % 60;
+            document.getElementById('countdown').textContent = 
+                `${m}:${s.toString().padStart(2, '0')}`;
+            secondsLeft--;
+            setTimeout(updateCountdown, 1000);
+        }
+
+        // Validar token al cargar
+        async function validateToken() {
+            if (!token) return;
+            try {
+                const res = await fetch(`/auth/validate?token=${token}`);
+                const data = await res.json();
+                if (!data.valid) {
+                    document.getElementById('expiredOverlay').style.display = 'flex';
+                    document.getElementById('submitBtn').disabled = true;
+                } else {
+                    // Ajustar countdown al tiempo real restante
+                    secondsLeft = data.seconds_left || 900;
+                    updateCountdown();
+                }
+            } catch (e) {
+                console.error('Error validando token:', e);
+                updateCountdown();
+            }
+        }
+
+        validateToken();
+
+        // Submit
+        async function handleSubmit(e) {
+            e.preventDefault();
+
+            const btn = document.getElementById('submitBtn');
+            const msgBox = document.getElementById('msgBox');
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            btn.disabled = true;
+            btn.textContent = 'Verificando...';
+            msgBox.className = 'msg';
+            msgBox.style.display = 'none';
+
+            try {
+                const res = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, username, password })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    msgBox.className = 'msg success';
+                    msgBox.textContent = '✅ ¡Credenciales verificadas y guardadas! Ya puedes volver a WhatsApp.';
+                    msgBox.style.display = 'block';
+                    btn.textContent = '✓ Guardado';
+                    document.getElementById('loginForm').querySelectorAll('input').forEach(i => i.disabled = true);
+                } else {
+                    // Si el servidor devuelve un nuevo token (tras fallo), actualizarlo
+                    if (data.new_token) {
+                        window.history.replaceState({}, '', `?token=${data.new_token}`);
+                    }
+                    msgBox.className = 'msg error';
+                    msgBox.textContent = data.message || 'Credenciales incorrectas. Inténtalo de nuevo.';
+                    msgBox.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Verificar y guardar';
+                }
+            } catch (err) {
+                msgBox.className = 'msg error';
+                msgBox.textContent = 'Error de conexión. Inténtalo de nuevo.';
+                msgBox.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Verificar y guardar';
+            }
+        }
+    </script>
+</body>
+</html>

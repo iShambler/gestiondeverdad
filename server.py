@@ -6,9 +6,10 @@ load_dotenv()
 
 import re
 import requests
-from fastapi import FastAPI, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Depends, Query
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from collections import deque
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -26,6 +27,7 @@ from auth_handler import verificar_y_solicitar_credenciales, obtener_credenciale
 from browser_pool import browser_pool
 from conversation_state import conversation_state_manager
 from credential_manager import credential_manager
+from auth_token_manager import auth_token_manager
 
 # ⭐ IMPORTAR TODAS LAS FUNCIONES AUXILIARES
 from funciones_server import (
@@ -54,6 +56,103 @@ app.add_middleware(
 
 META_WHATSAPP_TOKEN = os.getenv("META_WHATSAPP_TOKEN")
 META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID")
+BASE_URL = os.getenv("BASE_URL", "https://tu-dominio.com")  # URL pública del servidor
+
+# Servir archivos estáticos
+import pathlib
+STATIC_DIR = pathlib.Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ============================================================================
+# 🔐 ENDPOINTS DE AUTENTICACIÓN VÍA ENLACE WEB
+# ============================================================================
+
+@app.get("/auth/login")
+async def auth_login_page(token: str = Query(...)):
+    """Sirve la página de login con el token en la URL"""
+    return FileResponse(str(STATIC_DIR / "login.html"))
+
+
+@app.get("/auth/validate")
+async def auth_validate_token(token: str = Query(...)):
+    """Valida si un token es vigente"""
+    data = auth_token_manager.validar_token(token)
+    if data:
+        return {"valid": True, "seconds_left": data["seconds_left"]}
+    return {"valid": False}
+
+
+@app.post("/auth/login")
+async def auth_login_submit(request: Request):
+    """
+    Recibe credenciales desde la página web, verifica login en GestiónITT
+    y guarda las credenciales cifradas en la BD.
+    """
+    body = await request.json()
+    token = body.get("token")
+    username = body.get("username", "").strip()
+    password = body.get("password", "")
+
+    if not token or not username or not password:
+        return JSONResponse({"success": False, "message": "Faltan datos"}, status_code=400)
+
+    # Validar y consumir token
+    wa_id = auth_token_manager.consumir_token(token)
+    if not wa_id:
+        return JSONResponse({"success": False, "message": "Enlace caducado o inválido. Pide uno nuevo por WhatsApp."})
+
+    # Verificar credenciales haciendo login real en GestiónITT
+    session = browser_pool.get_session(wa_id)
+    if not session or not session.driver:
+        # Regenerar token para que pueda reintentar
+        nuevo_token = auth_token_manager.generar_token(wa_id)
+        return JSONResponse({"success": False, "message": "Error técnico. Inténtalo de nuevo."})
+
+    try:
+        from web_automation import hacer_login
+        with session.lock:
+            success, mensaje_login = hacer_login(session.driver, session.wait, username, password)
+
+        if success:
+            session.is_logged_in = True
+            # Guardar credenciales en BD
+            db = SessionLocal()
+            try:
+                from db import obtener_usuario_por_origen, cifrar
+                usuario = obtener_usuario_por_origen(db, wa_id=wa_id)
+                if usuario:
+                    usuario.username_intranet = username
+                    usuario.password_intranet = cifrar(password)
+                    db.commit()
+                    print(f"[AUTH WEB] ✅ Credenciales guardadas para {wa_id} ({username})")
+
+                    # Enviar confirmación por WhatsApp
+                    enviar_whatsapp(
+                        wa_id,
+                        f"🎉 *¡Credenciales configuradas!*\n\n"
+                        f"👤 Usuario: *{username}*\n"
+                        f"🔒 Contraseña: ******\n\n"
+                        f"Ya puedes usar el bot. Escríbeme lo que necesites 😊"
+                    )
+                    return JSONResponse({"success": True})
+                else:
+                    return JSONResponse({"success": False, "message": "Usuario no encontrado en la BD."})
+            finally:
+                db.close()
+        else:
+            # Login falló - regenerar token para que pueda reintentar
+            nuevo_token = auth_token_manager.generar_token(wa_id)
+            return JSONResponse({
+                "success": False,
+                "message": "❌ Credenciales incorrectas. Verifica tu usuario y contraseña de GestiónITT.",
+                "new_token": nuevo_token
+            })
+
+    except Exception as e:
+        print(f"[AUTH WEB] ❌ Error: {e}")
+        nuevo_token = auth_token_manager.generar_token(wa_id)
+        return JSONResponse({"success": False, "message": "Error verificando credenciales. Inténtalo de nuevo."})
 
 # ============================================================================
 # 📋 SCHEDULER DE RECORDATORIOS SEMANALES

@@ -35,17 +35,19 @@ def verificar_y_solicitar_credenciales(db: Session, user_id: str, canal: str = "
         else:
             usuario = crear_usuario(db, app_id=user_id, canal=canal)
 
-    #  Si NO tiene credenciales guardadas → mostrar mensaje
+    #  Si NO tiene credenciales guardadas → generar enlace de login
     if not usuario.username_intranet or not usuario.password_intranet:
-        # Mensaje diferente para WhatsApp (permite ingresarlas por chat)
         if canal == "whatsapp":
+            from auth_token_manager import auth_token_manager
+            import os
+            base_url = os.getenv("BASE_URL", "https://tu-dominio.com")
+            token = auth_token_manager.generar_token(user_id)
+            login_url = f"{base_url}/auth/login?token={token}"
             mensaje = (
-                "👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
-                " Por favor, envíamelas en este formato:\n\n"
-                "```\n"
-                "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
-                "```\n\n"
-                "🔒 Tus credenciales se guardan cifradas y seguras."
+                f"👋 *¡Hola!* Aún no tengo tus credenciales de GestiónITT.\n\n"
+                f"🔐 Configura tus credenciales aquí:\n{login_url}\n\n"
+                f"⏳ El enlace caduca en 15 minutos.\n"
+                f"🔒 Tus credenciales se guardan cifradas y seguras."
             )
         else:
             mensaje = (

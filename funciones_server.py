@@ -285,17 +285,16 @@ def realizar_login_inicial(session, user_id: str, username: str, password: str,
             
             if not success:
                 if "credenciales_invalidas" in mensaje_login:
-                    credential_manager.iniciar_cambio_credenciales(user_id)
+                    from auth_token_manager import auth_token_manager
+                    import os
+                    base_url = os.getenv("BASE_URL", "https://tu-dominio.com")
+                    token = auth_token_manager.generar_token(user_id)
+                    login_url = f"{base_url}/auth/login?token={token}"
                     error_msg = (
-                        " **Error de login**: Las credenciales de GestiónITT no son correctas.\n\n"
-                        "Necesito tus credenciales de GestiónITT.\n\n"
-                        " **Envíamelas así:**\n"
-                        "```\n"
-                        "Usuario: tu_usuario  Contraseña: tu_contraseña (todo sin tabular)\n"
-                        
-                        "```\n\n"
-                        "🔒 **Tranquilo:** Tus credenciales se guardan cifradas.\n\n"
-                        " Si no quieres cambiarlas, escribe 'cancelar'."
+                        " *Error de login*: Las credenciales de GestiónITT no son correctas.\n\n"
+                        f"🔐 Actualiza tus credenciales aquí:\n{login_url}\n\n"
+                        "⏳ El enlace caduca en 15 minutos.\n"
+                        "🔒 Tus credenciales se guardan cifradas."
                     )
                     registrar_peticion(db, usuario.id, texto, "error_login", canal=canal, 
                                      respuesta=error_msg, estado="credenciales_invalidas")

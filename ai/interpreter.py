@@ -670,7 +670,7 @@ Frase del usuario: "{texto}"
         client = settings.get_openai_client()  #  Necesario para usar la API
 
         response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL_MINI,
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "Eres un intérprete experto de lenguaje natural a comandos JSON estructurados. Procesas instrucciones complejas con alta precisión, manejando múltiples proyectos, fechas relativas y contextos ambiguos."},
                 {"role": "user", "content": prompt}
