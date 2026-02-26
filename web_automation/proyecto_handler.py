@@ -753,10 +753,19 @@ def imputar_horas_dia(driver, wait, dia, horas, fila, nombre_proyecto=None, modo
             # Hacer scroll y enfocar el campo
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", campo)
             time.sleep(0.3)
-            
+
             # Click para asegurar foco
-            campo.click()
-            time.sleep(0.2)
+            # Puede lanzar ElementNotInteractableException si el campo está en un mes
+            # diferente al de la vista actual (misma semana, diferente mes)
+            try:
+                campo.click()
+                time.sleep(0.2)
+            except Exception as e_click:
+                print(f"[DEBUG] Campo {dia} enabled pero no interactuable (cambio de mes): {e_click}")
+                dias_laborables = ["lunes", "martes", "miércoles", "miercoles", "jueves", "viernes"]
+                if dia.lower() not in dias_laborables:
+                    return f"No se puede imputar en fin de semana ({dia})"
+                return f"[DIA_DESHABILITADO:{dia}]"
             
             valor_actual = campo.get_attribute("value") or "0"
             try:

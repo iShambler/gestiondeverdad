@@ -133,10 +133,26 @@ def seleccionar_fecha(driver, fecha_obj, contexto=None):
                 
                 debe_volver = True
             else:
-                # Misma semana, NO volver
-                print(f"[DEBUG]  Misma semana ({lunes_objetivo.strftime('%d/%m')}), NO volver atrás")
-                #  RETORNAR INMEDIATAMENTE - No necesitamos hacer nada más
-                return f"Ya estás en la semana del {lunes_objetivo.strftime('%d/%m/%Y')}"
+                # Misma semana - verificar si estamos en diferente mes
+                # GestiónITT deshabilita días del "otro mes" en la vista semanal,
+                # así que si queremos acceder a un día de otro mes, hay que re-navegar
+                if fecha_actual_contexto and (fecha_actual_contexto.month != fecha_obj.month or fecha_actual_contexto.year != fecha_obj.year):
+                    print(f"[DEBUG] 🔄 Misma semana pero diferente mes ({fecha_actual_contexto.strftime('%m/%Y')} → {fecha_obj.strftime('%m/%Y')}), re-navegando...")
+
+                    #  GUARDAR ANTES de volver
+                    print(f"[DEBUG] 💾 Guardando cambios antes de cambiar vista de mes...")
+                    try:
+                        resultado_guardar = guardar_linea(driver, WebDriverWait(driver, 15))
+                        print(f"[DEBUG] 💾 {resultado_guardar}")
+                    except Exception as e:
+                        print(f"[DEBUG]  Error guardando antes de volver: {e}")
+
+                    debe_volver = True
+                else:
+                    # Misma semana, mismo mes → NO volver
+                    print(f"[DEBUG]  Misma semana ({lunes_objetivo.strftime('%d/%m')}), NO volver atrás")
+                    #  RETORNAR INMEDIATAMENTE - No necesitamos hacer nada más
+                    return f"Ya estás en la semana del {lunes_objetivo.strftime('%d/%m/%Y')}"
             
             if debe_volver:
                 print(f"[DEBUG] 🔙 Volviendo atrás...")
