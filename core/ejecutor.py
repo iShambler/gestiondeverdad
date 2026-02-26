@@ -6,7 +6,7 @@ Coordina la ejecución de comandos interpretados por la IA.
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -23,7 +23,9 @@ from web_automation import (
     guardar_linea,
     emitir_linea,
     volver_inicio,
-    copiar_semana_anterior
+    copiar_semana_anterior,
+    detectar_dias_deshabilitados,
+    lunes_de_semana
 )
 
 
@@ -250,6 +252,79 @@ def ejecutar_accion(driver, wait, orden, contexto):
             #  Intentar imputar, si falla por StaleElement, re-buscar proyecto
             try:
                 resultado = imputar_horas_dia(driver, wait, dia, horas, fila, proyecto, modo)
+
+                #  RECOVERY: Día deshabilitado (cambio de mes en la semana)
+                # Guardar, volver, navegar al día exacto, re-seleccionar proyecto, reintentar
+                if isinstance(resultado, str) and "[DIA_DESHABILITADO:" in resultado:
+                    print(f"[DEBUG] 🔄 Día deshabilitado detectado para '{dia}', iniciando recovery...")
+
+                    # Necesitamos la fecha exacta para navegar directamente al día
+                    try:
+                        fecha_exacta = datetime.fromisoformat(dia_param)
+                    except Exception:
+                        # Si dia_param no es ISO, calcular desde fecha_seleccionada + día de la semana
+                        fecha_sel = contexto.get("fecha_seleccionada")
+                        if fecha_sel:
+                            lunes = lunes_de_semana(fecha_sel)
+                            dias_offset = {"lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2, "jueves": 3, "viernes": 4}
+                            offset = dias_offset.get(dia.lower(), 0)
+                            fecha_exacta = lunes + timedelta(days=offset)
+                        else:
+                            return f"No he podido imputar el {dia}: campo deshabilitado y no hay fecha de referencia"
+
+                    # 1. Guardar cambios hechos hasta ahora
+                    print(f"[DEBUG] 💾 Guardando cambios antes de recovery...")
+                    try:
+                        guardar_linea(driver, wait)
+                    except Exception as e_guardar:
+                        print(f"[DEBUG] ⚠️ Error guardando antes de recovery: {e_guardar}")
+
+                    # 2. Volver a pantalla principal
+                    print(f"[DEBUG] 🔙 Volviendo a pantalla principal...")
+                    volver_inicio(driver)
+                    time.sleep(1)
+
+                    # 3. Limpiar contexto para forzar navegación fresca
+                    contexto["fecha_seleccionada"] = None
+                    contexto["fila_actual"] = None
+                    contexto["proyecto_actual"] = None
+                    contexto["nodo_padre_actual"] = None
+
+                    # 4. Navegar al día EXACTO (no al lunes de la semana)
+                    print(f"[DEBUG] 📅 Navegando a fecha exacta: {fecha_exacta.strftime('%d/%m/%Y')}...")
+                    seleccionar_fecha(driver, fecha_exacta, contexto)
+                    contexto["fecha_seleccionada"] = fecha_exacta
+
+                    # 5. Re-seleccionar el proyecto
+                    print(f"[DEBUG] 🔄 Re-seleccionando proyecto '{proyecto}'...")
+                    fila_nueva, mensaje_proy, necesita_desamb, coincidencias = seleccionar_proyecto(
+                        driver, wait, proyecto, nodo_padre, contexto=contexto
+                    )
+
+                    if necesita_desamb:
+                        return {
+                            "tipo": "desambiguacion",
+                            "proyecto": proyecto,
+                            "coincidencias": coincidencias
+                        }
+
+                    if not fila_nueva:
+                        return f"No he podido re-seleccionar el proyecto '{proyecto}' tras recovery: {mensaje_proy}"
+
+                    contexto["fila_actual"] = fila_nueva
+                    contexto["proyecto_actual"] = proyecto
+                    contexto["nodo_padre_actual"] = nodo_padre
+
+                    # 6. Reintentar la imputación
+                    print(f"[DEBUG] 🔄 Reintentando imputar {horas}h en {dia}...")
+                    resultado_retry = imputar_horas_dia(driver, wait, dia, horas, fila_nueva, proyecto, modo)
+
+                    # Si sigue deshabilitado, devolver error limpio (no bucle infinito)
+                    if isinstance(resultado_retry, str) and "[DIA_DESHABILITADO:" in resultado_retry:
+                        return f"No he podido imputar el {dia}: el campo sigue deshabilitado tras navegar a {fecha_exacta.strftime('%d/%m/%Y')}"
+
+                    return f"{resultado_retry} [FECHA:{fecha_formateada}]"
+
                 #  AÑADIR FECHA AL RESULTADO para que el response generator la use
                 return f"{resultado} [FECHA:{fecha_formateada}]"
             except Exception as e:
@@ -257,14 +332,14 @@ def ejecutar_accion(driver, wait, orden, contexto):
                     print(f"[DEBUG] 🔄 Elemento obsoleto detectado, re-buscando proyecto '{proyecto}'...")
                     # Re-buscar el proyecto
                     fila_nueva, mensaje, necesita_desamb, coincidencias = seleccionar_proyecto(driver, wait, proyecto, nodo_padre)
-                    
+
                     if necesita_desamb:
                         return {
                             "tipo": "desambiguacion",
                             "proyecto": proyecto,
                             "coincidencias": coincidencias
                         }
-                    
+
                     if fila_nueva:
                         contexto["fila_actual"] = fila_nueva
                         print(f"[DEBUG]  Proyecto re-encontrado, reintentando imputación...")
@@ -281,6 +356,7 @@ def ejecutar_accion(driver, wait, orden, contexto):
     # ⏱️ Imputar horas semanales
     elif accion == "imputar_horas_semana":
         proyecto = contexto.get("proyecto_actual")
+        nodo_padre = contexto.get("nodo_padre_actual")
         if not proyecto:
             return " No sé en qué proyecto quieres imputar. Dímelo, por favor."
 
@@ -288,7 +364,80 @@ def ejecutar_accion(driver, wait, orden, contexto):
         if not fila:
             return f" No he podido seleccionar el proyecto '{proyecto}'. ¿Estás en la pantalla de imputación?"
 
-        return imputar_horas_semana(driver, wait, fila, nombre_proyecto=proyecto)
+        # Detectar si hay días deshabilitados (cambio de mes en la semana)
+        dias_estado = detectar_dias_deshabilitados(driver)
+        dias_deshabilitados = [dia for dia, habilitado in dias_estado.items() if not habilitado]
+
+        # Primera pasada: imputa los días habilitados (omite deshabilitados)
+        resultado_primera = imputar_horas_semana(driver, wait, fila, nombre_proyecto=proyecto)
+
+        # Si no hay días deshabilitados, devolver resultado directamente
+        if not dias_deshabilitados:
+            return resultado_primera
+
+        # RECOVERY: Hay días deshabilitados → guardar, volver, navegar al otro mes, reintentar
+        print(f"[DEBUG] 🔄 Días deshabilitados detectados: {dias_deshabilitados}, iniciando recovery de semana...")
+
+        # 1. Guardar cambios de la primera pasada
+        print(f"[DEBUG] 💾 Guardando primera pasada...")
+        try:
+            guardar_linea(driver, wait)
+        except Exception as e_guardar:
+            print(f"[DEBUG] ⚠️ Error guardando primera pasada: {e_guardar}")
+
+        # 2. Volver a pantalla principal
+        print(f"[DEBUG] 🔙 Volviendo a pantalla principal...")
+        volver_inicio(driver)
+        time.sleep(1)
+
+        # 3. Calcular fecha de un día deshabilitado para navegar
+        fecha_sel = contexto.get("fecha_seleccionada")
+        if fecha_sel:
+            lunes = lunes_de_semana(fecha_sel)
+            dias_offset = {"lunes": 0, "martes": 1, "miércoles": 2, "jueves": 3, "viernes": 4}
+            primer_dia_deshabilitado = dias_deshabilitados[0]
+            offset = dias_offset.get(primer_dia_deshabilitado, 0)
+            fecha_destino = lunes + timedelta(days=offset)
+        else:
+            return resultado_primera  # Sin fecha de referencia, devolver solo la primera pasada
+
+        # 4. Limpiar contexto para navegación fresca
+        contexto["fecha_seleccionada"] = None
+        contexto["fila_actual"] = None
+        contexto["proyecto_actual"] = None
+        contexto["nodo_padre_actual"] = None
+
+        # 5. Navegar al día deshabilitado (ahora habilitado desde la otra perspectiva de mes)
+        print(f"[DEBUG] 📅 Navegando a {fecha_destino.strftime('%d/%m/%Y')} para segunda pasada...")
+        seleccionar_fecha(driver, fecha_destino, contexto)
+        contexto["fecha_seleccionada"] = fecha_destino
+
+        # 6. Re-seleccionar proyecto
+        print(f"[DEBUG] 🔄 Re-seleccionando proyecto '{proyecto}'...")
+        fila_nueva, mensaje_proy, necesita_desamb, coincidencias = seleccionar_proyecto(
+            driver, wait, proyecto, nodo_padre, contexto=contexto
+        )
+
+        if necesita_desamb:
+            return {
+                "tipo": "desambiguacion",
+                "proyecto": proyecto,
+                "coincidencias": coincidencias
+            }
+
+        if not fila_nueva:
+            return f"{resultado_primera}\n(No pude imputar días {dias_deshabilitados}: {mensaje_proy})"
+
+        contexto["fila_actual"] = fila_nueva
+        contexto["proyecto_actual"] = proyecto
+        contexto["nodo_padre_actual"] = nodo_padre
+
+        # 7. Segunda pasada: imputa los días que antes estaban deshabilitados
+        print(f"[DEBUG] 🔄 Segunda pasada para días: {dias_deshabilitados}...")
+        resultado_segunda = imputar_horas_semana(driver, wait, fila_nueva, nombre_proyecto=proyecto)
+
+        # Combinar resultados
+        return f"{resultado_primera}\n{resultado_segunda}"
 
     # 💾 Guardar línea
     elif accion == "guardar_linea":
